@@ -9,7 +9,9 @@ export function WofWorking({
   onDispChange = () => {},
   onBtnChange = () => {},
   displayWords = [],
-  buttonLabels = []
+  buttonLabels = [],
+  warnDisp = false,
+  warnBtn = []
 }) {
   return (
     <div className="wof-working-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
@@ -18,7 +20,7 @@ export function WofWorking({
         className="wof-disp-slot"
         style={{
           background: 'var(--paper)',
-          border: '2px solid var(--line)',
+          border: `2px solid ${warnDisp ? 'var(--brass)' : 'var(--line)'}`,
           borderRadius: '10px',
           padding: '12px 24px',
           minWidth: '220px',
@@ -69,6 +71,9 @@ export function WofWorking({
             borderCol = 'var(--select-green)';
             bgCol = 'rgba(72,187,120,0.18)';
           } else if (isLook) {
+            borderCol = '#60A5FA';
+            bgCol = 'rgba(96,165,250,0.12)';
+          } else if (warnBtn[i]) {
             borderCol = 'var(--brass)';
             bgCol = 'var(--brass-dim)';
           }

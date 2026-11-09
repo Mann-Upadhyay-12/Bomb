@@ -6,7 +6,8 @@ export function SearchWorking({
   hitCells = new Set(),
   onCellChange = () => {},
   onCellKeyDown = () => {},
-  onCellPaste = () => {}
+  onCellPaste = () => {},
+  idPrefix = 'search'
 }) {
   return (
     <div className="search-board-wrap">
@@ -33,10 +34,11 @@ export function SearchWorking({
             return (
               <input
                 key={`${r}-${c}`}
-                id={`sc_${r}_${c}`}
+                id={`${idPrefix}-sc_${r}_${c}`}
                 type="text"
                 className={cls}
-                maxLength={1}
+                inputMode="text"
+                onFocus={(e) => e.target.select()}
                 value={val}
                 autoComplete="off"
                 spellCheck="false"

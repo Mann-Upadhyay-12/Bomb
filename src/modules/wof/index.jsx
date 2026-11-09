@@ -16,6 +16,7 @@ import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
 import { CopyLines } from '../../core/components/CopyLines.jsx';
 import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
 import { WofWorking } from './working.jsx';
+import { wofReadImage } from './wofOCR.js';
 
 export const KEY = 'bombvision_wof_rules_v2';
 
@@ -37,6 +38,10 @@ export function WofModule({ isActive = true }) {
   const [btns, setBtns] = useState(['', '', '', '', '', '']);
   const [previewUri, setPreviewUri] = useState('');
   const [previewMeta, setPreviewMeta] = useState('');
+  const [warnDisp, setWarnDisp] = useState(false);
+  const [warnBtn, setWarnBtn] = useState([false, false, false, false, false, false]);
+  const [ocrStatus, setOcrStatus] = useState('');
+  const [ocrBusy, setOcrBusy] = useState(false);
 
   const res = solveCore(rules, disp, btns);
   const lookIdx = res.look !== undefined ? res.look : -1;
@@ -72,14 +77,43 @@ export function WofModule({ isActive = true }) {
     showToast('RESTORED DEFAULT WOF RULES ✓');
   };
 
-  const handleDispChange = (val) => setDisp(val);
+  // Manual edits clear the low-confidence warning for that slot
+  const handleDispChange = (val) => { setDisp(val); setWarnDisp(false); };
   const handleBtnChange = (idx, val) => {
     const next = [...btns];
     next[idx] = val;
     setBtns(next);
+    setWarnBtn(prev => prev.map((w, i) => (i === idx ? false : w)));
+  };
+
+  const handleImage = async (img, dataUri, fileBlob) => {
+    setPreviewUri(dataUri);
+    setPreviewMeta(`${img.naturalWidth}×${img.naturalHeight} px source`);
+    setLastImage(img, fileBlob);
+    if (ocrBusy) return;
+    setOcrBusy(true);
+    try {
+      const r = await wofReadImage(img, rules, setOcrStatus);
+      setDisp(r.disp);
+      setBtns(r.btns);
+      setWarnDisp(r.warnDisp);
+      setWarnBtn(r.warnBtn);
+      const anyWarn = r.warnDisp || r.warnBtn.some(Boolean);
+      setOcrStatus(anyWarn
+        ? '✅ OCR done — ⚠️ gold-bordered slots were read with low confidence, double-check them.'
+        : '✅ OCR done — all slots read confidently.');
+      showToast('WHO\'S ON FIRST READ ✓');
+    } catch (err) {
+      setOcrStatus(`⚠️ ${err.message} — pick the words from the dropdowns instead.`);
+      showToast('OCR UNAVAILABLE — SELECT WORDS MANUALLY');
+    } finally {
+      setOcrBusy(false);
+    }
   };
 
   const handleSample = () => {
+    setWarnDisp(false);
+    setWarnBtn([false, false, false, false, false, false]);
     setDisp('YES');
     setBtns(['OKAY', 'WHAT', 'LEFT', 'READY', 'HOLD ON', 'PRESS']);
     showToast('SAMPLE WHO\'S ON FIRST LOADED ✓');
@@ -88,6 +122,9 @@ export function WofModule({ isActive = true }) {
   const handleClear = () => {
     setDisp('');
     setBtns(['', '', '', '', '', '']);
+    setWarnDisp(false);
+    setWarnBtn([false, false, false, false, false, false]);
+    setOcrStatus('');
     setPreviewUri('');
     setPreviewMeta('');
     setLastImage(null, null);
@@ -114,12 +151,7 @@ export function WofModule({ isActive = true }) {
         <ModuleInput
           dropzone={
             <Dropzone
-              onImage={(img, dataUri, fileBlob) => {
-                setPreviewUri(dataUri);
-                setPreviewMeta(`${img.naturalWidth}×${img.naturalHeight} px source`);
-                setLastImage(img, fileBlob);
-                showToast('IMAGE LOADED — SET WORDS BELOW');
-              }}
+              onImage={handleImage}
               icon="🥊 WHO WHAT YES"
               title="Click here, then paste Who's on First screenshot"
             />
@@ -149,6 +181,7 @@ export function WofModule({ isActive = true }) {
             </>
           }
         >
+          {ocrStatus && <div className="module-hint">{ocrStatus}</div>}
           <details className="wof-manual-details" style={{ marginTop: '8px' }}>
             <summary style={{ cursor: 'pointer', fontFamily: 'monospace', fontWeight: 600, fontSize: '12px', letterSpacing: '0.08em', color: 'var(--ink-soft)', marginBottom: '8px' }}>
               📖 PASTE MANUAL RULES (STEP 1 &amp; STEP 2)
@@ -190,7 +223,7 @@ export function WofModule({ isActive = true }) {
           stats={stampStats}
           answers={res.ok ? [`${res.ans} (${POS_NAMES[res.hit]})`] : []}
           copyValue={res.ans || ''}
-          placeholder={res.msg || 'SELECT DISPLAY &amp; BUTTONS'}
+          placeholder={ocrBusy ? '📷 READING…' : (res.msg || 'SELECT DISPLAY & BUTTONS')}
         />
       }
       copylines={<CopyLines items={copyItems} />}
@@ -207,6 +240,8 @@ export function WofModule({ isActive = true }) {
             onBtnChange={handleBtnChange}
             displayWords={dw}
             buttonLabels={bw}
+            warnDisp={warnDisp}
+            warnBtn={warnBtn}
           />
         </WorkingPanel>
       }

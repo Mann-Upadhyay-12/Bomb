@@ -134,9 +134,14 @@ export function App() {
   return (
     <div className="page">
       {/* Toast Notification */}
-      <span className={`copied-toast ${showToast ? 'show' : ''}`} id="copiedToast">
+      <div
+        className={`copied-toast ${showToast ? 'show' : ''}`}
+        id="copiedToast"
+        role="status"
+        aria-live="polite"
+      >
         {toastMsg}
-      </span>
+      </div>
 
       {/* Closable Mission Sidebar */}
       <MissionSidebar

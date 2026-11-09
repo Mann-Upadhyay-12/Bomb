@@ -37,7 +37,7 @@ export function SwitchesModule({ isActive = true }) {
 
     const sol = swBFS(init, goal, forbidden);
     if (!sol) {
-      showToast('NO VALID PATH (BLOCKED)');
+      showToast(forbidden.includes(init) ? 'START POSITION IS FORBIDDEN' : 'NO VALID PATH (BLOCKED)');
       setPath(null);
       setLastCopyString('');
       return;
@@ -89,12 +89,23 @@ export function SwitchesModule({ isActive = true }) {
           setLastCopyString(moveSeq);
           if (copyOnDecode && moveSeq) copy(moveSeq);
         }
+      } else {
+        setPath(null);
+        showToast('SWITCHES DETECTED — NO VALID PATH');
       }
     }
   };
 
+  // Any edit to the inputs invalidates the previously computed solution
+  const invalidate = () => {
+    if (path) {
+      setPath(null);
+      setStepIdx(0);
+    }
+  };
+
   const handleSwitchClick = (i) => {
-    if (path) return;
+    invalidate();
     if (editMode === 'init') {
       const cur = swNorm(initState).split('');
       cur[i] = cur[i] === 'U' ? 'D' : 'U';
@@ -207,7 +218,7 @@ export function SwitchesModule({ isActive = true }) {
                   className="search-words-field"
                   value={initState}
                   maxLength={5}
-                  onChange={(e) => setInitState(e.target.value.toUpperCase())}
+                  onChange={(e) => { invalidate(); setInitState(e.target.value.toUpperCase().replace(/[^UD]/g, '')); }}
                 />
               </div>
               <div style={{ flex: 1, minWidth: '180px' }}>
@@ -217,7 +228,7 @@ export function SwitchesModule({ isActive = true }) {
                   className="search-words-field"
                   value={goalState}
                   maxLength={5}
-                  onChange={(e) => setGoalState(e.target.value.toUpperCase())}
+                  onChange={(e) => { invalidate(); setGoalState(e.target.value.toUpperCase().replace(/[^UD]/g, '')); }}
                 />
               </div>
             </div>
@@ -228,7 +239,7 @@ export function SwitchesModule({ isActive = true }) {
                 type="button"
                 className={`bg-btn ${editMode === 'init' ? 'active' : ''}`}
                 style={{ borderColor: editMode === 'init' ? 'var(--brass)' : '' }}
-                onClick={() => setEditMode('init')}
+                onClick={() => { invalidate(); setEditMode('init'); }}
               >
                 Start Position
               </button>
@@ -236,7 +247,7 @@ export function SwitchesModule({ isActive = true }) {
                 type="button"
                 className={`bg-btn ${editMode === 'goal' ? 'active' : ''}`}
                 style={{ borderColor: editMode === 'goal' ? 'var(--brass)' : '' }}
-                onClick={() => setEditMode('goal')}
+                onClick={() => { invalidate(); setEditMode('goal'); }}
               >
                 Goal Position
               </button>
@@ -248,7 +259,7 @@ export function SwitchesModule({ isActive = true }) {
                 className="password-rows-field"
                 rows={2}
                 value={forbiddenText}
-                onChange={(e) => setForbiddenText(e.target.value)}
+                onChange={(e) => { invalidate(); setForbiddenText(e.target.value); }}
                 placeholder="UDDUD&#10;DDUUU"
               />
             </div>

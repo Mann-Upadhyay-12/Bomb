@@ -64,7 +64,21 @@ export function decodeMorseRLE(rle) {
 
   const rawWord = letters.map(l => l.char).join('').trim();
   const cleanWord = rawWord.replace(/[^A-Z]/g, '');
-  const frequency = MORSE_FREQUENCIES[cleanWord] || '';
+  let word = rawWord;
+  let frequency = MORSE_FREQUENCIES[cleanWord] || '';
 
-  return { letters, unit, word: rawWord, frequency };
+  // The transmitter GIF loops, so the capture can begin mid-word
+  // (e.g. "LLSHE" for SHELL). Try every rotation against the known words.
+  if (!frequency && cleanWord.length > 1) {
+    for (let i = 1; i < cleanWord.length; i++) {
+      const rotated = cleanWord.slice(i) + cleanWord.slice(0, i);
+      if (MORSE_FREQUENCIES[rotated]) {
+        word = rotated;
+        frequency = MORSE_FREQUENCIES[rotated];
+        break;
+      }
+    }
+  }
+
+  return { letters, unit, word, frequency };
 }

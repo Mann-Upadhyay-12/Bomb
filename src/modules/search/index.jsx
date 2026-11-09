@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { solveWordSearch } from './searchSolver.js';
 import {
   ensureOCRWorker,
@@ -19,6 +19,8 @@ import { SearchWorking } from './working.jsx';
 
 export const MASTER_SEARCH_WORDS = "PALM SINK WITH SEND OKAY USER LOSS RAID DIRT LEAF WIFE YELL TELL FLAT PARK SOUP VAST BEST TORN CLAY STEM SLIP RIDE ICON CORN DOVE BIRD PLOT FOOT DESK CAPE POET LAVA JOKE MOVE JOIN FINE VEIL GAME PINE TOLD COLD BOLD GOLD HOLD SOLD FOLD MOLD";
 
+const MASTER_WORD_COUNT = MASTER_SEARCH_WORDS.split(/\s+/).length;
+
 export const SAMPLE_SEARCH_GRIDS = [
   [['W','F','P','N','B'],['C','U','Y','I','E'],['Y','M','R','Y','S'],['E','D','A','S','T'],['E','M','J','T','M']],
   [['O','A','I','A','G'],['U','R','B','H','A'],['M','O','I','A','Y'],['C','N','I','O','J'],['Q','O','U','A','R']]
@@ -30,6 +32,7 @@ export function SearchModule({ isActive = true }) {
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
+  const uid = useId(); // per-instance ids: missions can show the same module several times
 
   const [gridData, setGridData] = useState(() => Array.from({ length: 5 }, () => Array(5).fill('')));
   const [confidence, setConfidence] = useState(() => Array.from({ length: 5 }, () => Array(5).fill(100)));
@@ -54,14 +57,17 @@ export function SearchModule({ isActive = true }) {
     if (!isActive) return;
     const copyString = uniqueWords.join(' ');
     setLastCopyString(copyString);
-    if (copyOnDecode && uniqueWords.length > 0) {
+    // Only auto-copy once the board is fully filled, so partial typing / live OCR
+    // progress doesn't spam the clipboard.
+    const isFull = gridData.every(row => row.every(ch => ch && ch !== '?'));
+    if (copyOnDecode && isFull && uniqueWords.length > 0) {
       copy(copyString);
     }
-  }, [gridData, wordsText, isActive]);
+  }, [gridData, isActive]);
 
   // Handle cell input
   const handleCellChange = (r, c, val) => {
-    const char = val.slice(-1).toUpperCase();
+    const char = val.toUpperCase().replace(/[^A-Z]/g, '').slice(-1);
     const newGrid = gridData.map(row => [...row]);
     newGrid[r][c] = char;
     setGridData(newGrid);
@@ -72,25 +78,25 @@ export function SearchModule({ isActive = true }) {
 
     if (char) {
       if (c < 4) {
-        document.getElementById(`sc_${r}_${c + 1}`)?.focus();
+        document.getElementById(`${uid}-sc_${r}_${c + 1}`)?.focus();
       } else if (r < 4 && c === 4) {
-        document.getElementById(`sc_${r + 1}_0`)?.focus();
+        document.getElementById(`${uid}-sc_${r + 1}_0`)?.focus();
       }
     }
   };
 
   const handleCellKeyDown = (r, c, e) => {
     if (e.key === 'Backspace' && !gridData[r][c]) {
-      if (c > 0) document.getElementById(`sc_${r}_${c - 1}`)?.focus();
-      else if (r > 0) document.getElementById(`sc_${r - 1}_4`)?.focus();
+      if (c > 0) document.getElementById(`${uid}-sc_${r}_${c - 1}`)?.focus();
+      else if (r > 0) document.getElementById(`${uid}-sc_${r - 1}_4`)?.focus();
     } else if (e.key === 'ArrowRight' && c < 4) {
-      document.getElementById(`sc_${r}_${c + 1}`)?.focus();
+      document.getElementById(`${uid}-sc_${r}_${c + 1}`)?.focus();
     } else if (e.key === 'ArrowLeft' && c > 0) {
-      document.getElementById(`sc_${r}_${c - 1}`)?.focus();
+      document.getElementById(`${uid}-sc_${r}_${c - 1}`)?.focus();
     } else if (e.key === 'ArrowDown' && r < 4) {
-      document.getElementById(`sc_${r + 1}_${c}`)?.focus();
+      document.getElementById(`${uid}-sc_${r + 1}_${c}`)?.focus();
     } else if (e.key === 'ArrowUp' && r > 0) {
-      document.getElementById(`sc_${r - 1}_${c}`)?.focus();
+      document.getElementById(`${uid}-sc_${r - 1}_${c}`)?.focus();
     }
   };
 
@@ -137,7 +143,7 @@ export function SearchModule({ isActive = true }) {
     try {
       localStorage.setItem(SEARCH_WORDS_KEY, MASTER_SEARCH_WORDS);
     } catch (e) {}
-    showToast('RESTORED ALL 40 WORDS ✓');
+    showToast(`RESTORED ALL ${MASTER_WORD_COUNT} WORDS ✓`);
   };
 
   const handleImage = async (img, dataUri, fileBlob) => {
@@ -308,18 +314,18 @@ export function SearchModule({ isActive = true }) {
                 type="button"
                 onClick={handleRestoreWords}
               >
-                🔄 RESTORE 40 WORDS
+                🔄 RESTORE {MASTER_WORD_COUNT} WORDS
               </button>
             </>
           }
         >
           <div className="search-config" style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '16px' }}>
             <div className="search-config-row">
-              <label className="search-config-label" htmlFor="searchWordInput">
+              <label className="search-config-label" htmlFor={`${uid}-words`}>
                 TARGET WORDS (AUTO-SAVED &amp; EDITABLE):
               </label>
               <textarea
-                id="searchWordInput"
+                id={`${uid}-words`}
                 className="search-words-field"
                 style={{ height: '70px', resize: 'vertical', fontSize: '12px', lineHeight: 1.45, fontFamily: 'monospace' }}
                 value={wordsText}
@@ -338,7 +344,7 @@ export function SearchModule({ isActive = true }) {
                 ⚡ LOAD SAMPLE GRID
               </button>
               <button type="button" className="bg-btn" onClick={handleRestoreWords}>
-                🔄 RESTORE ALL 40 WORDS
+                🔄 RESTORE ALL {MASTER_WORD_COUNT} WORDS
               </button>
               <button type="button" className="bg-btn" onClick={handleClear}>
                 🗑️ CLEAR GRID
@@ -379,6 +385,7 @@ export function SearchModule({ isActive = true }) {
             onCellChange={handleCellChange}
             onCellKeyDown={handleCellKeyDown}
             onCellPaste={handleCellPaste}
+            idPrefix={uid}
           />
         </WorkingPanel>
       }

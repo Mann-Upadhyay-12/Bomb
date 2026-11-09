@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
@@ -28,12 +28,12 @@ export function LogicModule({ isActive = true }) {
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
+  const uid = useId(); // per-instance ids: missions can show the same module several times
 
   const [vars, setVars] = useState(DEFAULT_VARS);
   const [manualText, setManualText] = useState(DEFAULT_MANUAL_TEXT);
-  const [stages, setStages] = useState([
-    '(¬R^S)^¬S', '', '', '', ''
-  ]);
+  // Start empty so opening the tab doesn't silently overwrite the clipboard
+  const [stages, setStages] = useState(['', '', '', '', '']);
   const [activeStageIdx, setActiveStageIdx] = useState(0);
   const [previewUri, setPreviewUri] = useState('');
   const [previewMeta, setPreviewMeta] = useState('');
@@ -70,18 +70,19 @@ const results = (() => {
       const val = evaluateExpression(expr, greek, vars);
       if (STAGE_SYMBOLS[i]) greek[STAGE_SYMBOLS[i]] = val;
       return { val };
-    } catch {
-      return null;
+    } catch (err) {
+      return { error: (err && err.message) || 'invalid' };
     }
   });
 })();
 
+  // Stage 5 has no greek symbol, so it is reported as just T / F
   const validResults = results
-    .map((result, i) =>
-      result !== null
-        ? `${STAGE_SYMBOLS[i]}=${result.val ? 'T' : 'F'}`
-        : null
-    )
+    .map((result, i) => {
+      if (!result || result.error) return null;
+      const tf = result.val ? 'T' : 'F';
+      return STAGE_SYMBOLS[i] ? `${STAGE_SYMBOLS[i]}=${tf}` : tf;
+    })
     .filter(Boolean);
 
   const copyFormatted = validResults.join(' ');
@@ -108,9 +109,39 @@ const results = (() => {
     setActiveStageIdx(idx);
   };
 
+  // Insert at the caret of the focused stage input (or append), ⌫ deletes
   const handlePadInsert = (symbol) => {
-    const current = stages[activeStageIdx] || '';
-    handleStageChange(activeStageIdx, current + symbol);
+    const idx = activeStageIdx;
+    const el = document.getElementById(`${uid}-stage${idx}`);
+    const current = stages[idx] || '';
+    let start = current.length, end = current.length;
+    if (el && document.activeElement === el && el.selectionStart !== null) {
+      start = el.selectionStart;
+      end = el.selectionEnd;
+    }
+    let next, caret;
+    if (symbol === '⌫') {
+      if (start !== end) { next = current.slice(0, start) + current.slice(end); caret = start; }
+      else if (start > 0) { next = current.slice(0, start - 1) + current.slice(start); caret = start - 1; }
+      else { next = current; caret = 0; }
+    } else {
+      next = current.slice(0, start) + symbol + current.slice(end);
+      caret = start + symbol.length;
+    }
+    handleStageChange(idx, next);
+    requestAnimationFrame(() => {
+      const input = document.getElementById(`${uid}-stage${idx}`);
+      if (input) { input.focus(); input.setSelectionRange(caret, caret); }
+    });
+  };
+
+  // Pasting several lines into a stage fills that stage and the following ones
+  const handleStagePaste = (idx, e) => {
+    const text = e.clipboardData ? e.clipboardData.getData('text') : '';
+    if (!text || !text.includes('\n')) return;
+    e.preventDefault();
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    setStages(prev => prev.map((st, i) => (i >= idx && i - idx < lines.length ? lines[i - idx] : st)));
   };
 
   const handleSample = () => {
@@ -231,13 +262,13 @@ onImage={(img, dataUri, fileBlob) => {
           >
             <label
               className="logic-config-label"
-              htmlFor="logicManual"
+              htmlFor={`${uid}-manual`}
             >
               PASTE MANUAL TEXT (EXTRACTS P, Q, R, S, T):
             </label>
 
             <textarea
-              id="logicManual"
+              id={`${uid}-manual`}
               className="search-words-field"
               style={{ height: '76px', resize: 'vertical', fontSize: '12px', lineHeight: 1.45, fontFamily: 'monospace' }}
               value={manualText}
@@ -277,7 +308,11 @@ onImage={(img, dataUri, fileBlob) => {
             results={results}
             onVarToggle={handleVarToggle}
             onStageChange={handleStageChange}
+            onStageFocus={setActiveStageIdx}
+            onStagePaste={handleStagePaste}
+            activeStageIdx={activeStageIdx}
             onPadInsert={handlePadInsert}
+            idPrefix={uid}
           />
         </WorkingPanel>
       }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { PN_DEFAULT_CODES, pnNote, pnParseCodes, PN_INT } from './pianoSolver.js';
 import { pnAnalyze } from './pianoVision.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
@@ -18,6 +18,7 @@ export function PianoModule({ isActive = true }) {
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
+  const uid = useId(); // per-instance ids: missions can show the same module several times
 
   const [clefSel, setClefSel] = useState('auto');
   const [detClef, setDetClef] = useState('bass');
@@ -92,9 +93,10 @@ export function PianoModule({ isActive = true }) {
 
   const handleSample = () => {
     setClefSel('treble');
-    setNotes([{ pos: 0, acc: 0 }, { pos: 4, acc: 0 }]); // C4 and G4 (Perfect 5th)
-    setStatusText('Loaded Sample: Treble Clef, C4 and G4');
-    showToast('SAMPLE NOTES (C4 - G4) LOADED ✓');
+    // pos 0 = bottom staff line (E4 in treble), pos 4 = middle line (B4) → Perfect 5th
+    setNotes([{ pos: 0, acc: 0 }, { pos: 4, acc: 0 }]);
+    setStatusText('Loaded Sample: Treble Clef, E4 and B4 (Perfect 5th)');
+    showToast('SAMPLE NOTES (E4 - B4) LOADED ✓');
   };
 
   const handleClear = () => {
@@ -194,7 +196,7 @@ export function PianoModule({ isActive = true }) {
 
             <div className="search-config-row">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label className="search-config-label" htmlFor="pnCodes">
+                <label className="search-config-label" htmlFor={`${uid}-codes`}>
                   STAGE CODE TABLE (Interval to Code mapping):
                 </label>
                 <button
@@ -211,7 +213,7 @@ export function PianoModule({ isActive = true }) {
                 </button>
               </div>
               <textarea
-                id="pnCodes"
+                id={`${uid}-codes`}
                 className="password-rows-field"
                 rows={2}
                 value={codesText}

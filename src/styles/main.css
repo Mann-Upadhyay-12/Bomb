@@ -6,6 +6,7 @@
     --brass: #E5B84B;
     --brass-glow: rgba(229,184,75,0.30);
     --brass-deep: #C79832;
+    --brass-dim: rgba(229,184,75,0.14);
     --line: #2B313D;
     --dot-empty: #1C2028;
     --dot-empty-ring: #3C4454;
@@ -33,6 +34,7 @@
     --brass: #AD7A2E;
     --brass-glow: rgba(173,122,46,0.25);
     --brass-deep: #8A5F1F;
+    --brass-dim: rgba(173,122,46,0.12);
     --line: #D8CDB6;
     --dot-empty: #FFFFFF;
     --dot-empty-ring: #B7AB92;
@@ -70,7 +72,8 @@
       radial-gradient(circle at 1px 1px, rgba(33,29,23,0.05) 1px, transparent 1.6px) 0 0/16px 16px,
       var(--paper);
   }
-  .page { width: 100%; max-width: 880px; }
+  #root { width: 100%; min-width: 0; display: flex; justify-content: center; }
+  .page { width: 100%; max-width: 880px; min-width: 0; }
 
   /* Navigation mode pill toggle */
   .mode-toggle-main {
@@ -78,8 +81,8 @@
     flex-wrap: wrap;
     background: var(--paper-raised);
     border: 1px solid var(--line);
-    border-radius: 999px;
-    padding: 4px;
+    border-radius: 18px;
+    padding: 6px;
     margin-bottom: 24px;
     box-shadow: var(--shadow-out);
     gap: 4px;
@@ -370,17 +373,38 @@
     border-right-color: var(--paper-raised);
     border-bottom-color: var(--paper-raised);
   }
+  /* Floating toast — bottom centre, never pushes layout around */
   .copied-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 28px;
+    z-index: 2000;
+    transform: translate(-50%, 16px);
+    max-width: calc(100vw - 32px);
+    padding: 10px 18px;
+    border-radius: 999px;
+    background: var(--paper-raised);
+    border: 1px solid var(--brass);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.45), 0 0 0 4px var(--brass-dim);
     font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 12px;
+    font-weight: 700;
     letter-spacing: .08em;
     color: var(--brass);
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     opacity: 0;
-    transition: opacity .2s ease;
+    pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease;
   }
-  .copied-toast.show { opacity: 1; }
-  [data-theme="parchment"] .copied-toast { color: var(--brass-deep); }
+  .copied-toast.show { opacity: 1; transform: translate(-50%, 0); }
+  [data-theme="parchment"] .copied-toast {
+    color: var(--brass-deep);
+    border-color: var(--brass-deep);
+    box-shadow: 0 8px 22px rgba(33,29,23,0.18), 0 0 0 4px var(--brass-dim);
+  }
 
   /* Dropzone — signature pinstriped brass border */
   .dropzone {
@@ -928,3 +952,94 @@
     .dropzone { min-height: 160px; padding: 20px 12px; }
     .grid-cell { width: 34px; height: 34px; font-size: 13px; }
   }
+
+
+  /* ─────────────── Shared additions (bug-fix pass) ─────────────── */
+
+  /* Status / hint line used by modules for OCR + screenshot-reader feedback */
+  .module-hint {
+    font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--brass);
+    background: var(--paper-raised);
+    color: var(--ink);
+    margin-bottom: 10px;
+  }
+  .module-hint.ok { border-left-color: var(--select-green); }
+  .module-hint.bad { border-left-color: #E57373; color: var(--ink); }
+
+  /* Screenshot thumbnails (Diagram rounds, Symbols grids) */
+  .shots, .sy-grid-thumbs { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .shot-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    max-width: 160px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  .shot-card.bad { border-color: #E57373; }
+  .shot-card img { height: 64px; max-width: 100%; object-fit: contain; border-radius: 6px; display: block; }
+  .shot-card-tag {
+    font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+    font-size: 10px; font-weight: 700; letter-spacing: .1em; color: var(--brass);
+  }
+  .shot-card.bad .shot-card-tag { color: #E57373; }
+  .shot-card-meta { font-size: 10.5px; color: var(--ink-soft); line-height: 1.35; }
+
+  /* Wire Sequences stage strip */
+  .ws-stage-strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+  .ws-stage-card {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 8px 4px; min-width: 0;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+    transition: border-color .15s ease, background .15s ease;
+  }
+  .ws-stage-card:hover { border-color: var(--brass); }
+  .ws-stage-card.done { color: var(--ink); }
+  .ws-stage-card.active { border-color: var(--brass); background: var(--brass-dim); box-shadow: 0 0 0 1px var(--brass) inset; }
+  .ws-stage-card img { width: 100%; max-width: 72px; border-radius: 4px; }
+  .ws-stage-card-title { font-size: 10px; font-weight: 700; letter-spacing: .1em; color: var(--brass); }
+  .ws-stage-card-sub { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+
+  .preview-row img + img { margin-left: -4px; }
+
+  /* Disabled buttons should look disabled */
+  .bg-btn:disabled, .reset-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* Visible keyboard focus everywhere */
+  button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible,
+  [role="button"]:focus-visible {
+    outline: 2px solid var(--brass);
+    outline-offset: 2px;
+  }
+
+  /* Fixed-size boards (mines 10 cols, chess, queens…) scroll inside their panel
+     on narrow screens instead of pushing the whole page sideways */
+  .working-panel-content { overflow-x: auto; }
+
+  @media (max-width: 640px) {
+    body { padding: 20px 16px 48px; }
+    h1 { font-size: 34px; }
+    .mode-toggle-main { border-radius: 14px; }
+    .mode-btn-main { padding: 7px 10px; font-size: 10.5px; }
+    .working-panel-content { padding: 14px 12px; }
+    .ws-stage-strip { grid-template-columns: repeat(5, minmax(56px, 1fr)); overflow-x: auto; }
+    .copied-toast { bottom: 18px; font-size: 11px; }
+  }
+
+  /* Let flex/grid children shrink so wide boards scroll inside their panel */
+  .module-layout-container, .module-layout-working, .working-panel, .working-panel-content,
+  .module-input-wrap, .mission-modules-container, .mission-module-window { min-width: 0; max-width: 100%; }
+  .board-container, .search-board-wrap, .maze-board-wrap { max-width: 100%; }

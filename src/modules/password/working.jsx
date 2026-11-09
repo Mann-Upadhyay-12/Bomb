@@ -7,8 +7,8 @@ export function PasswordWorking({ cols = [], rowsCount = 0 }) {
         className="password-grid"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(5, minmax(80px, 1fr))',
-          gap: '10px'
+          gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+          gap: '6px'
         }}
       >
         {[0, 1, 2, 3, 4].map(colIdx => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { MASTER_PASSWORDS, filterPasswordCandidates } from './passwordSolver.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
@@ -10,12 +10,15 @@ import { CopyLines } from '../../core/components/CopyLines.jsx';
 import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
 import { PasswordWorking } from './working.jsx';
 
+const DEFAULT_COUNT = MASTER_PASSWORDS.filter(w => w.length === 5).length;
+
 export const PASSWORD_WORDS_KEY = 'bombvision_password_words';
 
 export function PasswordModule({ isActive = true }) {
   const { copyOnDecode, setLastCopyString } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
+  const uid = useId(); // per-instance ids: missions can show the same module several times
 
   const [rowsText, setRowsText] = useState('');
   const [masterText, setMasterText] = useState(() => {
@@ -26,7 +29,8 @@ export function PasswordModule({ isActive = true }) {
     }
   });
 
-  const rawRows = rowsText.split('\n');
+  // Accept one row per line, or rows separated by spaces / commas
+  const rawRows = rowsText.split(/[\s,;]+/);
   const { rows, masterSet, matches, cols } = filterPasswordCandidates(rawRows, masterText);
 
   // Trigger copy on decode if single match
@@ -57,11 +61,11 @@ export function PasswordModule({ isActive = true }) {
     try {
       localStorage.setItem(PASSWORD_WORDS_KEY, def);
     } catch (e) {}
-    showToast('RESTORED 35 PASSWORDS ✓');
+    showToast(`RESTORED ${DEFAULT_COUNT} PASSWORDS ✓`);
   };
 
   const handleSample = () => {
-    setRowsText('LHLOD\nLBANE\nPHATD');
+    setRowsText('LHLOD\nLBANE\nTHAIR\nWIAIE\nCEUUW\nLOASW');
     showToast('SAMPLE ROWS LOADED ✓');
   };
 
@@ -100,33 +104,33 @@ export function PasswordModule({ isActive = true }) {
                 type="button"
                 onClick={handleRestoreWords}
               >
-                🔄 RESTORE 35 WORDS
+                🔄 RESTORE {DEFAULT_COUNT} WORDS
               </button>
             </>
           }
         >
           <div className="password-config" style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '16px' }}>
             <div className="search-config-row">
-              <label className="search-config-label" htmlFor="passwordRowsInput">
+              <label className="search-config-label" htmlFor={`${uid}-rows`}>
                 SCROLLING LETTER ROWS (1 ROW PER LINE, e.g. "LHLOD"):
               </label>
               <textarea
-                id="passwordRowsInput"
+                id={`${uid}-rows`}
                 className="password-rows-field"
                 rows={4}
                 value={rowsText}
                 onChange={(e) => setRowsText(e.target.value)}
-                placeholder="LHLOD&#10;LBANE&#10;PHATD"
+                placeholder="LHLOD&#10;LBANE&#10;THAIR"
                 spellCheck="false"
               />
             </div>
 
             <div className="search-config-row">
-              <label className="search-config-label" htmlFor="passwordMasterInput">
-                35 MASTER PASSWORDS LIST (SPACE-SEPARATED):
+              <label className="search-config-label" htmlFor={`${uid}-master`}>
+                MASTER PASSWORDS LIST ({masterSet.length} WORDS, SPACE-SEPARATED):
               </label>
               <textarea
-                id="passwordMasterInput"
+                id={`${uid}-master`}
                 className="search-words-field"
                 style={{ height: '70px', resize: 'vertical', fontSize: '12px', lineHeight: 1.45, fontFamily: 'monospace' }}
                 value={masterText}
@@ -144,7 +148,7 @@ export function PasswordModule({ isActive = true }) {
                 ⚡ LOAD SAMPLE ROWS
               </button>
               <button type="button" className="bg-btn" onClick={handleRestoreWords}>
-                🔄 RESTORE 35 WORDS
+                🔄 RESTORE {DEFAULT_COUNT} WORDS
               </button>
               <button type="button" className="bg-btn" onClick={handleClear}>
                 🗑️ CLEAR ROWS

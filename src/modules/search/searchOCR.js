@@ -14,12 +14,12 @@ export async function ensureOCRWorker(onProgress) {
       throw new Error('Tesseract.js library not loaded — check network connection');
     }
 
-    // Protect with a 15-second timeout so it never hangs indefinitely
+    // Protect with a 60-second timeout (first run downloads the ~10MB model) so it never hangs indefinitely
     let timerId;
     const timeoutPromise = new Promise((_, reject) => {
       timerId = setTimeout(() => {
-        reject(new Error('OCR engine initialization timed out (15s)'));
-      }, 15000);
+        reject(new Error('OCR engine initialization timed out (60s)'));
+      }, 60000);
     });
 
     const initWorker = async () => {

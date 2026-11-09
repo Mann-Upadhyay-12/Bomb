@@ -18,7 +18,14 @@ export function SymbolsModule({ isActive = true }) {
   const { copy } = useClipboard();
 
   const [buttons, setButtons] = useState([null, null, null, null]);
-  const [counts, setCounts] = useState({});
+  // Up to 3 reference-grid screenshots (like the original) + manual ± adjustments.
+  // Counts are derived, so re-pasting a grid replaces it instead of double-counting.
+  const [grids, setGrids] = useState([null, null, null]);
+  const [adj, setAdj] = useState({});
+  const [status, setStatus] = useState({ text: '', ok: null });
+  const counts = {};
+  grids.forEach(g => { if (g) for (const [k, v] of Object.entries(g.counts)) counts[k] = (counts[k] || 0) + v; });
+  for (const [k, v] of Object.entries(adj)) counts[k] = Math.max(0, (counts[k] || 0) + v);
   const [previewUri, setPreviewUri] = useState('');
   const [previewMeta, setPreviewMeta] = useState('');
 
@@ -45,23 +52,71 @@ export function SymbolsModule({ isActive = true }) {
   };
 
   const handleCountAdj = (symbolKey, delta) => {
-    setCounts(prev => ({
-      ...prev,
-      [symbolKey]: Math.max(0, (prev[symbolKey] || 0) + delta)
-    }));
+    const cur = counts[symbolKey] || 0;
+    if (cur + delta < 0) return;
+    setAdj(prev => ({ ...prev, [symbolKey]: (prev[symbolKey] || 0) + delta }));
   };
 
   const handleSample = () => {
-    // Pick 4 diverse sample symbols and sample counts
-    const sampleKeys = ['balloon', 'at', 'squidknife', 'copyright'];
-    setButtons(sampleKeys);
-    setCounts({ balloon: 3, at: 1, squidknife: 5, copyright: 2 });
+    // 4 symbols from the symbol table with sample occurrence counts → press order 3 1 4 2
+    setButtons(['OMEGA', 'PSI', 'COPYRIGHT', 'ZHE']);
+    setGrids([null, null, null]);
+    setAdj({ OMEGA: 3, PSI: 1, COPYRIGHT: 5, ZHE: 2 });
     showToast('SAMPLE SYMBOLS LOADED ✓');
+  };
+
+  const removeGrid = (i) => setGrids(prev => prev.map((g, j) => (j === i ? null : g)));
+
+  const readImageData = (img) => {
+    const sc = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+    const W = Math.round(img.naturalWidth * sc), H = Math.round(img.naturalHeight * sc);
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const g = cv.getContext('2d', { willReadFrequently: true });
+    g.drawImage(img, 0, 0, W, H);
+    return g.getImageData(0, 0, W, H);
+  };
+
+  // A screenshot with 4 pale tiles is the module keypad; anything else is a reference grid
+  const handleImage = (img, dataUri, fileBlob) => {
+    setPreviewUri(dataUri);
+    setPreviewMeta(`${img.naturalWidth}×${img.naturalHeight} px source`);
+    setLastImage(img, fileBlob);
+    try {
+      const imgData = readImageData(img);
+      const probe = syReadModule(imgData);
+      if (probe.tiles >= 4) {
+        setButtons(prev => prev.map((k, i) => probe.buttons[i] || k));
+        const got = probe.buttons.filter(Boolean).length;
+        setStatus({
+          text: got === 4 ? 'Module read: all 4 buttons detected.' : `Module: only ${got}/4 buttons detected. Pick the missing ones by hand.`,
+          ok: got === 4
+        });
+        showToast(`MODULE READ: ${got}/4 BUTTONS ✓`);
+      } else {
+        const r = syReadGrids(imgData);
+        if (r.cells > 0) {
+          setGrids(prev => {
+            let slot = prev.findIndex(g => !g);
+            if (slot < 0) slot = 2;
+            return prev.map((g, i) => (i === slot ? { ...r, url: dataUri } : g));
+          });
+          setStatus({ text: `Grid read: ${r.cells} cells counted (${r.grids} grid(s)). Check the counts below.`, ok: true });
+          showToast(`GRID READ: ${r.cells} CELLS COUNTED ✓`);
+        } else {
+          setStatus({ text: 'Could not detect symbols in that image.', ok: false });
+          showToast('COULD NOT DETECT SYMBOLS');
+        }
+      }
+    } catch (e) {
+      setStatus({ text: 'Could not read that image — set symbols below.', ok: false });
+    }
   };
 
   const handleClear = () => {
     setButtons([null, null, null, null]);
-    setCounts({});
+    setGrids([null, null, null]);
+    setAdj({});
+    setStatus({ text: '', ok: null });
     setPreviewUri('');
     setPreviewMeta('');
     setLastImage(null, null);
@@ -87,44 +142,7 @@ export function SymbolsModule({ isActive = true }) {
         <ModuleInput
           dropzone={
             <Dropzone
-              onImage={(img, dataUri, fileBlob) => {
-                setPreviewUri(dataUri);
-                setPreviewMeta(`${img.naturalWidth}×${img.naturalHeight} px source`);
-                setLastImage(img, fileBlob);
-
-                try {
-                  const sc = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
-                  const W = Math.round(img.naturalWidth * sc), H = Math.round(img.naturalHeight * sc);
-                  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
-                  const g = cv.getContext('2d', { willReadFrequently: true });
-                  g.drawImage(img, 0, 0, W, H);
-                  const imgData = g.getImageData(0, 0, W, H);
-
-                  const probe = syReadModule(imgData);
-                  if (probe.tiles >= 4) {
-                    const next = [...buttons];
-                    probe.buttons.forEach((k, i) => { if (k) next[i] = k; });
-                    setButtons(next);
-                    showToast(`MODULE READ: ${probe.buttons.filter(Boolean).length}/4 BUTTONS ✓`);
-                  } else {
-                    const r = syReadGrids(imgData);
-                    if (r.cells > 0) {
-                      setCounts(prev => {
-                        const updated = { ...prev };
-                        for (const [k, v] of Object.entries(r.counts)) {
-                          updated[k] = (updated[k] || 0) + v;
-                        }
-                        return updated;
-                      });
-                      showToast(`GRID READ: ${r.cells} CELLS COUNTED ✓`);
-                    } else {
-                      showToast('COULD NOT DETECT SYMBOLS');
-                    }
-                  }
-                } catch (e) {
-                  showToast('IMAGE LOADED — SET SYMBOLS BELOW');
-                }
-              }}
+              onImage={handleImage}
               icon="🔣 Ω Ѣ © Ψ"
               title="Click here, then paste screenshot of symbols keypad or grid"
             />
@@ -153,13 +171,29 @@ export function SymbolsModule({ isActive = true }) {
               </button>
             </>
           }
-        />
+        >
+          {status.text && (
+            <div className={`module-hint ${status.ok === false ? 'bad' : 'ok'}`}>{status.text}</div>
+          )}
+          {grids.some(Boolean) && (
+            <div className="sy-grid-thumbs">
+              {grids.map((g, i) => g && (
+                <div key={i} className="shot-card">
+                  <img src={g.url} alt={`grid ${i + 1}`} />
+                  <div className="shot-card-tag">GRID {i + 1}</div>
+                  <div className="shot-card-meta">{g.cells} cells</div>
+                  <button type="button" className="bg-btn" style={{ padding: '2px 8px', fontSize: '10px' }} onClick={() => removeGrid(i)}>remove</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </ModuleInput>
       }
       answers={
         <AnswerPanel
           label="SYMBOLS BUTTON PRESS ORDER"
           stats={stampStats}
-          answers={order.length === 4 ? order.map(r => `Button ${r.n}`) : []}
+          answers={order.length === 4 ? order.map(r => `${r.n}`) : []}
           copyValue={copyFormatted}
           placeholder="SELECT ALL 4 SYMBOLS"
         />
@@ -188,6 +222,6 @@ export const symbolsModule = {
   tabLabel: '🔣 SYMBOLS',
   eyebrow: 'SYMBOLS PUZZLE SOLVER',
   title: 'Symbols Vision',
-  sub: 'Select the 4 symbols on the module keypad. Automatically sorts by occurrence counts across reference grids to determine the <b>exact button press order</b> and copy to clipboard!',
+  sub: 'Paste the module keypad screenshot and up to 3 reference-grid screenshots (or pick symbols / adjust counts by hand). Sorts the 4 buttons by occurrence count to give the <b>exact button press order</b> and copies it to your clipboard!',
   Component: SymbolsModule
 };

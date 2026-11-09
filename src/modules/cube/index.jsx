@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { searchCube } from './cubeSolver.js';
 import { detectCubeStickers, POS, sampleMedianRGB, cls } from './cubeVision.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
@@ -27,7 +27,12 @@ export function CubeModule({ isActive = true }) {
   const [previewUri, setPreviewUri] = useState('');
   const [previewMeta, setPreviewMeta] = useState('');
 
+  // Each solve gets a token; results from an older (superseded) solve are ignored
+  const solveToken = useRef(0);
+
   const solve = async (currentCells = cells) => {
+    const token = ++solveToken.current;
+    setSolution('');
     setStatusMsg('Searching solution…');
     const obs = Array(54).fill(null);
     for (let i = 0; i < 9; i++) {
@@ -37,7 +42,14 @@ export function CubeModule({ isActive = true }) {
     }
 
     try {
-      const res = await searchCube(obs, 10);
+      const res = await searchCube(obs, 10, () => token === solveToken.current);
+      if (token !== solveToken.current || (res && res.cancelled)) return;
+      if (res && res.timeout) {
+        setSolution('');
+        setStatusMsg('SEARCH TIMED OUT — check the sticker colours');
+        if (isActive) setLastCopyString('');
+        return;
+      }
       if (res && res.sols && res.sols.length > 0) {
         const movesStr = res.sols[0];
         setSolution(movesStr);
@@ -54,6 +66,7 @@ export function CubeModule({ isActive = true }) {
         }
       }
     } catch (err) {
+      if (token !== solveToken.current) return;
       setSolution('');
       setStatusMsg('Error: ' + err.message);
       if (isActive) {
@@ -130,6 +143,7 @@ export function CubeModule({ isActive = true }) {
   };
 
   const handleClear = () => {
+    solveToken.current++;
     const def = {
       U: Array(9).fill('W'),
       F: Array(9).fill('G'),

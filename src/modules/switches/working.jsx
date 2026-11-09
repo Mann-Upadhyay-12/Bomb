@@ -21,7 +21,7 @@ export function SwitchesWorking({
               key={i}
               className="sw-item"
               onClick={() => onSwitchClick(i)}
-              style={{ cursor: path ? 'default' : 'pointer' }}
+              style={{ cursor: 'pointer' }}
             >
               <div className="sw-track">
                 <div className={`sw-led lit pos-${gpos}`} />

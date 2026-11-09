@@ -58,15 +58,16 @@ export function QueensModule({ isActive = true }) {
   };
 
   const handleSample = () => {
+    // Region ids are 1-based, matching parseQueensRegionsFromImage()
     const sampleRegions = [
-      [0, 0, 1, 1, 1, 2, 2, 2],
-      [0, 0, 0, 1, 1, 2, 2, 2],
-      [3, 0, 0, 1, 4, 4, 2, 5],
-      [3, 3, 0, 4, 4, 4, 5, 5],
-      [3, 3, 6, 6, 4, 4, 5, 5],
-      [3, 6, 6, 6, 6, 7, 7, 5],
-      [6, 6, 6, 6, 7, 7, 7, 7],
-      [6, 6, 6, 7, 7, 7, 7, 7]
+      [1, 1, 2, 2, 2, 3, 3, 3],
+      [1, 1, 1, 2, 2, 3, 3, 3],
+      [4, 1, 1, 2, 5, 5, 3, 6],
+      [4, 4, 1, 5, 5, 5, 6, 6],
+      [4, 4, 7, 7, 5, 5, 6, 6],
+      [4, 7, 7, 7, 7, 8, 8, 6],
+      [7, 7, 7, 7, 8, 8, 8, 8],
+      [7, 7, 7, 8, 8, 8, 8, 8]
     ];
     setRegionGrid(sampleRegions);
     const solutions = solveQueensPuzzle(sampleRegions);
@@ -181,7 +182,7 @@ export function QueensModule({ isActive = true }) {
           stats={stampStats}
           answers={coords.length ? coords.map(c => `👑 ${c}`) : []}
           copyValue={coords.join(' ')}
-          placeholder={regionGrid.length ? 'NO QUEENS PLACED' : '— — —'}
+          placeholder={regionGrid.length ? 'NO VALID SOLUTION — CHECK REGIONS' : '— — —'}
         />
       }
       copylines={<CopyLines items={copyItems} />}

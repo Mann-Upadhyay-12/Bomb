@@ -9,11 +9,26 @@ export const ENGINE_URLS = [
 
 let worker = null;
 let engineReady = null;
+let lastStatus = 'Engine offline';
+const statusListeners = new Set();
+let searchSeq = 0;
 
+function emitStatus(text) {
+  lastStatus = text;
+  statusListeners.forEach(fn => { try { fn(text); } catch (e) {} });
+}
+
+// Every caller (e.g. several Chess windows in one mission) gets status updates,
+// not only the first one that happened to start the engine.
 export function startEngine(onStatusChange) {
+  if (onStatusChange) {
+    statusListeners.add(onStatusChange);
+    onStatusChange(lastStatus);
+  }
   if (engineReady) return engineReady;
+  const onStatus = emitStatus;
   engineReady = (async () => {
-    if (onStatusChange) onStatusChange('Loading Stockfish…');
+    onStatus('Loading Stockfish…');
     for (const url of ENGINE_URLS) {
       try {
         let source = '';
@@ -40,28 +55,63 @@ export function startEngine(onStatusChange) {
           worker.postMessage('uci');
           worker.postMessage('isready');
         });
-        if (onStatusChange) onStatusChange('Stockfish ready ✓');
+        onStatus('Stockfish ready ✓');
         return true;
-      } catch (error) {}
+      } catch (error) {
+        if (worker) { try { worker.terminate(); } catch (e) {} }
+        worker = null;
+      }
     }
-    if (onStatusChange) onStatusChange('⚠ Engine load failed (check network/stockfish.js)');
+    onStatus('⚠ Engine load failed (check network/stockfish.js)');
     return false;
   })();
   return engineReady;
 }
 
-export function askEngine(fen, milliseconds, onInfo) {
+export function stopEngineListener(onStatusChange) {
+  statusListeners.delete(onStatusChange);
+}
+
+/**
+ * Ask Stockfish for the best move. Only one search runs at a time: starting a new
+ * search stops the previous one, whose promise then resolves to SUPERSEDED.
+ */
+export const SUPERSEDED = Symbol('superseded');
+let pendingResolve = null;
+
+export async function askEngine(fen, milliseconds, onInfo) {
+  if (!worker && engineReady) await engineReady;
+  if (!worker) return null;
+
+  const mySeq = ++searchSeq;
+  let stoppedPrevious = false;
+  if (pendingResolve) {
+    const prev = pendingResolve;
+    pendingResolve = null;
+    prev(SUPERSEDED);
+    worker.postMessage('stop');
+    stoppedPrevious = true;
+  }
+
   return new Promise(resolve => {
-    if (!worker) {
-      resolve(null);
-      return;
-    }
-    const timer = setTimeout(() => {
-      resolve(null);
-    }, milliseconds + 2000);
+    // After 'stop' the old search still prints its bestmove; UCI processes commands in
+    // order, so everything before the 'readyok' answering our 'isready' belongs to it.
+    let waitingForBarrier = stoppedPrevious;
+    const finish = (val) => {
+      clearTimeout(timer);
+      if (pendingResolve === finish) pendingResolve = null;
+      resolve(val);
+    };
+    pendingResolve = finish;
+    const timer = setTimeout(() => finish(null), milliseconds + 2000);
 
     worker.onmessage = event => {
+      if (mySeq !== searchSeq) return;
       const line = String(event.data);
+      if (waitingForBarrier) {
+        if (line.includes('readyok')) waitingForBarrier = false;
+        return;
+      }
       if (line.startsWith('info') && line.includes(' score ') && onInfo) {
         const depth = (line.match(/ depth (\d+)/) || [])[1] || '';
         const cp = (line.match(/score cp (-?\d+)/) || [])[1] || '';
@@ -69,10 +119,10 @@ export function askEngine(fen, milliseconds, onInfo) {
         onInfo({ depth, cp, mate });
       }
       if (line.startsWith('bestmove')) {
-        clearTimeout(timer);
-        resolve(line.split(' ')[1]);
+        finish(line.split(' ')[1]);
       }
     };
+    if (stoppedPrevious) worker.postMessage('isready');
     worker.postMessage('ucinewgame');
     worker.postMessage('position fen ' + fen);
     worker.postMessage('go movetime ' + milliseconds);
