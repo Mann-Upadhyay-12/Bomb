@@ -1,0 +1,48 @@
+/* SIMONS Mode Styles */
+    #simonsConfig {
+      display: none; flex-direction: column; gap: 16px;
+      margin-bottom: 24px; padding: 20px 22px;
+      background: var(--paper-raised); border: 1px solid var(--line);
+      border-radius: 16px; box-shadow: var(--shadow-out);
+    }
+    .simon-drop {
+      border: 2px dashed var(--brass); border-radius: 12px;
+      padding: 20px 12px; text-align: center; cursor: pointer;
+      background: repeating-linear-gradient(0deg,transparent,transparent 15px,rgba(229,184,75,.04) 15px,rgba(229,184,75,.04) 16px);
+      color: var(--ink-soft); font-family: ui-monospace,Consolas,monospace; font-size: 12px;
+      transition: background .15s, border-color .15s;
+    }
+    .simon-drop.over { border-color: #F3CA65; background: rgba(229,184,75,.12); }
+    .simon-chip {
+      display:inline-flex;align-items:center;justify-content:center;
+      width:40px;height:40px;border-radius:6px;color:#fff;
+      font-weight:700;font-size:17px;border:2px solid rgba(0,0,0,.3);margin:3px;
+    }
+    .simon-chip.R{background:#c62828}.simon-chip.B{background:#1e6bc4}
+    .simon-chip.G{background:#2e7d32}.simon-chip.Y{background:#f2a81d;color:#2b2417}
+    .simon-chip.sm{width:28px;height:28px;font-size:13px;margin:1px}
+    .simon-chip.none{background:transparent;color:var(--ink-soft);border:2px dashed var(--line)}
+    .simon-stacks{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;align-items:center}
+    .simon-lbl{font-family:ui-monospace,Consolas,monospace;font-size:12px;font-weight:700;
+               letter-spacing:.1em;color:var(--brass);text-transform:uppercase}
+    .simon-row{display:flex;flex-wrap:wrap;align-items:center;min-height:48px}
+    .simon-pairs{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+    .simon-pair{border:1px solid var(--line);border-radius:8px;padding:4px 8px;
+                text-align:center;background:var(--paper)}
+    .simon-pair .sn{font-size:10px;color:var(--ink-soft)}
+    .simon-uploads-table{width:100%;border-collapse:collapse;font-size:13px;font-family:ui-monospace,Consolas,monospace}
+    .simon-uploads-table td,.simon-uploads-table th{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;color:var(--ink)}
+    .simon-uploads-table th{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--brass)}
+    .simon-rules-area{width:100%;min-height:130px;border:1px solid var(--line);border-radius:10px;
+                      background:var(--paper);padding:10px;font-family:ui-monospace,Consolas,monospace;
+                      font-size:12px;color:var(--ink);resize:vertical;line-height:1.5;}
+    .simon-rules-area:focus{outline:2px solid var(--brass);outline-offset:1px}
+    .simon-status{font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--ink-soft)}
+    .simon-status.warn{color:#F87171}
+    .simon-rules-table{width:100%;border-collapse:collapse;font-size:13px;font-family:ui-monospace,Consolas,monospace;max-width:380px}
+    .simon-rules-table td,.simon-rules-table th{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:middle;color:var(--ink)}
+    .simon-rules-table th{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--brass)}
+    [data-theme="parchment"] .simon-lbl{color:var(--brass-deep)}
+    [data-theme="parchment"] .simon-uploads-table th{color:var(--brass-deep)}
+    [data-theme="parchment"] .simon-rules-table th{color:var(--brass-deep)}
+    [data-theme="parchment"] .simon-status.warn{color:#B04A3A}

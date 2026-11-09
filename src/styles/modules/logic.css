@@ -1,0 +1,111 @@
+/* LOGIC Mode Styles */
+    .logic-config {
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 24px;
+      padding: 22px 24px;
+      background: var(--paper-raised);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: var(--shadow-out);
+    }
+    .logic-card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .logic-card-lbl {
+      font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      color: var(--brass);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logic-vars-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .logic-v-chip {
+      padding: 6px 14px;
+      border-radius: 8px;
+      background: var(--paper-raised);
+      border: 1.5px solid var(--line);
+      cursor: pointer;
+      font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--ink);
+      transition: all .12s ease;
+      user-select: none;
+    }
+    .logic-v-chip:hover {
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-out);
+    }
+    .logic-v-chip.T {
+      color: #68D391;
+      border-color: #48BB78;
+      background: rgba(72,187,120,0.22);
+      box-shadow: 0 0 8px rgba(72,187,120,0.3);
+    }
+    .logic-v-chip.F {
+      color: #F87171;
+      border-color: #EF5350;
+      background: rgba(239,83,80,0.22);
+      box-shadow: 0 0 8px rgba(239,83,80,0.3);
+    }
+    [data-theme="parchment"] .logic-card-lbl { color: var(--brass-deep); }
+    [data-theme="parchment"] .logic-v-chip.T {
+      color: var(--select-green-deep);
+      border-color: var(--select-green);
+      background: rgba(62,124,74,0.16);
+      box-shadow: 0 0 8px rgba(62,124,74,0.25);
+    }
+    [data-theme="parchment"] .logic-v-chip.F {
+      color: #B04A3A;
+      border-color: #B04A3A;
+      background: rgba(176,74,58,0.16);
+      box-shadow: 0 0 8px rgba(176,74,58,0.25);
+    }
+    .logic-pad {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .logic-pad button {
+      min-width: 44px;
+      height: 38px;
+      padding: 0 10px;
+      font-size: 16px;
+      font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+      font-weight: 700;
+      background: var(--paper-raised);
+      color: var(--ink);
+      border: 1.5px solid var(--line);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all .12s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .logic-pad button:hover {
+      border-color: var(--brass);
+      color: var(--brass);
+      transform: translateY(-1px);
+    }
+    .logic-pad button:active {
+      background: var(--brass);
+      color: #121419;
+    }

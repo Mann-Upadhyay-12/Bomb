@@ -1,0 +1,96 @@
+/* KNOB Mode Styles */
+    .knob-config {
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 20px;
+      padding: 20px 22px;
+      background: var(--paper-raised);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: var(--shadow-out);
+    }
+    .knob-panel-wrap {
+      display: flex;
+      gap: 28px;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      padding: 6px 0;
+    }
+    .knob-board {
+      background: #15181F;
+      border: 3px solid #2B313D;
+      border-radius: 18px;
+      padding: 18px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 6px 28px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08);
+    }
+    [data-theme="parchment"] .knob-board {
+      background: #201C16;
+      border-color: #362E24;
+      box-shadow: 0 6px 28px rgba(33,29,23,.4), inset 0 1px 0 rgba(255,255,255,.08);
+    }
+    .knob-grid-hdr {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      align-items: center;
+    }
+    .knob-grid-title {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: .14em;
+      color: var(--brass);
+      text-shadow: 0 0 14px rgba(173,122,46,.35);
+    }
+    .knob-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .knob-row-label {
+      font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--ink-soft);
+      letter-spacing: .1em;
+      margin-bottom: 5px;
+    }
+    .knob-row-leds {
+      display: flex;
+      gap: 8px;
+    }
+    .knob-led-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 2px solid #362E24;
+      background: #181511;
+      color: #7C7466;
+      font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all .15s ease;
+      user-select: none;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.6);
+    }
+    .knob-led-btn:hover {
+      transform: scale(1.08);
+      border-color: var(--brass);
+    }
+    .knob-led-btn.is-on {
+      background: radial-gradient(circle at 35% 35%, #FFF7D6, #E5B84B 60%, #9E7412);
+      color: #12141A;
+      border-color: #FFF;
+      box-shadow: 0 0 16px rgba(229,184,75,0.85), inset 0 -2px 4px rgba(0,0,0,0.4);
+      text-shadow: 0 1px 2px rgba(255,255,255,0.4);
+    }

@@ -1,0 +1,349 @@
+/* Mission Sidebar & Filter Styles */
+
+.sidebar-toggle-btn {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--paper-raised);
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: var(--shadow-out);
+  transition: all .15s ease;
+  user-select: none;
+}
+.sidebar-toggle-btn:hover {
+  border-color: var(--brass);
+  color: var(--brass);
+}
+.sidebar-toggle-btn .toggle-icon {
+  font-size: 13px;
+}
+.sidebar-toggle-btn.has-mission {
+  border-color: var(--brass);
+  background: rgba(229,184,75,0.12);
+  color: var(--brass);
+}
+
+.top-bar-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.sidebar-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(2px);
+  z-index: 9998;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.mission-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 320px;
+  max-width: 85vw;
+  background: var(--paper);
+  border-right: 1px solid var(--line);
+  box-shadow: 4px 0 24px rgba(0,0,0,0.6);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(-100%);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mission-sidebar.open {
+  transform: translateX(0);
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper-raised);
+}
+
+.sidebar-title-area {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-eyebrow {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: .2em;
+  color: var(--brass);
+  font-weight: 700;
+}
+
+.sidebar-title {
+  margin: 0;
+  font-size: 20px;
+  font-family: Georgia, 'Times New Roman', serif;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.sidebar-close-btn {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .15s ease;
+}
+.sidebar-close-btn:hover {
+  color: var(--ink);
+  border-color: var(--ink-soft);
+  background: var(--paper);
+}
+
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 14px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sidebar-all-row {
+  padding: 0 4px;
+}
+
+.sidebar-all-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  background: var(--paper-raised);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  transition: all .15s ease;
+}
+.sidebar-all-btn:hover {
+  border-color: var(--brass);
+}
+.sidebar-all-btn.active {
+  border-color: var(--brass);
+  background: rgba(229,184,75,0.12);
+}
+.all-icon {
+  font-size: 20px;
+}
+.all-info {
+  display: flex;
+  flex-direction: column;
+}
+.all-label {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: .08em;
+  color: var(--brass);
+}
+.all-desc {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.sidebar-divider {
+  height: 1px;
+  background: var(--line);
+  margin: 4px 4px 8px;
+}
+
+.sidebar-sections-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sidebar-section {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper-raised);
+  overflow: hidden;
+}
+
+.sidebar-section-header {
+  width: 100%;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--ink);
+  text-align: left;
+  transition: background .12s;
+}
+.sidebar-section-header:hover {
+  background: rgba(255,255,255,0.03);
+}
+.sidebar-section-title {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: var(--ink);
+}
+.sidebar-section-caret {
+  font-size: 10px;
+  color: var(--ink-soft);
+}
+
+.sidebar-missions-group {
+  padding: 6px 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--paper);
+  border-top: 1px solid var(--line);
+}
+
+.sidebar-mission-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--paper-raised);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.sidebar-mission-card:hover {
+  border-color: var(--brass);
+  transform: translateY(-1px);
+}
+.sidebar-mission-card.active {
+  border-color: var(--brass);
+  background: rgba(229,184,75,0.12);
+  box-shadow: 0 0 12px rgba(229,184,75,0.15);
+}
+
+.mission-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.mission-id-badge {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--brass);
+}
+.mission-mod-count {
+  font-size: 10px;
+  color: var(--ink-soft);
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+}
+
+.mission-modules-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.mission-mod-pill {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+}
+.sidebar-mission-card.active .mission-mod-pill {
+  color: var(--ink);
+}
+.mission-mod-pill.unimplemented {
+  opacity: 0.55;
+  border-style: dashed;
+  text-decoration: line-through;
+}
+
+/* Active Mission Banner above Top Router */
+.mode-toggle-wrapper {
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mode-toggle-wrapper .mode-toggle-main {
+  margin-bottom: 0;
+}
+.active-mission-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 14px;
+  background: rgba(229,184,75,0.08);
+  border: 1px solid var(--brass);
+  border-radius: 8px;
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+}
+.active-mission-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: var(--brass);
+}
+.clear-mission-btn {
+  background: transparent;
+  border: none;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: color .12s;
+  padding: 2px 6px;
+}
+.clear-mission-btn:hover {
+  color: var(--ink);
+}
+
+.mode-btn-main.unimplemented {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border: 1px dashed var(--line);
+}

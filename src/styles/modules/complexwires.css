@@ -1,0 +1,54 @@
+#complexWiresConfig {
+      display: none; flex-direction: column; gap: 16px;
+      margin-bottom: 24px; padding: 20px 22px;
+      background: var(--paper-raised); border: 1px solid var(--line);
+      border-radius: 16px; box-shadow: var(--shadow-out);
+    }
+    .cw-drops { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .cw-drop { border: 2px dashed var(--line); border-radius: 10px; min-height: 100px;
+               padding: 10px; display: flex; flex-direction: column;
+               align-items: center; justify-content: center; gap: 6px;
+               text-align: center; color: var(--ink-soft); cursor: pointer;
+               font-family: ui-monospace,Consolas,monospace; font-size: 12px;
+               transition: border-color .15s; }
+    .cw-drop:focus { border-color: var(--brass); outline: none; }
+    .cw-drop img { max-width: 100%; max-height: 120px; border-radius: 6px; }
+    .cw-wire { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center;
+               padding: 8px 0; border-top: 1px solid var(--line); }
+    .cw-wire:first-child { border-top: 0; }
+    .cw-wire .cw-num { width: 20px; font-weight: 700; color: var(--brass); font-family: ui-monospace,Consolas,monospace; }
+    .cw-swatches { display: flex; gap: 5px; }
+    .cw-swatch { width: 50px; height: 24px; border-radius: 12px; border: 2px solid transparent; cursor: pointer; padding: 0; transition: border-color .12s; }
+    .cw-swatch[aria-pressed="true"] { border-color: var(--ink); }
+    .cw-swatch.red { background: #e04848; }
+    .cw-swatch.blue { background: #3d8bf0; }
+    .cw-swatch.white { background: #f4f4f4; box-shadow: inset 0 0 0 1px #bbb; }
+    .cw-swatch.striped { background: repeating-linear-gradient(90deg,#e04848 0 8px,#3d8bf0 8px 16px); }
+    .cw-check { display: flex; gap: 5px; align-items: center; cursor: pointer; font-family: ui-monospace,Consolas,monospace; font-size: 12px; color: var(--ink); }
+    .cw-status { font-size: 13px; color: var(--ink-soft); font-family: ui-monospace,Consolas,monospace; margin-top: 6px; }
+    .cw-answer { font-size: 26px; font-weight: 700; margin: 0 0 6px; font-family: ui-monospace,Consolas,monospace; color: var(--ink); }
+    .cw-answer span { color: #4ADE80; }
+    .cw-warn { color: #F87171; font-size: 13px; margin: 0 0 6px; font-family: ui-monospace,Consolas,monospace; }
+    .cw-verdict { padding: 6px 0; border-top: 1px solid var(--line); font-family: ui-monospace,Consolas,monospace; font-size: 12.5px; }
+    .cw-verdict:first-of-type { border-top: 0; }
+    .cw-tag { display: inline-block; min-width: 48px; text-align: center; font-weight: 700;
+              border-radius: 4px; padding: 0 6px; margin-right: 6px; color: #fff;
+              font-size: 11px; }
+    .cw-tag.cut { background: #2e7d32; }
+    .cw-tag.keep { background: #B04A3A; }
+    .cw-why { color: var(--ink-soft); font-size: 12px; }
+    .cw-map { position: relative; max-width: 480px; aspect-ratio: 710/640;
+              background: #faf8f2; border-radius: 10px; border: 1px solid var(--line); }
+    .cw-map svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .cw-map button { position: absolute; transform: translate(-50%,-50%); min-width: 30px; height: 30px;
+                     border-radius: 15px; background: transparent; border: 2px solid transparent;
+                     color: #1f2430; font: 700 18px Georgia,serif; cursor: pointer; padding: 0; }
+    .cw-map button.used { border-color: var(--brass); background: rgba(229,184,75,.35); }
+    .cw-map button.unset { color: #B04A3A; }
+    .cw-map button.unsure { border: 2px dashed #B04A3A; }
+    .cw-read-status { font-family: ui-monospace,Consolas,monospace; font-size: 11.5px; color: var(--ink-soft); margin-top: 6px; }
+    [data-theme="parchment"] .cw-warn{color:#B04A3A}
+    [data-theme="parchment"] .cw-answer span{color:var(--select-green-deep)}
+    [data-theme="parchment"] .cw-tag.cut{background:#3E7C4A}
+    [data-theme="parchment"] .cw-tag.keep{background:#B04A3A}
+    @media(max-width:520px){.cw-drops{grid-template-columns:1fr}}

@@ -1,0 +1,23 @@
+/* Word Search Mode Styles */
+  /* Search mode */
+  .search-config { display: none; flex-direction: column; gap: 12px; margin-bottom: 20px; padding: 18px 20px; background: var(--paper-raised); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-out); }
+  .search-config-row { display: flex; flex-direction: column; gap: 6px; }
+  .search-config-label { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; font-size: 11px; font-weight: 700; letter-spacing: .12em; color: var(--brass); }
+  .search-words-field { width: 100%; font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; font-size: 13px; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; outline: none; transition: border-color .15s ease; }
+  .search-words-field:focus { border-color: var(--brass); }
+  .search-btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .search-cell { width: 50px; height: 50px; background: var(--paper-raised); border: 1px solid var(--line); border-radius: 10px; color: var(--ink); font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; font-size: 24px; font-weight: 700; text-align: center; text-transform: uppercase; outline: none; transition: all 0.15s ease; box-shadow: var(--shadow-out); }
+  .search-cell:focus { border-color: var(--brass); box-shadow: 0 0 0 3px var(--brass-glow); }
+  .search-cell.highlighted { background: rgba(72,187,120,0.22) !important; border: 2px solid #48BB78 !important; color: #68D391 !important; box-shadow: 0 0 10px rgba(72,187,120,0.35) !important; }
+  .search-cell.low-confidence { border: 2px solid var(--brass) !important; box-shadow: 0 0 8px var(--brass-glow) !important; background: rgba(229,184,75,0.12) !important; }
+  [data-theme="parchment"] .search-config-label { color: var(--brass-deep); }
+  [data-theme="parchment"] .search-cell:focus { box-shadow: 0 0 0 3px rgba(173,122,46,0.2); }
+  [data-theme="parchment"] .search-cell.highlighted { background: rgba(62,124,74,0.18) !important; border: 2px solid var(--select-green-deep) !important; color: var(--select-green-deep) !important; box-shadow: 0 0 10px rgba(62,124,74,0.3) !important; }
+  [data-theme="parchment"] .search-cell.low-confidence { border: 2px solid var(--brass) !important; box-shadow: 0 0 8px rgba(173,122,46,0.3) !important; background: rgba(173,122,46,0.08) !important; }
+
+  /* OCR progress */
+  .ocr-progress-wrap { display: none; height: 3px; background: var(--line); border-radius: 2px; margin-top: 10px; overflow: hidden; }
+  .ocr-progress-wrap.show { display: block; }
+  .ocr-progress-bar { height: 100%; background: var(--brass); border-radius: 2px; transition: width .2s ease; width: 0%; }
+  [data-theme="parchment"] .ocr-progress-bar { background: var(--brass-deep); }
+

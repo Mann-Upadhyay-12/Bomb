@@ -1,0 +1,13 @@
+/* Morse Mode Styles */
+  /* Morse waveform & letter cards */
+  .morse-wave-wrap { width: 100%; overflow: hidden; }
+  #morseWaveCanvas { display: block; width: 100%; border-radius: 8px; background: var(--paper); border: 1px solid var(--line); }
+  .morse-letter-section-label { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; font-size: 11px; letter-spacing: .16em; color: var(--ink-soft); margin: 16px 0 10px; }
+  #morseLetterRow { display: flex; flex-wrap: wrap; gap: 10px; min-height: 72px; align-items: center; }
+  .morse-letter-card { background: var(--paper-raised); border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 14px; text-align: center; font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; min-width: 52px; box-shadow: var(--shadow-out); }
+  .morse-letter-card .mlc-char { font-size: 22px; font-weight: 700; color: var(--ink); line-height: 1; }
+  .morse-letter-card .mlc-code { font-size: 13px; margin-top: 6px; letter-spacing: 3px; color: var(--brass); }
+  .morse-word-sep { width: 1px; height: 52px; background: var(--line); border-radius: 2px; margin: 0 6px; flex: none; }
+  .legend-box.dot { background: #48BB78; border: 1px solid #2F855A; }
+  .legend-box.dash { background: var(--brass); border: 1px solid var(--brass-deep); }
+

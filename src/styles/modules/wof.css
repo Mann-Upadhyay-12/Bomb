@@ -1,0 +1,12 @@
+/* WOF Mode Styles */
+    .wof-config{display:none;flex-direction:column;gap:14px;margin-bottom:20px;padding:18px 20px;background:var(--paper-raised);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-out);}
+    .wof-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .wof-slot{display:flex;flex-direction:column;gap:5px;}
+    .wof-sel{width:100%;font-family:ui-monospace,'Cascadia Code',Consolas,monospace;font-size:13px;font-weight:600;color:var(--ink);background:var(--paper);border:1.5px solid var(--line);border-radius:8px;padding:9px 10px;outline:none;}
+    .wof-sel:focus{border-color:var(--brass);}
+    .wof-slot.warn .wof-sel{border-color:var(--brass);background:rgba(229,184,75,.14);}
+    .wof-slot.look .wof-sel{border-color:#60A5FA;box-shadow:0 0 10px rgba(96,165,250,.35);}
+    .wof-slot.hit .wof-sel{border-color:#48BB78;background:rgba(72,187,120,.22);color:#68D391;box-shadow:0 0 10px rgba(72,187,120,.35);}
+    [data-theme="parchment"] .wof-slot.warn .wof-sel{border-color:var(--brass-deep);background:rgba(173,122,46,.10);}
+    [data-theme="parchment"] .wof-slot.hit .wof-sel{border-color:var(--select-green-deep);background:rgba(62,124,74,.18);color:var(--select-green-deep);box-shadow:0 0 10px rgba(62,124,74,.35);}
+    .wof-tag{font-family:ui-monospace,'Cascadia Code',Consolas,monospace;font-size:9.5px;color:var(--ink-soft);letter-spacing:.06em;margin-left:6px;}

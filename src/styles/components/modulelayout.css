@@ -1,0 +1,21 @@
+.module-layout-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.module-layout-input {
+  width: 100%;
+}
+
+.module-layout-answers {
+  width: 100%;
+}
+
+.module-layout-copylines {
+  width: 100%;
+}
+
+.module-layout-working {
+  width: 100%;
+}

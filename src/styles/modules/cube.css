@@ -1,0 +1,120 @@
+/* CUBE Mode Styles */
+    .cube-config {
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 20px;
+      padding: 20px 22px;
+      background: var(--paper-raised);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: var(--shadow-out);
+    }
+    .cube-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .cube-btn-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+    .cube-canvas-card {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .cube-canvas-wrap {
+      background: #0b0c10;
+      border: 1.5px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+      min-height: 240px;
+      box-shadow: var(--shadow-in);
+      position: relative;
+    }
+    .cube-cv {
+      width: auto;
+      height: auto;
+      max-width: 100%;
+      max-height: 52vh;
+      display: block;
+      margin: 0 auto;
+      border-radius: 8px;
+      touch-action: none;
+      cursor: grab;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+    }
+    .cube-grids-section {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .cube-grids-wrap {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 16px;
+      justify-items: center;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px 16px;
+      box-shadow: var(--shadow-in);
+    }
+    .cube-face-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      max-width: 150px;
+    }
+    .cube-face-title {
+      font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: var(--brass-deep);
+      text-align: center;
+      text-transform: uppercase;
+    }
+    .cube-grid-3x3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 5px;
+      width: 100%;
+      aspect-ratio: 1;
+      background: #0d0f14;
+      padding: 6px;
+      border-radius: 8px;
+      border: 1.5px solid var(--line);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+    .cube-swatch {
+      aspect-ratio: 1;
+      border-radius: 5px;
+      border: 1.5px solid rgba(0, 0, 0, 0.45);
+      cursor: pointer;
+      padding: 0;
+      box-shadow: inset 0 1px 1px rgba(255,255,255,0.25), 0 1px 2px rgba(0,0,0,0.5);
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
+    .cube-swatch:hover {
+      transform: scale(1.08);
+      box-shadow: inset 0 1px 1px rgba(255,255,255,0.4), 0 0 8px rgba(173,122,46,0.5);
+      z-index: 1;
+    }
+    .cube-swatch:focus-visible {
+      outline: 2px solid var(--brass);
+      outline-offset: 1px;
+    }

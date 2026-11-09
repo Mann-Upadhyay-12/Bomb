@@ -1,0 +1,67 @@
+/* WIRESEQ Mode Styles */
+    #wireSeqConfig {
+      display: none; flex-direction: column; gap: 16px;
+      margin-bottom: 24px; padding: 20px 22px;
+      background: var(--paper-raised); border: 1px solid var(--line);
+      border-radius: 16px; box-shadow: var(--shadow-out);
+    }
+    .ws-stamp {
+      font-family: ui-monospace,'Cascadia Code',Consolas,monospace;
+      font-weight: 700; font-size: 42px; letter-spacing: .1em;
+      line-height: 1.1; min-height: 52px; word-break: break-word;
+      color: var(--ink);
+    }
+    .ws-stamp .ph { color: var(--line); }
+    .ws-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .ws-chip { font-family: ui-monospace,Consolas,monospace; font-weight: 600; font-size: 12px;
+               padding: 7px 12px; border-radius: 999px; border: 1.5px solid var(--line); color: var(--ink-soft); }
+    .ws-chip.cut { background: var(--select-green); border-color: var(--select-green); color: var(--paper-raised); }
+    .ws-chip.skip { background: rgba(176,74,58,.12); border-color: #B04A3A; color: #F87171; }
+    .ws-wire { display: grid; grid-template-columns: 32px 1fr 1fr; gap: 10px; align-items: center;
+               padding: 10px 0; border-top: 1px dashed var(--line); }
+    .ws-wire:first-of-type { border-top: 0; }
+    .ws-num { font-family: Georgia,serif; font-weight: 700; font-size: 24px; color: var(--ink); }
+    .ws-grp { display: flex; gap: 6px; flex-wrap: wrap; }
+    .ws-opt { font-family: ui-monospace,Consolas,monospace; font-size: 12px; font-weight: 600;
+              border: 1.5px solid var(--line); background: transparent; color: var(--ink);
+              border-radius: 999px; padding: 8px 12px; cursor: pointer;
+              display: inline-flex; align-items: center; gap: 6px;
+              transition: border-color .12s, background .12s; }
+    .ws-opt:hover { border-color: var(--brass); }
+    .ws-opt .ws-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--ws-c, var(--ink)); }
+    .ws-opt.on { border-color: var(--brass-deep); background: rgba(229,184,75,.12); }
+    .ws-opt.dest { min-width: 40px; justify-content: center; }
+    .ws-counts { display: flex; gap: 10px; flex-wrap: wrap; }
+    .ws-count { font-family: ui-monospace,Consolas,monospace; font-size: 12px; font-weight: 600;
+                border: 1px solid var(--line); border-radius: 10px; padding: 7px 12px;
+                display: flex; align-items: center; gap: 7px; color: var(--ink); }
+    .ws-count .ws-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ws-c); }
+    .ws-manual-area { width: 100%; min-height: 130px; border: 1px solid var(--line); border-radius: 10px;
+                      background: var(--paper); padding: 10px; font-family: ui-monospace,Consolas,monospace;
+                      font-size: 12px; color: var(--ink); resize: vertical; line-height: 1.5; }
+    .ws-manual-area:focus { outline: 2px solid var(--brass); outline-offset: 1px; }
+    .ws-status { font-family: ui-monospace,Consolas,monospace; font-size: 11.5px; color: var(--ink-soft); }
+    .ws-status.err { color: #F87171; } .ws-status.ok { color: #4ADE80; }
+    .ws-panel-no { font-family: ui-monospace,Consolas,monospace; font-size: 11px; letter-spacing: .16em; color: var(--ink-soft); }
+    [data-theme="parchment"] .ws-chip.cut{color:var(--paper-raised)}
+    [data-theme="parchment"] .ws-chip.skip{color:#B04A3A}
+    [data-theme="parchment"] .ws-opt.on{border-color:var(--brass-deep);background:rgba(173,122,46,.09)}
+    [data-theme="parchment"] .ws-status.err{color:#B04A3A}
+    [data-theme="parchment"] .ws-status.ok{color:var(--select-green-deep)}
+    .ws-stage-btn { font-family: ui-monospace,'Cascadia Code',Consolas,monospace; font-size: 11.5px;
+                    font-weight: 700; letter-spacing: .06em; padding: 8px 16px; border-radius: 999px;
+                    border: 1.5px solid var(--line); background: transparent; color: var(--ink-soft);
+                    cursor: pointer; transition: border-color .12s, background .12s, color .12s; }
+    .ws-stage-btn:hover { border-color: var(--brass); color: var(--ink); }
+    .ws-stage-btn.active { background: var(--brass); color: #121419; border-color: var(--brass); }
+    .ws-quick-input { font-family: ui-monospace,Consolas,monospace; font-size: 13px;
+                      color: var(--ink); background: var(--paper); border: 1.5px solid var(--line);
+                      border-radius: 10px; padding: 10px 14px; outline: none; transition: border-color .15s;
+                      flex: 1; min-width: 0; }
+    .ws-quick-input:focus { border-color: var(--brass); }
+    .ws-shortcut-chip { font-family: ui-monospace,Consolas,monospace; font-size: 11px; font-weight: 600;
+                        padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line);
+                        background: var(--paper-raised); color: var(--ink-soft); cursor: pointer;
+                        transition: border-color .12s, color .12s; }
+    .ws-shortcut-chip:hover { border-color: var(--brass); color: var(--ink); }
+    [data-theme="parchment"] .ws-stage-btn.active{background:var(--ink);color:var(--paper-raised);}

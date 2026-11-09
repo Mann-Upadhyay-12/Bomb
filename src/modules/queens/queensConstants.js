@@ -1,0 +1,1 @@
+export const QUEENS_PALETTE = ['#F2BD91', '#AFD2A1', '#BCACE9', '#EAD58D', '#9BCAE1', '#EDABC0', '#8ED3C6', '#B7BFD0'];

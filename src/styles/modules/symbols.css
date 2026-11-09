@@ -1,0 +1,31 @@
+#symbolsConfig{display:none;flex-direction:column;gap:16px;margin-bottom:24px;padding:20px 22px;
+      background:var(--paper-raised);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-out)}
+    .sy-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .sy-row .upload-btn{margin:0}
+    .sy-thumbs{display:flex;gap:8px;flex-wrap:wrap}
+    .sy-thumb{position:relative;border:1px solid var(--line);border-radius:8px;padding:4px;background:var(--paper);
+      font-family:ui-monospace,Consolas,monospace;font-size:10.5px;color:var(--ink-soft);text-align:center;min-width:88px}
+    .sy-thumb img{display:block;max-width:120px;max-height:90px;border-radius:5px;margin:0 auto 3px}
+    .sy-thumb button{background:none;border:0;color:#B04A3A;cursor:pointer;font-size:11px;font-weight:700;padding:2px 4px}
+    .sy-btns{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    @media(max-width:560px){.sy-btns{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    .sy-btn{border:1.5px solid var(--line);border-radius:12px;padding:10px 8px;text-align:center;background:var(--paper);
+      font-family:ui-monospace,Consolas,monospace}
+    .sy-btn .n{font-size:11px;font-weight:700;color:var(--brass);letter-spacing:.1em}
+    .sy-btn .g{font-size:38px;line-height:1.2;color:var(--ink);font-family:Georgia,'Times New Roman',serif}
+    .sy-btn .c{font-size:12px;font-weight:700;color:var(--ink)}
+    .sy-btn select{margin-top:6px;width:100%;font-size:12px;background:var(--paper-raised);color:var(--ink);
+      border:1px solid var(--line);border-radius:6px;padding:5px}
+    .sy-counts{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px}
+    .sy-count{border:1px solid var(--line);border-radius:10px;padding:6px 4px;text-align:center;background:var(--paper)}
+    .sy-count .g{font-size:22px;font-family:Georgia,'Times New Roman',serif;color:var(--ink)}
+    .sy-count .k{display:flex;align-items:center;justify-content:center;gap:6px;font-family:ui-monospace,Consolas,monospace;
+      font-weight:700;font-size:13px;color:var(--ink-soft)}
+    .sy-count .k.on{color:var(--brass)}
+    .sy-count .k button{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:5px;width:24px;height:24px;
+      cursor:pointer;font-weight:700;line-height:1}
+    .sy-seq{display:flex;flex-direction:column;gap:6px}
+    .sy-step{display:flex;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:10px;
+      padding:8px 14px;font-family:ui-monospace,Consolas,monospace;font-size:13px;color:var(--ink)}
+    .sy-step b{font-size:20px;color:var(--brass)}
+    .sy-svg{display:inline-block;vertical-align:middle;fill:currentColor}

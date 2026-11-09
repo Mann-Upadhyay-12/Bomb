@@ -1,0 +1,29 @@
+/* Maze Mode Styles */
+  /* Maze mode */
+  .maze-config { display: none; flex-direction: column; gap: 12px; margin-bottom: 20px; padding: 18px 20px; background: var(--paper-raised); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-out); }
+  .maze-upload-row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .maze-upload-card { flex: 1; min-width: 220px; background: var(--paper); border: 1.5px dashed var(--line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; transition: border-color .15s ease, background .15s ease, transform .1s ease; }
+  .maze-upload-card.drag { border-color: var(--brass) !important; background: rgba(229,184,75,0.12) !important; transform: scale(1.01); }
+  .maze-upload-card-title { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; font-size: 11px; font-weight: 700; letter-spacing: .1em; color: var(--brass); }
+  .maze-status-tag { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; font-size: 11px; color: var(--ink-soft); }
+  .maze-cell { width: 44px; height: 44px; background: #181C24; border: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; font-size: 12px; font-weight: 700; color: var(--ink-soft); cursor: pointer; position: relative; user-select: none; transition: transform 0.08s ease, background 0.1s ease; box-sizing: border-box; }
+  .maze-cell:hover { transform: scale(1.08); z-index: 5; }
+  .maze-cell.wall-u { border-top: 3.5px solid var(--brass) !important; }
+  .maze-cell.wall-d { border-bottom: 3.5px solid var(--brass) !important; }
+  .maze-cell.wall-l { border-left: 3.5px solid var(--brass) !important; }
+  .maze-cell.wall-r { border-right: 3.5px solid var(--brass) !important; }
+  .maze-cell.start-cell { background: rgba(239,83,80,0.28) !important; color: #EF5350 !important; box-shadow: inset 0 0 10px rgba(239,83,80,0.3); }
+  .maze-cell.goal-cell { background: rgba(229,184,75,0.28) !important; color: var(--brass) !important; box-shadow: inset 0 0 10px rgba(229,184,75,0.3); }
+  .maze-cell.path-cell { background: rgba(72,187,120,0.25) !important; color: #68D391 !important; box-shadow: inset 0 0 8px rgba(72,187,120,0.3); }
+  .maze-cell .cell-coord { font-size: 7.5px; position: absolute; top: 2px; left: 3px; opacity: 0.5; }
+  [data-theme="parchment"] .maze-upload-card.drag { border-color: var(--brass-deep) !important; background: rgba(173,122,46,0.1) !important; }
+  [data-theme="parchment"] .maze-upload-card-title { color: var(--brass-deep); }
+  [data-theme="parchment"] .maze-cell { background: var(--paper-raised); }
+  [data-theme="parchment"] .maze-cell.wall-u { border-top: 3.5px solid var(--brass-deep) !important; }
+  [data-theme="parchment"] .maze-cell.wall-d { border-bottom: 3.5px solid var(--brass-deep) !important; }
+  [data-theme="parchment"] .maze-cell.wall-l { border-left: 3.5px solid var(--brass-deep) !important; }
+  [data-theme="parchment"] .maze-cell.wall-r { border-right: 3.5px solid var(--brass-deep) !important; }
+  [data-theme="parchment"] .maze-cell.start-cell { background: rgba(176,74,58,0.2) !important; color: #B04A3A !important; box-shadow: inset 0 0 10px rgba(176,74,58,0.3); }
+  [data-theme="parchment"] .maze-cell.goal-cell { background: rgba(173,122,46,0.22) !important; color: var(--brass-deep) !important; box-shadow: inset 0 0 10px rgba(173,122,46,0.3); }
+  [data-theme="parchment"] .maze-cell.path-cell { background: rgba(62,124,74,0.22) !important; color: var(--select-green-deep) !important; box-shadow: inset 0 0 8px rgba(62,124,74,0.3); }
+
