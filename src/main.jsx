@@ -33,6 +33,8 @@ import './styles/modules/simons.css';
 import './styles/modules/wireseq.css';
 import './styles/modules/complexwires.css';
 import './styles/modules/symbols.css';
+import './styles/modules/button.css';
+import './styles/modules/balance.css';
 
 const rootEl = document.getElementById('root');
 if (rootEl) {

@@ -6,7 +6,7 @@ import { ModeRouter } from './core/ModeRouter.jsx';
 import { MissionSidebar } from './core/components/MissionSidebar.jsx';
 import { KNOWN_MODULE_NAMES } from './core/sectionsData.js';
 
-// Import all 18 migrated React modules
+// Import all puzzle modules
 import { MinesModule, minesModule } from './modules/mines/index.jsx';
 import { QueensModule, queensModule } from './modules/queens/index.jsx';
 import { MorseModule, morseModule } from './modules/morse/index.jsx';
@@ -25,6 +25,8 @@ import { SimonsModule, simonsModule } from './modules/simons/index.jsx';
 import { WireseqModule, wireseqModule } from './modules/wireseq/index.jsx';
 import { ComplexWiresModule, complexwiresModule } from './modules/complexwires/index.jsx';
 import { SymbolsModule, symbolsModule } from './modules/symbols/index.jsx';
+import { ButtonModule, buttonModule } from './modules/button/index.jsx';
+import { BalanceModule, balanceModule } from './modules/balance/index.jsx';
 
 export function App() {
   const { appMode, setAppMode, prefixHash, setPrefixHash } = useAppState();
@@ -82,7 +84,9 @@ export function App() {
     simons: simonsModule,
     wireseq: wireseqModule,
     complexwires: complexwiresModule,
-    symbols: symbolsModule
+    symbols: symbolsModule,
+    button: buttonModule,
+    balance: balanceModule
   };
 
   const currentMeta = moduleMeta[appMode] || minesModule;
@@ -126,6 +130,10 @@ export function App() {
         return <ComplexWiresModule isActive={isActive} />;
       case 'symbols':
         return <SymbolsModule isActive={isActive} />;
+      case 'button':
+        return <ButtonModule isActive={isActive} />;
+      case 'balance':
+        return <BalanceModule isActive={isActive} />;
       default:
         return <MinesModule isActive={isActive} />;
     }
@@ -232,7 +240,7 @@ export function App() {
           <h1>Bomb &amp; Queens &amp; Morse &amp; Logic Vision</h1>
           <div className="about-panel">
             <p className="about-text">
-              <b>Bomb &amp; Queens &amp; Morse &amp; Logic Vision</b> is an automated computer vision &amp; constraint solver for GTA Heist puzzles. Includes automated modules for Minesweeper, Queens, Morse Code, Word Search, Mazes, Passwords, Switches, Venn Diagrams, Piano Intervals, Who's on First, Knobs, Rubik's Cube, Logic (¬ &gt; ^ &gt; V &gt; →), and <b>Chess</b> (Stockfish).
+              <b>Bomb &amp; Queens &amp; Morse &amp; Logic Vision</b> is an automated computer vision &amp; constraint solver for GTA Heist puzzles. Includes automated modules for Minesweeper, Queens, Morse Code, Word Search, Mazes, Passwords, Switches, Venn Diagrams, Piano Intervals, Who's on First, Knobs, Rubik's Cube, Logic (¬ &gt; ^ &gt; V &gt; →), <b>Chess</b> (Stockfish), The Button and Balance.
             </p>
           </div>
           <div className="about-panel bg-panel">
