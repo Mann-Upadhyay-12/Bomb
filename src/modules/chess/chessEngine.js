@@ -73,15 +73,19 @@ export function stopEngineListener(onStatusChange) {
 }
 
 /**
- * Ask Stockfish for the best move. Only one search runs at a time: starting a new
- * search stops the previous one, whose promise then resolves to SUPERSEDED.
+ * Ask Stockfish for the best move. Only one search runs at a time. A new search from the
+ * same owner (e.g. the same Chess window) stops that owner's running search, whose promise
+ * resolves to SUPERSEDED; a search from another owner waits its turn instead, so several
+ * Chess windows in one mission don't cancel each other.
  */
 export const SUPERSEDED = Symbol('superseded');
 let pendingResolve = null;
+let current = null; // { owner, done: Promise }
 
-export async function askEngine(fen, milliseconds, onInfo) {
+export async function askEngine(fen, milliseconds, onInfo, owner = 'default') {
   if (!worker && engineReady) await engineReady;
   if (!worker) return null;
+  while (current && current.owner !== owner) await current.done;
 
   const mySeq = ++searchSeq;
   let stoppedPrevious = false;
@@ -93,6 +97,10 @@ export async function askEngine(fen, milliseconds, onInfo) {
     stoppedPrevious = true;
   }
 
+  let markDone;
+  const me = { owner, done: new Promise(r => { markDone = r; }) };
+  current = me;
+
   return new Promise(resolve => {
     // After 'stop' the old search still prints its bestmove; UCI processes commands in
     // order, so everything before the 'readyok' answering our 'isready' belongs to it.
@@ -100,6 +108,8 @@ export async function askEngine(fen, milliseconds, onInfo) {
     const finish = (val) => {
       clearTimeout(timer);
       if (pendingResolve === finish) pendingResolve = null;
+      if (current === me) current = null;
+      markDone();
       resolve(val);
     };
     pendingResolve = finish;

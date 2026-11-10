@@ -95,6 +95,11 @@ export function Dropzone({
     }
   };
 
+  // The window listeners are registered once; they call the latest handlers through this ref
+  // (re-registering on every render reset the drag counter mid-drag and made the highlight flicker).
+  const latest = useRef({});
+  latest.current = { handleDataTransfer, loadFromSource };
+
   // Window-wide drag and drop & paste listeners
   // CRITICAL: Only process events if this specific dropzone is currently visible (not hidden in an inactive mission slot)
   useEffect(() => {
@@ -165,7 +170,7 @@ export function Dropzone({
       e.stopImmediatePropagation();
       dragDepth = 0;
       setIsDrag(false);
-      handleDataTransfer(e.dataTransfer);
+      latest.current.handleDataTransfer(e.dataTransfer);
     };
 
     const handleWindowPaste = (e) => {
@@ -182,13 +187,13 @@ export function Dropzone({
           if (src.type === 'file') {
             e.preventDefault();
             e.stopImmediatePropagation();
-            loadFromSource(src);
+            latest.current.loadFromSource(src);
           }
           return;
         }
         e.preventDefault();
         e.stopImmediatePropagation();
-        loadFromSource(src);
+        latest.current.loadFromSource(src);
       }
     };
 
@@ -209,7 +214,7 @@ export function Dropzone({
       window.removeEventListener('drop', handleWindowDrop);
       window.removeEventListener('paste', handleWindowPaste);
     };
-  }, [multiple, onFiles, onImage]);
+  }, []);
 
   return (
     <>

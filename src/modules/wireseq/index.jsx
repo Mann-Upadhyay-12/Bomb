@@ -114,8 +114,9 @@ export function WireseqModule({ isActive = true }) {
     const res = wsReadImage(g.getImageData(0, 0, W, H));
     const th = document.createElement('canvas'); th.width = 96; th.height = Math.max(1, Math.round(96 * H / W));
     th.getContext('2d').drawImage(c2, 0, 0, th.width, th.height);
-    const stageIdx = res.stageNo ? res.stageNo - 1 : stageHint;
-    return { stageIdx, fromDots: !!res.stageNo, wires: res.wires, thumb: th.toDataURL('image/jpeg', 0.7) };
+    const fromDots = res.stageNo >= 1 && res.stageNo <= WS_STAGES; // ignore a misread dot count
+    const stageIdx = Math.max(0, Math.min(WS_STAGES - 1, fromDots ? res.stageNo - 1 : stageHint));
+    return { stageIdx, fromDots, wires: res.wires, thumb: th.toDataURL('image/jpeg', 0.7) };
   };
 
   const applyTraces = (traces) => {

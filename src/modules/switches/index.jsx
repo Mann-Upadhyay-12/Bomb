@@ -93,6 +93,8 @@ export function SwitchesModule({ isActive = true }) {
         setPath(null);
         showToast('SWITCHES DETECTED — NO VALID PATH');
       }
+    } else {
+      showToast('COULD NOT READ SWITCHES — SET THEM BY CLICKING');
     }
   };
 

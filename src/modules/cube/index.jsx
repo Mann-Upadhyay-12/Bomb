@@ -29,6 +29,9 @@ export function CubeModule({ isActive = true }) {
 
   // Each solve gets a token; results from an older (superseded) solve are ignored
   const solveToken = useRef(0);
+  // async results read the live tab state, not the one captured when the work started
+  const activeRef = useRef(isActive);
+  activeRef.current = isActive;
 
   const solve = async (currentCells = cells) => {
     const token = ++solveToken.current;
@@ -47,21 +50,21 @@ export function CubeModule({ isActive = true }) {
       if (res && res.timeout) {
         setSolution('');
         setStatusMsg('SEARCH TIMED OUT — check the sticker colours');
-        if (isActive) setLastCopyString('');
+        if (activeRef.current) setLastCopyString('');
         return;
       }
       if (res && res.sols && res.sols.length > 0) {
         const movesStr = res.sols[0];
         setSolution(movesStr);
         setStatusMsg(res.len === 0 ? 'ALREADY SOLVED ✓' : `SOLVED (${res.len} moves)`);
-        if (isActive) {
+        if (activeRef.current) {
           setLastCopyString(movesStr);
           if (copyOnDecode && movesStr) copy(movesStr);
         }
       } else {
         setSolution('');
         setStatusMsg('NO SOLUTION FOUND (Check face colors)');
-        if (isActive) {
+        if (activeRef.current) {
           setLastCopyString('');
         }
       }
@@ -69,7 +72,7 @@ export function CubeModule({ isActive = true }) {
       if (token !== solveToken.current) return;
       setSolution('');
       setStatusMsg('Error: ' + err.message);
-      if (isActive) {
+      if (activeRef.current) {
         setLastCopyString('');
       }
     }

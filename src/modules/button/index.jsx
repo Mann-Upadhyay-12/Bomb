@@ -122,7 +122,7 @@ export function ButtonModule({ isActive = true }) {
   const handleImage = async (img, dataUri, fileBlob) => {
     setPreviewUri(dataUri);
     setLastImage(img, fileBlob);
-    if (busy) return;
+    if (busy) { showToast('STILL READING THE LAST BUTTON — PASTE AGAIN IN A MOMENT'); return; }
     setBusy(true);
     setStatus({ text: 'Reading button…', ok: null });
     try {

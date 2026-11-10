@@ -49,6 +49,8 @@ export function SearchModule({ isActive = true }) {
   const [previewMeta, setPreviewMeta] = useState('');
   const [ocrProgress, setOcrProgress] = useState(null); // percentage or null
   const [ocrStatus, setOcrStatus] = useState('');
+  // Each OCR run gets an id; a newer paste (or Clear) makes older runs stop writing into the grid
+  const ocrRunRef = React.useRef(0);
 
   // Solve word search
   const { foundMatches, uniqueWords, hitCells, totalWords } = solveWordSearch(gridData, wordsText);
@@ -119,6 +121,7 @@ export function SearchModule({ isActive = true }) {
   };
 
   const handleClear = () => {
+    ocrRunRef.current++;
     setGridData(Array.from({ length: 5 }, () => Array(5).fill('')));
     setConfidence(Array.from({ length: 5 }, () => Array(5).fill(100)));
     setPreviewUri('');
@@ -151,6 +154,8 @@ export function SearchModule({ isActive = true }) {
     setPreviewMeta(`${img.naturalWidth}×${img.naturalHeight} px source`);
     setLastImage(img, fileBlob);
 
+    const runId = ++ocrRunRef.current;
+    const stale = () => runId !== ocrRunRef.current;
     setOcrStatus('Starting OCR engine…');
     setOcrProgress(5);
 
@@ -166,12 +171,14 @@ export function SearchModule({ isActive = true }) {
         }
       });
     } catch (err) {
+      if (stale()) return;
       setOcrStatus(`⚠️ OCR unavailable: ${err.message}. You can type or paste letters manually.`);
       setOcrProgress(null);
       showToast('OCR UNAVAILABLE — ENTER LETTERS MANUALLY');
       return;
     }
 
+    if (stale()) return;
     setOcrStatus('Reading 25 letter cells…');
     setOcrProgress(15);
 
@@ -234,6 +241,7 @@ export function SearchModule({ isActive = true }) {
         padCtx.drawImage(cellCanvas, PAD_PX, PAD_PX);
 
         const rec = await recognizeCell(worker, padCanvas);
+        if (stale()) return;
         newGrid[r][c] = rec.letter;
         newConf[r][c] = rec.confidence;
         done++;

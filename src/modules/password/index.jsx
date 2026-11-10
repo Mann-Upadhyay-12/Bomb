@@ -47,7 +47,7 @@ export function PasswordModule({ isActive = true }) {
     } else {
       setLastCopyString('');
     }
-  }, [rowsText, masterText, isActive]);
+  }, [matches.join(' '), isActive]); // re-run only when the result changes, not on every keystroke
 
   const handleClear = () => {
     setRowsText('');

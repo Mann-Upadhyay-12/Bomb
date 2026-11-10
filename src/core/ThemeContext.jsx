@@ -34,8 +34,10 @@ export function ThemeProvider({ children }) {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    // If background color is at default or matches standard theme, remove inline override so theme CSS takes effect
-    if (!bgColor || bgColor === DEFAULT_BG_COLOR || bgColor === '#EDE6D6' || bgColor === '#13151A') {
+    // Only a complete #RRGGBB colour is applied (the hex box is typed into, so half-typed values are ignored).
+    // The default colours fall back to the theme CSS.
+    const valid = /^#[0-9a-f]{6}$/i.test(bgColor || '');
+    if (!valid || bgColor.toUpperCase() === DEFAULT_BG_COLOR || bgColor.toUpperCase() === '#EDE6D6') {
       document.documentElement.style.removeProperty('--paper');
       document.body.style.backgroundColor = '';
     } else {
@@ -44,6 +46,7 @@ export function ThemeProvider({ children }) {
     }
     try {
       localStorage.setItem(THEME_KEY, theme);
+      if (valid) localStorage.setItem(BG_COLOR_KEY, bgColor);
     } catch (e) {}
   }, [theme, bgColor]);
 

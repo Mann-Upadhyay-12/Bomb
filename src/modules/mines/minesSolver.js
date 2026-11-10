@@ -81,35 +81,64 @@ export function solveMinesGrid(gridData) {
     }
   }
 
-  // Tank solver for frontier up to 24 unrevealed cells
-  const fMap = new Map();
-  constraints.forEach(con => {
-    con.covered.filter(c => !c.isSafe && !c.isMine).forEach(u => fMap.set(u.name, u));
+  // Tank solver: exhaustive search over the frontier, done by backtracking with pruning and split into
+  // independent groups, so large frontiers stay fast (the old 2^n brute force froze the page at ~20+ cells).
+  const isOpen = c => !c.isSafe && !c.isMine;
+  const live = constraints
+    .map(con => ({ cells: con.covered.filter(isOpen), need: con.reqMines - con.covered.filter(c => c.isMine).length }))
+    .filter(con => con.cells.length > 0);
+
+  // group frontier cells that share a constraint (union-find over cell names)
+  const parent = new Map();
+  const find = x => { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; };
+  live.forEach(con => con.cells.forEach(c => { if (!parent.has(c.name)) parent.set(c.name, c.name); }));
+  live.forEach(con => { for (let i = 1; i < con.cells.length; i++) parent.set(find(con.cells[i].name), find(con.cells[0].name)); });
+  const groups = new Map();
+  live.forEach(con => {
+    const g = find(con.cells[0].name);
+    if (!groups.has(g)) groups.set(g, { cells: new Map(), cons: [] });
+    const grp = groups.get(g);
+    grp.cons.push(con);
+    con.cells.forEach(c => grp.cells.set(c.name, c));
   });
-  const frontier = Array.from(fMap.values());
-  if (frontier.length > 0 && frontier.length <= 24) {
-    const valid = [];
-    const n = frontier.length;
-    for (let mask = 0; mask < (1 << n); mask++) {
-      const assign = {};
-      for (let i = 0; i < n; i++) assign[frontier[i].name] = (mask >> i) & 1;
-      let ok = true;
-      for (const con of constraints) {
-        let mc = con.covered.filter(c => c.isMine).length;
-        for (const u of con.covered) {
-          if (!u.isSafe && !u.isMine && assign[u.name] === 1) mc++;
-        }
-        if (mc !== con.reqMines) { ok = false; break; }
+
+  const MAX_NODES = 2e6; // safety cap per group
+  for (const grp of groups.values()) {
+    const cells = Array.from(grp.cells.values());
+    if (cells.length > 64) continue;
+    const idx = new Map(cells.map((c, i) => [c.name, i]));
+    const cons = grp.cons.map(con => ({ ids: con.cells.map(c => idx.get(c.name)), need: con.need }));
+    const consOf = cells.map(() => []);
+    cons.forEach((con, ci) => con.ids.forEach(id => consOf[id].push(ci)));
+    const assign = new Int8Array(cells.length).fill(-1);
+    const mineCnt = new Int32Array(cons.length), openCnt = new Int32Array(cons.length);
+    cons.forEach((con, ci) => { openCnt[ci] = con.ids.length; });
+    const seenMine = new Uint8Array(cells.length), seenSafe = new Uint8Array(cells.length);
+    let solutions = 0, nodes = 0, aborted = false;
+
+    const fits = id => consOf[id].every(ci => mineCnt[ci] <= cons[ci].need && mineCnt[ci] + openCnt[ci] >= cons[ci].need);
+    const dfs = (k) => {
+      if (aborted) return;
+      if (++nodes > MAX_NODES) { aborted = true; return; }
+      if (k === cells.length) {
+        solutions++;
+        for (let i = 0; i < cells.length; i++) (assign[i] ? seenMine : seenSafe)[i] = 1;
+        return;
       }
-      if (ok) valid.push(assign);
-    }
-    if (valid.length > 0) {
-      frontier.forEach(cell => {
-        const states = new Set(valid.map(a => a[cell.name]));
-        if (states.has(0) && !states.has(1)) cell.isSafe = true;
-        if (states.has(1) && !states.has(0)) cell.isMine = true;
-      });
-    }
+      for (const v of [0, 1]) {
+        assign[k] = v;
+        for (const ci of consOf[k]) { openCnt[ci]--; if (v) mineCnt[ci]++; }
+        if (fits(k)) dfs(k + 1);
+        for (const ci of consOf[k]) { openCnt[ci]++; if (v) mineCnt[ci]--; }
+        assign[k] = -1;
+      }
+    };
+    dfs(0);
+    if (aborted || solutions === 0) continue;
+    cells.forEach((cell, i) => {
+      if (seenSafe[i] && !seenMine[i]) cell.isSafe = true;
+      if (seenMine[i] && !seenSafe[i]) cell.isMine = true;
+    });
   }
 
   const safeList = [], mineList = [];

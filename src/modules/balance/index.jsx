@@ -35,7 +35,7 @@ export function BalanceModule({ isActive = true }) {
   const handleImage = async (img, dataUri, fileBlob) => {
     setPreviewUri(dataUri);
     setLastImage(img, fileBlob);
-    if (busy) return;
+    if (busy) { showToast('STILL READING THE LAST SCREENSHOT — PASTE AGAIN IN A MOMENT'); return; }
     setBusy(true);
     setStatus({ text: 'Reading equation…', ok: null });
     try {

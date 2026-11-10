@@ -90,7 +90,7 @@ export function WofModule({ isActive = true }) {
     setPreviewUri(dataUri);
     setPreviewMeta(`${img.naturalWidth}×${img.naturalHeight} px source`);
     setLastImage(img, fileBlob);
-    if (ocrBusy) return;
+    if (ocrBusy) { showToast('STILL READING THE LAST SCREENSHOT — PASTE AGAIN IN A MOMENT'); return; }
     setOcrBusy(true);
     try {
       const r = await wofReadImage(img, rules, setOcrStatus);
