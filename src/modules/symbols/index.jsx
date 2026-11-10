@@ -11,6 +11,7 @@ import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
 import { CopyLines } from '../../core/components/CopyLines.jsx';
 import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
 import { SymbolsWorking } from './working.jsx';
+import { stripStore, useStrip } from './stripStore.js';
 
 const MAX_GRIDS = 6;
 const EMPTY_BUTTONS = [null, null, null, null];
@@ -26,22 +27,28 @@ function toImageData(img) {
   return g.getImageData(0, 0, W, H);
 }
 
-export function SymbolsModule({ isActive = true }) {
+export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1 }) {
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
 
-  // Each grid is one 5×5 reference panel ("SYMBOLS #n" in a strip screenshot)
-  const [grids, setGrids] = useState([]);
+  // The strip ("SYMBOLS #1", "#2" … grids) is shared by every Symbols window;
+  // this window uses grid #(instance + 1) by default, and can be pointed at another one.
+  const { grids, version } = useStrip();
+  const [gridIdx, setGridIdx] = useState(instance);
   const [buttons, setButtons] = useState(EMPTY_BUTTONS);
   const [adj, setAdj] = useState({});
-  const [pasteMode, setPasteMode] = useState('replace'); // 'replace' | 'add'
+
+  // A new strip resets this window's ± corrections and goes back to its own grid number
+  React.useEffect(() => { setAdj({}); setGridIdx(instance); }, [version, instance]);
+
+  const myGrid = grids[gridIdx] || null;
   const [previewUri, setPreviewUri] = useState('');
   const [previewMeta, setPreviewMeta] = useState('');
 
   // Totals = symbols read in every grid + manual ± corrections
   const rawCounts = {};
-  for (const g of grids) for (const k of g.cells) if (k) rawCounts[k] = (rawCounts[k] || 0) + 1;
+  if (myGrid) for (const k of myGrid.cells) if (k) rawCounts[k] = (rawCounts[k] || 0) + 1;
   const counts = { ...rawCounts };
   for (const [k, d] of Object.entries(adj)) counts[k] = Math.max(0, (rawCounts[k] || 0) + d);
 
@@ -64,7 +71,11 @@ export function SymbolsModule({ isActive = true }) {
         warnings.push(`Tie: buttons ${order[i - 1].n} & ${order[i].n} both have ${order[i].c}`);
       }
     }
-    if (!grids.length && !Object.keys(adj).length) warnings.push('No reference grid loaded yet');
+    if (!myGrid && !Object.keys(adj).length) {
+      warnings.push(grids.length
+        ? `The strip has ${grids.length} grid${grids.length > 1 ? 's' : ''} — there is no SYMBOLS #${gridIdx + 1}`
+        : 'No reference grid loaded yet');
+    }
   }
 
   React.useEffect(() => {
@@ -98,27 +109,16 @@ export function SymbolsModule({ isActive = true }) {
     const panels = fullGrids.length ? fullGrids : pr.panels;
     if (!panels.length) { showToast('COULD NOT DETECT SYMBOLS'); return; }
 
-    const newGrids = panels.map(p => ({ id: ++gridSeq, cells: p.cells }));
-    if (pasteMode === 'add') {
-      setGrids(prev => [...prev, ...newGrids].slice(-MAX_GRIDS));
-    } else {
-      setGrids(newGrids.slice(0, MAX_GRIDS));
-      setAdj({});
-    }
+    stripStore.setGrids(panels.slice(0, MAX_GRIDS).map(p => ({ id: ++gridSeq, cells: p.cells })));
     const cells = panels.reduce((s, p) => s + p.cells.filter(Boolean).length, 0);
     showToast(panels.length > 1
       ? `STRIP READ: ${panels.length} GRIDS · ${cells} CELLS ✓`
       : `GRID READ: ${cells}/25 CELLS ✓`);
   };
 
-  const handleCellSet = (gi, ci, k) => {
-    setGrids(prev => prev.map((g, i) => (i === gi ? { ...g, cells: g.cells.map((x, j) => (j === ci ? k : x)) } : g)));
-  };
-
-  const handleRemoveGrid = (gi) => setGrids(prev => prev.filter((_, i) => i !== gi));
-
   const handleAddBlankGrid = () => {
-    setGrids(prev => (prev.length >= MAX_GRIDS ? prev : [...prev, { id: ++gridSeq, cells: Array(25).fill(null) }]));
+    if (grids.length >= MAX_GRIDS) return;
+    stripStore.setGrids([...grids, { id: ++gridSeq, cells: Array(25).fill(null) }]);
   };
 
   const handleCountAdj = (k, delta) => {
@@ -130,14 +130,13 @@ export function SymbolsModule({ isActive = true }) {
     // The two-grid strip from the game: Ѣ 17, Ж 9, ¿ 5, ƛ 4 …
     const g1 = ['STAR_SOLID','YAT','INV_QUESTION','YAT','YAT','YAT','INV_QUESTION','LAMBDA_STROKE','YAT','YAT','OT','OT','COPYRIGHT','INV_QUESTION','LAMBDA_STROKE','YAT','LAMBDA_STROKE','OT','OT','INV_QUESTION','KOPPA','YAT','LAMBDA_STROKE','OT','YAT'];
     const g2 = ['YAT','YAT','YAT','YAT','YAT','STAR_HOLLOW','ZHE','ZHE','STAR_HOLLOW','ZHE','YAT','STAR_HOLLOW','ZHE','ZHE','DOUBLE_CROSS','INV_QUESTION','ZHE','KOPPA','ZHE','YAT','ZHE','STAR_HOLLOW','ZHE','YAT','STAR_HOLLOW'];
-    setGrids([{ id: ++gridSeq, cells: g1 }, { id: ++gridSeq, cells: g2 }]);
+    stripStore.setGrids([{ id: ++gridSeq, cells: g1 }, { id: ++gridSeq, cells: g2 }]);
     setButtons(['LAMBDA_STROKE', 'YAT', 'INV_QUESTION', 'ZHE']);
-    setAdj({});
     showToast('SAMPLE STRIP LOADED ✓');
   };
 
   const handleClear = () => {
-    setGrids([]);
+    stripStore.setGrids([]); // the strip is shared — clearing it clears every Symbols window
     setButtons(EMPTY_BUTTONS);
     setAdj({});
     setPreviewUri('');
@@ -155,7 +154,9 @@ export function SymbolsModule({ isActive = true }) {
     });
   }
 
-  const gridInfo = grids.length ? `${grids.length} GRID${grids.length > 1 ? 'S' : ''}` : 'NO GRID';
+  const gridInfo = myGrid
+    ? (grids.length > 1 ? `USING SYMBOLS #${gridIdx + 1} OF ${grids.length}` : '1 GRID')
+    : 'NO GRID';
   const stampStats = order.length === 4
     ? `${gridInfo} | PRESS ORDER: ${copyFormatted}${warnings.length ? ' | ⚠ CHECK' : ''}`
     : `${gridInfo} | BUTTONS: ${validButtons.length}/4`;
@@ -171,7 +172,7 @@ export function SymbolsModule({ isActive = true }) {
               title="Click here, then paste the grid strip or the 2×2 keypad"
               sub={
                 <>
-                  press <kbd>Ctrl</kbd>+<kbd>V</kbd> anywhere — a strip with several <b>SYMBOLS #n</b> grids is split and summed automatically
+                  press <kbd>Ctrl</kbd>+<kbd>V</kbd> anywhere — a strip with <b>SYMBOLS #1, #2 …</b> grids is split, one grid per Symbols module
                 </>
               }
             />
@@ -204,11 +205,11 @@ export function SymbolsModule({ isActive = true }) {
       }
       answers={
         <AnswerPanel
-          label="SYMBOLS BUTTON PRESS ORDER"
+          label={instanceCount > 1 ? `SYMBOLS #${instance + 1} — BUTTON PRESS ORDER` : 'SYMBOLS BUTTON PRESS ORDER'}
           stats={stampStats}
           answers={order.length === 4 ? order.map(r => `Button ${r.n}`) : []}
           copyValue={copyFormatted}
-          placeholder={grids.length ? 'SET ALL 4 KEYPAD BUTTONS' : 'PASTE GRID(S) + KEYPAD'}
+          placeholder={myGrid ? 'SET ALL 4 KEYPAD BUTTONS' : 'PASTE GRID STRIP + KEYPAD'}
         />
       }
       copylines={<CopyLines items={copyItems} />}
@@ -216,18 +217,18 @@ export function SymbolsModule({ isActive = true }) {
         <WorkingPanel title="SYMBOLS WORKSPACE — keypad buttons, reference grids & counts">
           <SymbolsWorking
             grids={grids}
+            gridIdx={gridIdx}
+            onUseGrid={setGridIdx}
             buttons={buttons}
             counts={counts}
             order={order}
             warnings={warnings}
-            pasteMode={pasteMode}
-            onPasteMode={setPasteMode}
             onButtonSelect={(i, k) => setButtons(prev => prev.map((x, j) => (j === i ? k : x)))}
             onClearButtons={() => setButtons(EMPTY_BUTTONS)}
-            onCellSet={handleCellSet}
-            onRemoveGrid={handleRemoveGrid}
+            onCellSet={stripStore.setCell}
+            onRemoveGrid={stripStore.removeGrid}
             onAddBlankGrid={grids.length < MAX_GRIDS ? handleAddBlankGrid : null}
-            onClearGrids={() => { setGrids([]); setAdj({}); }}
+            onClearGrids={() => stripStore.setGrids([])}
             onCountAdj={handleCountAdj}
           />
         </WorkingPanel>
@@ -242,6 +243,6 @@ export const symbolsModule = {
   tabLabel: '🔣 SYMBOLS',
   eyebrow: 'SYMBOLS PUZZLE SOLVER',
   title: 'Symbols Vision',
-  sub: 'Paste the reference grid screenshot — a single 5×5 grid, or a <b>strip of SYMBOLS #1, #2 …</b> grids which are split and summed — plus the 2×2 keypad. Buttons are pressed from <b>highest count to lowest</b>.',
+  sub: 'Paste the reference grid screenshot — a single 5×5 grid, or a <b>strip of SYMBOLS #1, #2 …</b> grids where grid #n belongs to Symbols module #n — plus the 2×2 keypad. Buttons are pressed from <b>highest count to lowest</b>.',
   Component: SymbolsModule
 };

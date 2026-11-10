@@ -97,7 +97,7 @@ export function App() {
   const currentMeta = moduleMeta[appMode] || minesModule;
 
   // Render module component by ID
-  const renderModuleById = (id, isActive = true) => {
+  const renderModuleById = (id, isActive = true, instance = 0, instanceCount = 1) => {
     switch (id) {
       case 'mines':
         return <MinesModule isActive={isActive} />;
@@ -134,7 +134,7 @@ export function App() {
       case 'complexwires':
         return <ComplexWiresModule isActive={isActive} />;
       case 'symbols':
-        return <SymbolsModule isActive={isActive} />;
+        return <SymbolsModule isActive={isActive} instance={instance} instanceCount={instanceCount} />;
       case 'button':
         return <ButtonModule isActive={isActive} />;
       case 'balance':
@@ -206,13 +206,16 @@ export function App() {
                 const known = KNOWN_MODULE_NAMES[modName];
                 if (!known || !known.isImplemented) return null;
                 const isSlotActive = activeSlotIndex === slotIdx;
+                // Which copy of this module this slot is (Symbols #1, #2 …) and how many copies the level has
+                const instance = activeMission.modules.slice(0, slotIdx).filter(n => n === modName).length;
+                const instanceCount = activeMission.modules.filter(n => n === modName).length;
                 return (
                   <div
                     key={`mission-${activeMission.id}-slot-${slotIdx}-${known.id}`}
                     className="mission-module-window"
                     style={{ display: isSlotActive ? 'block' : 'none' }}
                   >
-                    {renderModuleById(known.id, isSlotActive)}
+                    {renderModuleById(known.id, isSlotActive, instance, instanceCount)}
                   </div>
                 );
               })}

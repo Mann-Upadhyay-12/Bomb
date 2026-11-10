@@ -93,7 +93,10 @@ export function MissionSidebar({
                             key={m.id}
                             type="button"
                             className={`sidebar-mission-card ${isSelected ? 'active' : ''}`}
-                            onClick={() => onSelectMission(m)}
+                            disabled={m.modules.length === 0}
+                            title={m.modules.length === 0 ? 'No solvable modules in this level yet' : undefined}
+                            style={m.modules.length === 0 ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
+                            onClick={() => m.modules.length && onSelectMission(m)}
                           >
                             <div className="mission-card-top">
                               <span className="mission-id-badge">{m.label}</span>
@@ -102,6 +105,9 @@ export function MissionSidebar({
                               </span>
                             </div>
                             <div className="mission-modules-list">
+                              {m.modules.length === 0 && (
+                                <span className="mission-mod-pill unimplemented">no solvers yet</span>
+                              )}
                               {m.modules.map((name, i) => {
                                 const info = KNOWN_MODULE_NAMES[name];
                                 const isImp = info && info.isImplemented;
