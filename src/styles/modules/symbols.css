@@ -67,3 +67,11 @@
 .sy-step b { font-size: 18px; }
 .sy-warn { margin: 0; padding: 8px 12px; list-style: none; border: 1px solid #B04A3A; border-radius: 10px; color: #E57373;
   font-family: ui-monospace, Consolas, monospace; font-size: 12px; display: flex; flex-direction: column; gap: 3px; }
+
+/* strip: grid #n belongs to Symbols module #n */
+.sy-grid-card.mine { border: 2px solid var(--brass); }
+.sy-grid-card.other .sy-grid { opacity: .45; }
+.sy-grid-header > span { display: flex; align-items: center; gap: 8px; }
+.sy-mine-tag { background: var(--brass); color: #121419; border-radius: 5px; padding: 1px 6px; font-size: 10px; letter-spacing: .06em; }
+.sy-grid-header .sy-use-btn { border: 1px solid #5A5F6A; border-radius: 5px; padding: 1px 7px; font-size: 10px; color: #C9CDD6; }
+.sy-grid-header .sy-use-btn:hover { border-color: #F3C567; color: #F3C567; }

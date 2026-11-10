@@ -8,8 +8,8 @@ export function SymbolsWorking({
   counts = {},
   order = [],
   warnings = [],
-  pasteMode = 'replace',
-  onPasteMode = () => {},
+  gridIdx = 0,
+  onUseGrid = () => {},
   onButtonSelect = () => {},
   onClearButtons = () => {},
   onCellSet = () => {},
@@ -71,19 +71,9 @@ export function SymbolsWorking({
       <section className="sy-section">
         <div className="sy-section-head">
           <span className="search-config-label">
-            REFERENCE GRID{multi ? `S (${grids.length}) — COUNTS ARE SUMMED` : ''}
+            REFERENCE GRID{multi ? `S (${grids.length}) — THIS MODULE USES SYMBOLS #${gridIdx + 1}` : ''}
           </span>
           <div className="sy-head-actions">
-            <div className="sy-seg" role="group" aria-label="What a new grid paste does">
-              <button type="button" className={pasteMode === 'replace' ? 'on' : ''} onClick={() => onPasteMode('replace')}
-                title="A new grid screenshot replaces the current grids">
-                PASTE REPLACES
-              </button>
-              <button type="button" className={pasteMode === 'add' ? 'on' : ''} onClick={() => onPasteMode('add')}
-                title="A new grid screenshot is added next to the current grids">
-                PASTE ADDS
-              </button>
-            </div>
             {onAddBlankGrid && <button type="button" className="bg-btn" onClick={onAddBlankGrid}>+ Blank grid</button>}
             {grids.length > 0 && <button type="button" className="bg-btn" onClick={() => { setEditing(null); onClearGrids(); }}>Clear grids</button>}
           </div>
@@ -92,21 +82,26 @@ export function SymbolsWorking({
         {grids.length === 0 ? (
           <div className="sy-empty">
             Paste the grid screenshot. One grid is read as-is; a strip with <b>SYMBOLS #1</b>, <b>#2</b> … headers is
-            split into its grids. Click any cell afterwards to fix a misread.
+            split so grid #n goes to Symbols module #n. Click any cell afterwards to fix a misread.
           </div>
         ) : (
           <div className={`sy-strip ${onKeypad.size ? 'has-keypad' : ''}`}>
             {grids.map((g, gi) => (
-              <div key={g.id} className="sy-grid-card">
+              <div key={g.id} className={`sy-grid-card ${multi ? (gi === gridIdx ? 'mine' : 'other') : ''}`}>
                 {multi && (
                   <div className="sy-grid-header">
-                    <span>SYMBOLS #{gi + 1}</span>
+                    <span>
+                      SYMBOLS #{gi + 1}
+                      {gi === gridIdx
+                        ? <span className="sy-mine-tag">THIS MODULE</span>
+                        : <button type="button" className="sy-use-btn" onClick={() => onUseGrid(gi)}>USE</button>}
+                    </span>
                     <button type="button" title={`Remove grid #${gi + 1}`} onClick={() => { setEditing(null); onRemoveGrid(gi); }}>✕</button>
                   </div>
                 )}
                 <div className="sy-grid">
                   {g.cells.map((k, ci) => {
-                    const rank = k ? rankOf[k] : undefined;
+                    const rank = k && (!multi || gi === gridIdx) ? rankOf[k] : undefined;
                     const isEdit = editing && editing.gi === gi && editing.ci === ci;
                     return (
                       <button
