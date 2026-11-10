@@ -86,7 +86,7 @@ export function ModeRouter({
       {activeMission && (
         <div className="active-mission-banner">
           <span className="active-mission-title">
-            MISSION {activeMission.id} ({activeMission.modules.length} MODULES)
+            {activeMission.custom ? activeMission.label.toUpperCase() : `MISSION ${activeMission.id}`} ({activeMission.modules.length} MODULES)
           </span>
           {onClearMission && (
             <button
