@@ -15,7 +15,6 @@ import { PianoWorking } from './working.jsx';
 export const PN_KEY = 'bombvision_piano_codes';
 
 export function PianoModule({ isActive = true }) {
-  const uid = React.useId();
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
