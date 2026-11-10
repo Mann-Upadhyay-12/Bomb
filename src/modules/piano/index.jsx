@@ -15,6 +15,7 @@ import { PianoWorking } from './working.jsx';
 export const PN_KEY = 'bombvision_piano_codes';
 
 export function PianoModule({ isActive = true }) {
+  const uid = React.useId();
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
@@ -194,7 +195,7 @@ export function PianoModule({ isActive = true }) {
 
             <div className="search-config-row">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label className="search-config-label" htmlFor="pnCodes">
+                <label className="search-config-label" htmlFor={`${uid}-codes`}>
                   STAGE CODE TABLE (Interval to Code mapping):
                 </label>
                 <button
@@ -211,7 +212,7 @@ export function PianoModule({ isActive = true }) {
                 </button>
               </div>
               <textarea
-                id="pnCodes"
+                id={`${uid}-codes`}
                 className="password-rows-field"
                 rows={2}
                 value={codesText}

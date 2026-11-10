@@ -25,6 +25,7 @@ const DEFAULT_VARS = {
 };
 
 export function LogicModule({ isActive = true }) {
+  const uid = React.useId();
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
@@ -231,13 +232,13 @@ onImage={(img, dataUri, fileBlob) => {
           >
             <label
               className="logic-config-label"
-              htmlFor="logicManual"
+              htmlFor={`${uid}-manual`}
             >
               PASTE MANUAL TEXT (EXTRACTS P, Q, R, S, T):
             </label>
 
             <textarea
-              id="logicManual"
+              id={`${uid}-manual`}
               className="search-words-field"
               style={{ height: '76px', resize: 'vertical', fontSize: '12px', lineHeight: 1.45, fontFamily: 'monospace' }}
               value={manualText}

@@ -109,37 +109,79 @@ export function syReadBox(img, x0, y0, w, h, margin, thresh, skip) {
   return syClassify(rows);
 }
 
-export function syReadGrids(img) {
+// Splits a screenshot into its 5×5 reference grids.
+// The game stacks one grid per panel; when there is more than one, each panel sits under a dark
+// "SYMBOLS #n" header strip. A single grid comes with no header at all.
+// Returns { panels: [{ x, y, w, h, cells: [25 symbol keys | null], counts }], hasHeader }.
+export function syReadPanels(img) {
   const { data, width: W, height: H } = img;
-  const bands = [];
-  let inBand = false, y1 = 0;
+  const isLight = i => syGray(data, i) > 150;
+
+  // 1. rows that are mostly light belong to a grid, dark rows are headers / gaps
+  const rowLight = new Uint8Array(H);
   for (let y = 0; y < H; y++) {
-    let s = 0;
-    for (let x = 0; x < W; x++) s += syGray(data, (y * W + x) * 4);
-    const light = s / W > 140;
-    if (light && !inBand) { inBand = true; y1 = y; }
-    else if (!light && inBand) { inBand = false; if (y - y1 > 45) bands.push({ y1, h: y - y1 }); }
+    let n = 0;
+    for (let x = 0; x < W; x++) if (isLight((y * W + x) * 4)) n++;
+    rowLight[y] = n > W * 0.45 ? 1 : 0;
   }
-  if (inBand && H - y1 > 45) bands.push({ y1, h: H - y1 });
-  if (!bands.length) bands.push({ y1: 0, h: H });
-  const counts = {};
-  let cells = 0;
+  const minSide = Math.max(40, Math.min(W, H) * 0.08);
+  const bands = [];
+  for (let y = 0; y < H;) {
+    if (!rowLight[y]) { y++; continue; }
+    let y2 = y;
+    // tolerate 1-2px dark rows (thick grid lines) inside a band
+    while (y2 < H && (rowLight[y2] || (y2 + 2 < H && (rowLight[y2 + 1] || rowLight[y2 + 2])))) y2++;
+    if (y2 - y >= minSide) bands.push({ y1: y, y2 });
+    y = y2;
+  }
+  if (!bands.length) bands.push({ y1: 0, y2: H });
+
+  // a header is a solid dark strip above a grid (or between two grids)
+  const hasHeader = bands.length > 1 || bands[0].y1 >= Math.max(8, H * 0.03);
+
+  const panels = [];
   for (const b of bands) {
-    const cw = W / 5, ch = b.h / 5;
+    const bh = b.y2 - b.y1;
+    // 2. horizontal extent of the light area inside this band (crops side margins)
+    let x1 = -1, x2 = -1;
+    for (let x = 0; x < W; x++) {
+      let n = 0;
+      for (let y = b.y1; y < b.y2; y++) if (isLight((y * W + x) * 4)) n++;
+      if (n > bh * 0.45) { if (x1 < 0) x1 = x; x2 = x + 1; }
+    }
+    if (x1 < 0) { x1 = 0; x2 = W; }
+    const pw = x2 - x1;
+    if (pw < minSide || pw / bh > 2.2 || bh / pw > 2.2) continue; // not a square-ish grid
+
+    // 3. classify the 25 cells
+    const cw = pw / 5, ch = bh / 5;
+    const cells = [];
+    const counts = {};
     for (let r = 0; r < 5; r++) {
       for (let c = 0; c < 5; c++) {
-        const x0 = Math.floor(c * cw), x1 = Math.floor((c + 1) * cw);
-        const yy0 = Math.floor(b.y1 + r * ch), yy1 = Math.floor(b.y1 + (r + 1) * ch);
-        if (x1 - x0 <= 0 || yy1 - yy0 <= 0) continue;
-        const res = syReadBox(img, x0, yy0, x1 - x0, yy1 - yy0, 2, 110, null);
-        if (res && res.symbol !== '?') {
-          counts[res.symbol] = (counts[res.symbol] || 0) + 1;
-          cells++;
-        }
+        const cx0 = Math.floor(x1 + c * cw), cx1 = Math.floor(x1 + (c + 1) * cw);
+        const cy0 = Math.floor(b.y1 + r * ch), cy1 = Math.floor(b.y1 + (r + 1) * ch);
+        const mg = Math.max(2, Math.round(Math.min(cw, ch) * 0.06));
+        const res = syReadBox(img, cx0, cy0, cx1 - cx0, cy1 - cy0, mg, 110, null);
+        const k = res && res.symbol !== '?' ? res.symbol : null;
+        cells.push(k);
+        if (k) counts[k] = (counts[k] || 0) + 1;
       }
     }
+    if (cells.some(Boolean)) panels.push({ x: x1, y: b.y1, w: pw, h: bh, cells, counts });
   }
-  return { counts, grids: bands.length, cells };
+  return { panels, hasHeader };
+}
+
+// Back-compat: summed counts across every grid in the image
+export function syReadGrids(img) {
+  const { panels } = syReadPanels(img);
+  const counts = {};
+  let cells = 0;
+  for (const p of panels) {
+    for (const k of p.cells) if (k) { counts[k] = (counts[k] || 0) + 1; cells++; }
+  }
+  return { counts, grids: panels.length, cells };
 }
 
 export function syReadModule(img) {

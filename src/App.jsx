@@ -5,6 +5,9 @@ import { useToast } from './core/ToastContext.jsx';
 import { ModeRouter } from './core/ModeRouter.jsx';
 import { MissionSidebar } from './core/components/MissionSidebar.jsx';
 import { KNOWN_MODULE_NAMES } from './core/sectionsData.js';
+import { LevelGenerator } from './core/level/LevelGenerator.jsx';
+
+const CUSTOM_LEVELS_KEY = 'bomb_custom_levels';
 
 // Import all 18 migrated React modules
 import { MinesModule, minesModule } from './modules/mines/index.jsx';
@@ -30,12 +33,25 @@ export function App() {
   const { appMode, setAppMode, prefixHash, setPrefixHash } = useAppState();
   const { isDark, bgColor, setBgColor, bgImage, setBgImage } = useTheme();
   const { toastMsg, show: showToast } = useToast();
-  const [view, setView] = useState('main'); // 'main' or 'about'
+  const [view, setView] = useState('main'); // 'main' | 'about' | 'generate'
+  const [customLevels, setCustomLevels] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(CUSTOM_LEVELS_KEY) || '[]'); } catch (e) { return []; }
+  });
+  const saveCustomLevels = (next) => {
+    setCustomLevels(next);
+    try { localStorage.setItem(CUSTOM_LEVELS_KEY, JSON.stringify(next)); } catch (e) {}
+  };
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeMission, setActiveMission] = useState(null);
   const [activeSlotIndex, setActiveSlotIndex] = useState(0);
+  // Modules opened in "all modules" mode stay mounted (hidden) so switching tabs keeps their data
+  const [visitedModes, setVisitedModes] = useState(() => [appMode]);
+  React.useEffect(() => {
+    setVisitedModes(prev => (prev.includes(appMode) ? prev : [...prev, appMode]));
+  }, [appMode]);
 
   const handleSelectMission = (mission) => {
+    setView('main');
     setActiveMission(mission);
     setActiveSlotIndex(0);
     // Find first implemented module in this mission
@@ -88,7 +104,7 @@ export function App() {
   const currentMeta = moduleMeta[appMode] || minesModule;
 
   // Render module component by ID
-  const renderModuleById = (id, isActive = true) => {
+  const renderModuleById = (id, isActive = true, instance = 0, instanceCount = 1) => {
     switch (id) {
       case 'mines':
         return <MinesModule isActive={isActive} />;
@@ -125,7 +141,7 @@ export function App() {
       case 'complexwires':
         return <ComplexWiresModule isActive={isActive} />;
       case 'symbols':
-        return <SymbolsModule isActive={isActive} />;
+        return <SymbolsModule isActive={isActive} instance={instance} instanceCount={instanceCount} />;
       default:
         return <MinesModule isActive={isActive} />;
     }
@@ -145,10 +161,25 @@ export function App() {
         activeMission={activeMission}
         onSelectMission={handleSelectMission}
         onSelectAll={handleSelectAll}
+        customLevels={customLevels}
+        onGenerate={() => { setView('generate'); setIsSidebarOpen(false); }}
       />
 
-      {view === 'main' ? (
-        <div className="view" id="mainView">
+      {view === 'generate' && (
+        <div className="view" id="generateView">
+          <LevelGenerator
+            isVisible={view === 'generate'}
+            savedLevels={customLevels}
+            onBack={() => setView('main')}
+            onSave={(lvl) => saveCustomLevels([...customLevels, lvl])}
+            onDelete={(id) => saveCustomLevels(customLevels.filter(l => l.id !== id))}
+            onStart={(lvl) => handleSelectMission(lvl)}
+          />
+        </div>
+      )}
+
+      {/* Main view stays mounted (hidden) on other screens so module data survives */}
+      <div className="view" id="mainView" style={{ display: view === 'main' ? undefined : 'none' }}>
           {/* Top Controls Bar */}
           <div className="top-bar-controls">
             <button
@@ -158,7 +189,7 @@ export function App() {
               title="Open missions sidebar"
             >
               <span className="toggle-icon">☰</span>
-              <span>{activeMission ? `MISSION: ${activeMission.id}` : 'MISSIONS / SECTIONS'}</span>
+              <span>{activeMission ? (activeMission.custom ? `LEVEL: ${activeMission.label}` : `MISSION: ${activeMission.id}`) : 'MISSIONS / SECTIONS'}</span>
             </button>
           </div>
 
@@ -188,19 +219,32 @@ export function App() {
                 const known = KNOWN_MODULE_NAMES[modName];
                 if (!known || !known.isImplemented) return null;
                 const isSlotActive = activeSlotIndex === slotIdx;
+                // Which copy of this module this slot is (Symbols #1, #2 …) and how many copies the level has
+                const instance = activeMission.modules.slice(0, slotIdx).filter(n => n === modName).length;
+                const instanceCount = activeMission.modules.filter(n => n === modName).length;
                 return (
                   <div
                     key={`mission-${activeMission.id}-slot-${slotIdx}-${known.id}`}
                     className="mission-module-window"
                     style={{ display: isSlotActive ? 'block' : 'none' }}
                   >
-                    {renderModuleById(known.id, isSlotActive)}
+                    {renderModuleById(known.id, isSlotActive, instance, instanceCount)}
                   </div>
                 );
               })}
             </div>
           ) : (
-            renderModuleById(appMode, true)
+            <div className="mission-modules-container">
+              {visitedModes.map(id => (
+                <div
+                  key={`all-${id}`}
+                  className="mission-module-window"
+                  style={{ display: id === appMode ? 'block' : 'none' }}
+                >
+                  {renderModuleById(id, id === appMode)}
+                </div>
+              ))}
+            </div>
           )}
 
           {/* About / Settings Footer */}
@@ -214,7 +258,8 @@ export function App() {
             </button>
           </div>
         </div>
-      ) : (
+
+      {view === 'about' && (
         <div className="view about-view" id="aboutView">
           <button
             className="back-btn"
