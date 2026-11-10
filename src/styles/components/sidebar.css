@@ -347,29 +347,3 @@
   cursor: not-allowed;
   border: 1px dashed var(--line);
 }
-
-/* ═══════════ LEVEL GENERATOR ═══════════ */
-.lvlgen { display: flex; flex-direction: column; gap: 14px; }
-.lvlgen-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-.lvlgen-row .bg-url { flex: 1; min-width: 200px; }
-.lvlgen-panel { display: flex; flex-direction: column; gap: 12px; }
-.lvlgen-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.lvlgen-item { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px;
-  background: var(--paper); font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
-.lvlgen-item select { flex: 1; min-width: 0; background: var(--paper-raised); color: var(--ink); border: 1px solid var(--line);
-  border-radius: 6px; padding: 5px 6px; font-size: 12.5px; }
-.lvlgen-idx { width: 22px; text-align: right; color: var(--brass); font-weight: 700; }
-.lvlgen-tag { font-size: 10px; font-weight: 800; letter-spacing: .08em; padding: 2px 7px; border-radius: 5px; background: #2E7D32; color: #fff; }
-.lvlgen-item.unsure .lvlgen-tag { background: var(--brass); color: #121419; }
-.lvlgen-item.skipped { opacity: .55; }
-.lvlgen-item.skipped .lvlgen-tag { background: #555B66; }
-.lvlgen-item.skipped select { text-decoration: line-through; }
-.lvlgen-actions { display: inline-flex; gap: 4px; }
-.lvlgen-actions > button:not(.bg-btn) { border: 1px solid var(--line); background: transparent; color: var(--ink-soft); border-radius: 5px;
-  width: 26px; height: 26px; cursor: pointer; font-weight: 700; }
-.lvlgen-actions > button:not(.bg-btn):hover { border-color: var(--brass); color: var(--ink); }
-.lvlgen-start:disabled, .lvlgen .bg-btn:disabled { opacity: .45; cursor: not-allowed; }
-.lvlgen-saved { display: flex; flex-direction: column; gap: 8px; }
-.lvlgen-saved-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; border: 1px solid var(--line);
-  border-radius: 10px; padding: 8px 12px; background: var(--paper); font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; color: var(--ink); }
-.lvlgen-saved-mods { color: var(--ink-soft); font-size: 11.5px; margin-top: 3px; }
