@@ -8,6 +8,8 @@ import {
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
+import { useSharedSetting } from '../../core/sharedSetting.js';
+import { useInstance } from '../../core/InstanceContext.jsx';
 import { Dropzone } from '../../core/Dropzone.jsx';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
@@ -17,22 +19,15 @@ import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
 import { SimonsWorking } from './working.jsx';
 
 export function SimonsModule({ isActive = true }) {
+  const inst = useInstance();
+  const grouped = Boolean(inst && inst.grouped);
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
 
-  const [rulesText, setRulesText] = useState(() => {
-    try {
-      const sv = localStorage.getItem('bombvision_simon_rules');
-      return sv && sv.trim() ? sv : SIMON_DEFAULT_RULES;
-    } catch (e) {
-      return SIMON_DEFAULT_RULES;
-    }
-  });
-  const [rules, setRules] = useState(() => parseSimonRules(rulesText) || {
-    even: { R: 'R', B: 'G', Y: 'Y', G: 'B' },
-    odd: { R: 'G', B: 'R', Y: 'B', G: 'Y' }
-  });
+  // The manual is the same for every copy of this module, so all windows share it
+  const [rulesText, setRulesText] = useSharedSetting('bombvision_simon_rules', SIMON_DEFAULT_RULES);
+  const rules = React.useMemo(() => parseSimonRules(rulesText) || parseSimonRules(SIMON_DEFAULT_RULES), [rulesText]);
   const [stageParity, setStageParity] = useState('even'); // 'even' or 'odd'
   const [entries, setEntries] = useState([]);
   const [previewUri, setPreviewUri] = useState('');
@@ -137,17 +132,10 @@ export function SimonsModule({ isActive = true }) {
 
   const handleRulesChange = (text) => {
     setRulesText(text);
-    const parsed = parseSimonRules(text);
-    if (parsed) {
-      setRules(parsed);
-      try { localStorage.setItem('bombvision_simon_rules', text); } catch (e) {}
-    }
   };
 
   const handleRestoreDefaultRules = () => {
     setRulesText(SIMON_DEFAULT_RULES);
-    setRules(parseSimonRules(SIMON_DEFAULT_RULES));
-    try { localStorage.setItem('bombvision_simon_rules', SIMON_DEFAULT_RULES); } catch (e) {}
     showToast('RESTORED DEFAULT SIMON RULES ✓');
   };
 
@@ -233,6 +221,7 @@ export function SimonsModule({ isActive = true }) {
             </button>
           </div>
 
+          {!grouped && (
           <details className="simon-manual-details" style={{ marginTop: '8px' }}>
             <summary style={{ cursor: 'pointer', fontFamily: 'monospace', fontWeight: 600, fontSize: '12px', letterSpacing: '0.08em', color: 'var(--ink-soft)', marginBottom: '8px' }}>
               📖 MANUAL RULES — PASTE &amp; PARSE (EVEN / ODD DISARMED RULES)
@@ -263,6 +252,7 @@ export function SimonsModule({ isActive = true }) {
               </div>
             </div>
           </details>
+          )}
         </ModuleInput>
       }
       answers={

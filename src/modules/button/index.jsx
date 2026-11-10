@@ -11,6 +11,8 @@ import { readButtonImage } from './buttonVision.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
+import { useSharedSetting, useSharedState } from '../../core/sharedSetting.js';
+import { useInstance } from '../../core/InstanceContext.jsx';
 import { Dropzone } from '../../core/Dropzone.jsx';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
@@ -29,10 +31,12 @@ export function ButtonModule({ isActive = true }) {
   const { copy } = useClipboard();
   const uid = useId(); // per-instance ids: missions show several Button windows
 
-  const [checklist, setChecklist] = useState(() => {
-    try { return localStorage.getItem(KEY) || ''; } catch (e) { return ''; }
-  });
-  const [facts, setFacts] = useState(() => {
+  // The checklist and the bomb facts (serial, module counts) are the same for every Button
+  // on the bomb, so all Button windows share them
+  const [checklist, setChecklistShared] = useSharedSetting(KEY, '');
+  const inst = useInstance();
+  const grouped = Boolean(inst && inst.grouped);
+  const [facts, setFacts] = useSharedState('button-facts', () => {
     const f = emptyFacts();
     const parsed = parseChecklist((() => { try { return localStorage.getItem(KEY) || ''; } catch (e) { return ''; } })()).facts;
     if (parsed.serial) f.serial = parsed.serial;
@@ -111,9 +115,9 @@ export function ButtonModule({ isActive = true }) {
     });
   };
 
+  const setChecklist = (text) => setChecklistShared(text);
   const handleChecklistChange = (text) => {
     setChecklist(text);
-    try { localStorage.setItem(KEY, text); } catch (e) {}
     applyPastedFacts(text);
   };
 
@@ -148,7 +152,6 @@ export function ButtonModule({ isActive = true }) {
 
   const handleSample = () => {
     setChecklist(SAMPLE_CHECKLIST);
-    try { localStorage.setItem(KEY, SAMPLE_CHECKLIST); } catch (e) {}
     setFacts({ serial: 'E1ZQGHV1', total: '6', nonNeedy: '5', needy: '1', buttonMods: '3' });
     setColor('green');
     setLabel('WHITE');
@@ -241,6 +244,7 @@ export function ButtonModule({ isActive = true }) {
           )}
 
           <div className="btn-config">
+            {!grouped && (
             <div className="search-config-row">
               <div className="btn-config-head">
                 <label className="search-config-label" htmlFor={`${uid}-list`} style={{ margin: 0 }}>
@@ -260,6 +264,7 @@ export function ButtonModule({ isActive = true }) {
                 onChange={(e) => handleChecklistChange(e.target.value)}
               />
             </div>
+            )}
 
             <div className="btn-facts">
               <label className="btn-fact btn-fact-serial">

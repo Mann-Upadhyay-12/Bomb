@@ -1,6 +1,7 @@
 import React from 'react';
 import { useClipboard } from '../useClipboard.js';
 import { useToast } from '../ToastContext.jsx';
+import { useInstance } from '../InstanceContext.jsx';
 
 export function AnswerPanel({
   label = 'GUARANTEED SAFE SQUARES',
@@ -12,6 +13,13 @@ export function AnswerPanel({
 }) {
   const { copy } = useClipboard();
   const { flash } = useToast();
+
+  // Inside a module group, tell this copy's box what the current answer is
+  const inst = useInstance();
+  const summary = copyValue || (Array.isArray(answers) ? answers.join(' ') : (answers || ''));
+  React.useEffect(() => {
+    if (inst && inst.report) inst.report(summary);
+  }, [summary]);
 
   const handleCopy = () => {
     if (copyValue) {

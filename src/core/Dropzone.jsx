@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { extractImageSource, extractImageFromPaste, loadImageSource } from '../utils/image.js';
+import { useInstance } from './InstanceContext.jsx';
 
 export function Dropzone({
   onImage,
@@ -95,10 +96,21 @@ export function Dropzone({
     }
   };
 
+  // A screenshot dropped on this copy's box in a module group is loaded here
+  const inst = useInstance();
+  const injectNonce = inst && inst.inject ? inst.inject.nonce : 0;
+  useEffect(() => {
+    if (!injectNonce || !inst.inject.file) return;
+    if (multiple && onFiles) onFiles([inst.inject.file]);
+    else loadFromSource({ type: 'file', file: inst.inject.file });
+  }, [injectNonce]);
+
   // The window listeners are registered once; they call the latest handlers through this ref
   // (re-registering on every render reset the drag counter mid-drag and made the highlight flicker).
   const latest = useRef({});
-  latest.current = { handleDataTransfer, loadFromSource };
+  // In a module group every card is visible: only the selected card takes Ctrl+V, and drops are
+  // handled per card (the card you drop on), not window-wide.
+  latest.current = { handleDataTransfer, loadFromSource, inst };
 
   // Window-wide drag and drop & paste listeners
   // CRITICAL: Only process events if this specific dropzone is currently visible (not hidden in an inactive mission slot)
@@ -125,8 +137,9 @@ export function Dropzone({
       return types.includes('Files') || !internalDrag;
     };
 
+    const inGroup = () => Boolean(latest.current.inst && latest.current.inst.multi);
     const handleWindowDragEnter = (e) => {
-      if (!isVisible()) return;
+      if (!isVisible() || inGroup()) return;
       if (!isDroppable(e.dataTransfer)) return;
       e.preventDefault();
       dragDepth++;
@@ -134,7 +147,7 @@ export function Dropzone({
     };
 
     const handleWindowDragOver = (e) => {
-      if (!isVisible()) return;
+      if (!isVisible() || inGroup()) return;
       if (!isDroppable(e.dataTransfer)) return;
       e.preventDefault();
       if (e.dataTransfer) {
@@ -144,7 +157,7 @@ export function Dropzone({
     };
 
     const handleWindowDragLeave = () => {
-      if (!isVisible()) return;
+      if (!isVisible() || inGroup()) return;
       dragDepth = Math.max(0, dragDepth - 1);
       if (dragDepth === 0) {
         setIsDrag(false);
@@ -158,7 +171,7 @@ export function Dropzone({
     };
 
     const handleWindowDrop = (e) => {
-      if (!isVisible()) return;
+      if (!isVisible() || inGroup()) return;
       if (!isDroppable(e.dataTransfer)) {
         dragDepth = 0;
         internalDrag = false;
@@ -175,6 +188,7 @@ export function Dropzone({
 
     const handleWindowPaste = (e) => {
       if (!isVisible()) return;
+      if (inGroup() && !latest.current.inst.selected) return;
 
       const active = document.activeElement;
       const cd = e.clipboardData;
@@ -228,7 +242,7 @@ export function Dropzone({
       />
       <div
         ref={containerRef}
-        className={`dropzone ${isDrag ? 'drag' : ''} ${loading ? 'loading' : ''}`}
+        className={`dropzone ${isDrag ? 'drag' : ''} ${loading ? 'loading' : ''} ${inst && inst.multi ? 'compact' : ''}`}
         tabIndex={0}
         role="button"
         aria-label="Upload or paste image"

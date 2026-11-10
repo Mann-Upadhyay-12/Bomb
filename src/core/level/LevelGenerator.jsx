@@ -6,6 +6,7 @@ import { readBoard, imageToData } from './levelVision.js';
 
 const ALL_NAMES = Object.keys(KNOWN_MODULE_NAMES);
 const isSolvable = n => Boolean(KNOWN_MODULE_NAMES[n] && KNOWN_MODULE_NAMES[n].isImplemented);
+const SOLVABLE_NAMES = ALL_NAMES.filter(isSolvable).sort((a, b) => a.localeCompare(b));
 
 /**
  * Paste a screenshot of the bomb board → list of modules in board order → start it as a level.
@@ -60,8 +61,9 @@ export function LevelGenerator({ isVisible, savedLevels = [], onStart, onSave, o
       <div className="eyebrow">LEVEL GENERATOR</div>
       <h1>Generate Level</h1>
       <div className="sub">
-        Paste a screenshot of the bomb board. Every module card is read by its title, in board order
-        (left → right, top → bottom). Modules this app can't solve yet are <b>left out</b> of the level.
+        Paste a screenshot of the bomb board — every module card is read by its title, in board order
+        (left → right, top → bottom) — or <b>build the level by hand</b> by clicking modules below.
+        Modules this app can't solve yet are <b>left out</b> of the level.
       </div>
 
       {isVisible && (
@@ -87,10 +89,30 @@ export function LevelGenerator({ isVisible, savedLevels = [], onStart, onSave, o
         </div>
       )}
 
+      <div className="about-panel lvlgen-panel">
+        <div className="bg-panel-title">BUILD BY HAND — CLICK TO ADD (CLICK AGAIN FOR ANOTHER COPY)</div>
+        <div className="lvlgen-palette">
+          {SOLVABLE_NAMES.map(n => {
+            const have = draft.filter(m => m.name === n).length;
+            return (
+              <button key={n} type="button" className={`lvlgen-chip ${have ? 'on' : ''}`}
+                onClick={() => setDraft(prev => [...prev, { name: n, unsure: false }])}>
+                {n}{have ? <b> ×{have}</b> : null}
+              </button>
+            );
+          })}
+        </div>
+        {draft.length > 0 && (
+          <div className="lvlgen-row">
+            <button type="button" className="bg-btn" onClick={() => { setDraft([]); setPreviewUri(''); }}>Clear list</button>
+          </div>
+        )}
+      </div>
+
       {draft.length > 0 && (
         <div className="about-panel lvlgen-panel">
           <div className="bg-panel-title">
-            DETECTED MODULES — {kept.length} IN LEVEL{skipped.length ? `, ${skipped.length} SKIPPED (NO SOLVER)` : ''}
+            LEVEL MODULES — {kept.length} IN LEVEL{skipped.length ? `, ${skipped.length} SKIPPED (NO SOLVER)` : ''}
           </div>
           <ol className="lvlgen-list">
             {draft.map((m, i) => {

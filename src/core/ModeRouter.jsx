@@ -59,9 +59,13 @@ export function ModeRouter({
       const isRepeated = counts[modName] > 1;
 
       const known = KNOWN_MODULE_NAMES[modName];
+      // repeated "same manual" modules share one grouped window → one tab, on the first copy
+      if (known && known.shared && isRepeated && count > 1) return null;
       const reg = known && known.isImplemented ? MODULE_REGISTRY.find(m => m.id === known.id) : null;
       const baseLabel = reg ? reg.label : `⚠️ ${modName.toUpperCase()} (N/A)`;
-      const displayLabel = isRepeated ? `${baseLabel} #${count}` : baseLabel;
+      const displayLabel = !isRepeated ? baseLabel
+        : known && known.shared ? `${baseLabel} ×${counts[modName]}`
+        : `${baseLabel} #${count}`;
 
       return {
         key: `${modName}-${idx}`,
@@ -71,7 +75,7 @@ export function ModeRouter({
         isImplemented: Boolean(reg),
         name: modName
       };
-    });
+    }).filter(Boolean);
   } else {
     renderedTabs = MODULE_REGISTRY.map(m => ({
       key: m.id,

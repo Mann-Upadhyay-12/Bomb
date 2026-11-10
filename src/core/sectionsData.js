@@ -1,34 +1,36 @@
 // Sections and missions configuration for the Bomb Boomed sidebar
 // Each mission maps to a sequence of modules.
 // Missing/placeholder modules are flagged with isImplemented: false.
+// shared: true = every copy on a bomb uses the same manual (Password, Piano …): repeated copies are
+// shown as ONE window with the manual once and a box per copy. Others get a window per copy.
 
 export const KNOWN_MODULE_NAMES = {
   // Implemented modules in bomb_boomed:
   'Maze': { id: 'maze', isImplemented: true },
-  'Password': { id: 'password', isImplemented: true },
+  'Password': { id: 'password', isImplemented: true, shared: true },
   'Switches': { id: 'switches', isImplemented: true },
   'Search': { id: 'search', isImplemented: true },
   'Knobs': { id: 'knob', isImplemented: true },
-  'Piano': { id: 'piano', isImplemented: true },
-  'Who\'s On First': { id: 'wof', isImplemented: true },
-  'Wire Sequences': { id: 'wireseq', isImplemented: true },
+  'Piano': { id: 'piano', isImplemented: true, shared: true },
+  'Who\'s On First': { id: 'wof', isImplemented: true, shared: true },
+  'Wire Sequences': { id: 'wireseq', isImplemented: true, shared: true },
   'Complex Wires': { id: 'complexwires', isImplemented: true },
   'Logic': { id: 'logic', isImplemented: true },
   'Chess': { id: 'chess', isImplemented: true },
   'Mines': { id: 'mines', isImplemented: true },
   'Symbols': { id: 'symbols', isImplemented: true },
-  'Simon Says': { id: 'simons', isImplemented: true },
+  'Simon Says': { id: 'simons', isImplemented: true, shared: true },
   'Rubik\'s Cube': { id: 'cube', isImplemented: true },
   'Diagram': { id: 'diagram', isImplemented: true },
-  'Morse Code': { id: 'morse', isImplemented: true },
+  'Morse Code': { id: 'morse', isImplemented: true, shared: true },
   'Queens': { id: 'queens', isImplemented: true },
-  'The Button': { id: 'button', isImplemented: true },
+  'The Button': { id: 'button', isImplemented: true, shared: true },
   'Balance': { id: 'balance', isImplemented: true },
 
   // Modules not yet implemented or KTANE/GTA variants:
   // "Wires" is standard regular wires (or complex wires as fallback if desired, but as a distinct module it's missing)
-  'Wires': { id: 'wires', isImplemented: false },
-  'Memory': { id: 'memory', isImplemented: false },
+  'Wires': { id: 'wires', isImplemented: false, shared: true },
+  'Memory': { id: 'memory', isImplemented: false, shared: true },
   'Circuit': { id: 'circuit', isImplemented: false },
   'Pressure': { id: 'pressure', isImplemented: false },
   'Breaker': { id: 'breaker', isImplemented: false }

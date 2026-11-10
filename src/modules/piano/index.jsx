@@ -4,6 +4,8 @@ import { pnAnalyze } from './pianoVision.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
+import { useSharedSetting } from '../../core/sharedSetting.js';
+import { useInstance } from '../../core/InstanceContext.jsx';
 import { Dropzone } from '../../core/Dropzone.jsx';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
@@ -23,13 +25,10 @@ export function PianoModule({ isActive = true }) {
   const [clefSel, setClefSel] = useState('auto');
   const [detClef, setDetClef] = useState('bass');
   const [notes, setNotes] = useState([{ pos: 0, acc: 0 }, { pos: 0, acc: 0 }]);
-  const [codesText, setCodesText] = useState(() => {
-    try {
-      return localStorage.getItem(PN_KEY) || PN_DEFAULT_CODES;
-    } catch (e) {
-      return PN_DEFAULT_CODES;
-    }
-  });
+  // The interval → code table is the same for every Piano module, so all windows share it
+  const [codesText, setCodesText] = useSharedSetting(PN_KEY, PN_DEFAULT_CODES);
+  const inst = useInstance();
+  const grouped = Boolean(inst && inst.grouped);
 
   const [previewUri, setPreviewUri] = useState('');
   const [previewMeta, setPreviewMeta] = useState('');
@@ -194,6 +193,7 @@ export function PianoModule({ isActive = true }) {
               </button>
             </div>
 
+            {!grouped && (
             <div className="search-config-row">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <label className="search-config-label" htmlFor={`${uid}-codes`}>
@@ -205,7 +205,6 @@ export function PianoModule({ isActive = true }) {
                   style={{ fontSize: '11px', padding: '2px 8px' }}
                   onClick={() => {
                     setCodesText(PN_DEFAULT_CODES);
-                    try { localStorage.setItem(PN_KEY, PN_DEFAULT_CODES); } catch (e) {}
                     showToast('RESET CODES TO DEFAULT ✓');
                   }}
                 >
@@ -217,12 +216,10 @@ export function PianoModule({ isActive = true }) {
                 className="password-rows-field"
                 rows={2}
                 value={codesText}
-                onChange={(e) => {
-                  setCodesText(e.target.value);
-                  try { localStorage.setItem(PN_KEY, e.target.value); } catch (err) {}
-                }}
+                onChange={(e) => setCodesText(e.target.value)}
               />
             </div>
+            )}
 
             {statusText && (
               <div style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--brass)' }}>
