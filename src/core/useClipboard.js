@@ -25,7 +25,7 @@ export function useClipboard() {
     const formatted = formatClipboardText(text);
     if (!formatted) return;
 
-    const done = () => showToast(customToast);
+    const done = () => showToast(customToast, true);
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(formatted)

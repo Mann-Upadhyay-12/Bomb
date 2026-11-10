@@ -1,8 +1,9 @@
 import React from 'react';
 
 const SHOWN = {
-  K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙',
-  k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟'
+  // Filled glyphs for both colours; colour comes from CSS (white fill + dark outline)
+  K: '♚\uFE0E', Q: '♛\uFE0E', R: '♜\uFE0E', B: '♝\uFE0E', N: '♞\uFE0E', P: '♟\uFE0E',
+  k: '♚\uFE0E', q: '♛\uFE0E', r: '♜\uFE0E', b: '♝\uFE0E', n: '♞\uFE0E', p: '♟\uFE0E'
 };
 
 const CYCLE = ['', 'P', 'N', 'B', 'R', 'Q', 'K', 'p', 'n', 'b', 'r', 'q', 'k'];
@@ -49,7 +50,10 @@ export function ChessWorking({
                 justifyContent: 'center',
                 fontSize: '28px',
                 color: isWhitePiece ? '#FFFFFF' : '#12141A',
-                filter: isWhitePiece ? 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))' : 'none',
+                // Solid glyphs + outline so white pieces stay visible on light squares
+                WebkitTextStroke: isWhitePiece ? '1.2px #12141A' : '0',
+                textShadow: isWhitePiece ? '0 1px 2px rgba(0,0,0,0.55)' : 'none',
+                lineHeight: 1,
                 cursor: 'pointer',
                 userSelect: 'none'
               }}
@@ -61,7 +65,7 @@ export function ChessWorking({
         })}
       </div>
       <div style={{ fontSize: '11px', color: 'var(--ink-soft)' }}>
-        Click any square to cycle pieces (White Pawn → King → Black Pawn → King → Empty)
+        Click any square to cycle pieces (Empty → White P N B R Q K → Black p n b r q k → Empty)
       </div>
     </div>
   );

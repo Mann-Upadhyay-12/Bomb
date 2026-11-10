@@ -15,7 +15,8 @@ export async function detectKnobStateFromImage(img) {
 
   try {
     const worker = await ensureOCRWorker();
-    await worker.setParameters({ tessedit_char_whitelist: 'XO01 \n\r\t' });
+    // Reset page-segmentation mode too: the shared worker may still be in single-char mode from Search
+    await worker.setParameters({ tessedit_char_whitelist: 'XO01 \n\r\t', tessedit_pageseg_mode: '6', user_defined_dpi: '150' });
     const { data } = await worker.recognize(canvas);
     const text = data.text.toUpperCase().replace(/[01]/g, m => m === '1' ? 'X' : 'O');
     const matches = text.match(/[XO]{6}/g);

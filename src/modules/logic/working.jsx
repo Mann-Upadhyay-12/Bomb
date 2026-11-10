@@ -7,9 +7,13 @@ export function LogicWorking({
   results = [null, null, null, null, null],
   onVarToggle = () => {},
   onStageChange = () => {},
+  onStageFocus = () => {},
+  onStagePaste = () => {},
+  activeStageIdx = 0,
+  idPrefix = 'logic',
   onPadInsert = () => {}
 }) {
-  const padSymbols = ['(', ')', '¬', '^', 'V', '→', 'P', 'Q', 'R', 'S', 'T'];
+  const padSymbols = ['(', ')', '¬', '^', 'V', '→', 'P', 'Q', 'R', 'S', 'T', 'α', 'β', 'γ', 'δ', '⌫'];
 
   return (
     <div className="logic-working-container" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -43,8 +47,10 @@ export function LogicWorking({
             key={sym}
             type="button"
             className="bg-btn"
+            onMouseDown={(e) => e.preventDefault() /* keep focus/caret in the stage input */}
             onClick={() => onPadInsert(sym)}
-            style={{ minWidth: '38px', fontWeight: 700 }}
+            title={sym === '⌫' ? 'Backspace' : `Insert ${sym} into stage ${activeStageIdx + 1}`}
+            style={{ minWidth: '38px', fontWeight: 700, color: 'αβγδ'.includes(sym) ? 'var(--brass)' : undefined }}
           >
             {sym}
           </button>
@@ -58,22 +64,31 @@ export function LogicWorking({
           let badgeText = '–';
           let badgeColor = 'var(--line)';
           let textColor = 'var(--ink-soft)';
-          if (res !== null) {
+          const hasError = res && res.error;
+          if (hasError) {
+            badgeText = '!';
+            badgeColor = 'var(--brass)';
+            textColor = 'var(--brass)';
+          } else if (res) {
             badgeText = res.val ? 'T' : 'F';
             badgeColor = res.val ? 'var(--select-green)' : '#EF5350';
             textColor = res.val ? '#68D391' : '#EF5350';
           }
 
           return (
-            <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <span style={{ fontWeight: 700, fontSize: '18px', width: '24px', textAlign: 'center', color: 'var(--brass)' }}>
-                {sym}
+                {sym || '⑤'}
               </span>
               <input
+                id={`${idPrefix}-stage${idx}`}
                 type="text"
                 className="search-words-field"
-                style={{ flex: 1 }}
+                style={{ flex: 1, minWidth: 0, borderColor: idx === activeStageIdx ? 'var(--brass)' : undefined }}
                 value={stages[idx]}
+                onFocus={() => onStageFocus(idx)}
+                onPaste={(e) => onStagePaste(idx, e)}
                 onChange={(e) => onStageChange(idx, e.target.value)}
                 placeholder={`Stage ${idx + 1} formula (e.g. (¬R^S)^¬S)`}
                 spellCheck="false"
@@ -82,6 +97,7 @@ export function LogicWorking({
                 style={{
                   width: '38px',
                   height: '38px',
+                  flexShrink: 0,
                   borderRadius: '6px',
                   border: `2px solid ${badgeColor}`,
                   display: 'flex',
@@ -94,6 +110,12 @@ export function LogicWorking({
               >
                 {badgeText}
               </div>
+            </div>
+            {hasError && (
+              <div style={{ fontSize: '11px', color: 'var(--brass)', fontFamily: 'monospace', paddingLeft: '34px' }}>
+                ⚠ {res.error}
+              </div>
+            )}
             </div>
           );
         })}

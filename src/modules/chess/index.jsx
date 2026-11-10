@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   startEngine,
+  stopEngineListener,
   askEngine,
+  SUPERSEDED,
   toFen,
   parseFen
 } from './chessEngine.js';
@@ -37,9 +39,9 @@ export function ChessModule({ isActive = true }) {
   const [activeTarget, setActiveTarget] = useState('white');
 
   useEffect(() => {
-    startEngine(statusText => {
-      setEngineStatus(statusText);
-    });
+    const onStatus = statusText => setEngineStatus(statusText);
+    startEngine(onStatus);
+    return () => stopEngineListener(onStatus);
   }, []);
 
   const solvePosition = async (positionArray = merged) => {
@@ -48,6 +50,7 @@ export function ChessModule({ isActive = true }) {
     if (wKings !== 1 || bKings !== 1) {
       const msg = (wKings !== 1 ? 'White King (♔) missing.' : '') + (bKings !== 1 ? ' Black King (♚) missing.' : '');
       setEngineStatus(`⚠️ ${msg}`);
+      setBestMove('');
       return;
     }
 
@@ -59,6 +62,7 @@ export function ChessModule({ isActive = true }) {
         const e = mate ? `Mate in ${mate}` : `Eval ${(Number(cp) / 100).toFixed(2)}`;
         setEngineStatus(`Thinking… depth ${depth} (${e})`);
       });
+      if (uci === SUPERSEDED) return; // a newer search replaced this one
       if (uci && uci !== '(none)') {
         let san = uci;
         if (typeof window !== 'undefined' && typeof window.Chess !== 'undefined') {
@@ -76,7 +80,7 @@ export function ChessModule({ isActive = true }) {
         }
       } else {
         setBestMove('');
-        setEngineStatus('No legal move found');
+        setEngineStatus(uci === null ? 'Engine unavailable / timed out' : 'No legal move found');
       }
     } catch (err) {
       setBestMove('');

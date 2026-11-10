@@ -19,6 +19,7 @@ export function evaluateExpression(src, greek, vars) {
              .replace(/[!~]/g, '¬')
              .replace(/[&∧]/g, '^')
              .replace(/[|∨v]/g, 'V')
+             .replace(/[pqrst]/g, c => c.toUpperCase())
              .replace(/\s+/g, '');
   let p = 0;
   const peek = () => s[p];

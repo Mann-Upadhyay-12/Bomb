@@ -22,14 +22,14 @@ export const KNOWN_MODULE_NAMES = {
   'Diagram': { id: 'diagram', isImplemented: true },
   'Morse Code': { id: 'morse', isImplemented: true },
   'Queens': { id: 'queens', isImplemented: true },
+  'The Button': { id: 'button', isImplemented: true },
+  'Balance': { id: 'balance', isImplemented: true },
 
   // Modules not yet implemented or KTANE/GTA variants:
   // "Wires" is standard regular wires (or complex wires as fallback if desired, but as a distinct module it's missing)
   'Wires': { id: 'wires', isImplemented: false },
-  'The Button': { id: 'button', isImplemented: false },
   'Memory': { id: 'memory', isImplemented: false },
   'Circuit': { id: 'circuit', isImplemented: false },
-  'Balance': { id: 'balance', isImplemented: false },
   'Pressure': { id: 'pressure', isImplemented: false },
   'Breaker': { id: 'breaker', isImplemented: false }
 };

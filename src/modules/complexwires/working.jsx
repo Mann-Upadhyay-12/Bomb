@@ -4,6 +4,7 @@ import { CW_REGIONS, CW_LETTERS, cwKey } from './complexwiresConstants.js';
 export function ComplexWiresWorking({
   wires = [],
   rules = {},
+  unsure = new Set(),
   edge = { even: false, needy: false, gte5: true },
   results = [],
   onWireToggle = () => {},
@@ -29,6 +30,7 @@ export function ComplexWiresWorking({
                 alignItems: 'center',
                 gap: '12px',
                 padding: '8px 14px',
+                flexWrap: 'wrap',
                 background: w.active ? 'var(--paper)' : 'rgba(255,255,255,0.02)',
                 border: '1px solid var(--line)',
                 borderRadius: '8px',
@@ -112,6 +114,11 @@ export function ComplexWiresWorking({
                   {res.cut ? 'CUT' : 'LEAVE'}
                 </div>
               )}
+              {w.active && res.why && (
+                <div style={{ flexBasis: '100%', fontSize: '11px', color: 'var(--ink-soft)', paddingLeft: '32px' }}>
+                  {cwKey(w) === 'None' ? 'no features' : cwKey(w).replace(/\+/g, ' + ')} → letter <b>{rules[cwKey(w)] || 'D'}</b> → {res.why}
+                </div>
+              )}
             </div>
           );
         })}
@@ -121,16 +128,20 @@ export function ComplexWiresWorking({
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         <span className="search-config-label">VENN DIAGRAM RULE LETTERS (16 COMBINATIONS):</span>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '6px' }}>
-          {CW_REGIONS.map(reg => (
+          {CW_REGIONS.map(reg => {
+            const isUsed = wires.some(w => w.active && cwKey(w) === reg.id);
+            const isUnsure = unsure.has(reg.id);
+            return (
             <div
               key={reg.id}
+              title={isUnsure ? 'Read with low confidence — please check' : isUsed ? 'Used by a current wire' : undefined}
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 padding: '4px 8px',
-                background: 'var(--paper)',
-                border: '1px solid var(--line)',
+                background: isUsed ? 'var(--brass-dim)' : 'var(--paper)',
+                border: isUnsure ? '1px dashed var(--brass)' : isUsed ? '1px solid var(--brass)' : '1px solid var(--line)',
                 borderRadius: '6px',
                 fontSize: '11px'
               }}
@@ -153,7 +164,8 @@ export function ComplexWiresWorking({
                 ))}
               </select>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

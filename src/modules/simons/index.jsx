@@ -51,6 +51,77 @@ export function SimonsModule({ isActive = true }) {
     }
   }, [copyFormatted, isActive]);
 
+  // Analyse one image/GIF blob → list of flashed colours (GIF frames are decoded
+  // one by one when the browser supports ImageDecoder, like the original app).
+  const analyzeBlob = async (blob, img) => {
+    const cv = document.createElement('canvas');
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const isGif = blob && (blob.type === 'image/gif' || /\.gif$/i.test(blob.name || ''));
+    if (isGif && typeof window !== 'undefined' && 'ImageDecoder' in window) {
+      try {
+        const dec = new window.ImageDecoder({ data: await blob.arrayBuffer(), type: 'image/gif' });
+        await dec.tracks.ready;
+        const n = dec.tracks.selectedTrack.frameCount;
+        const seq = [];
+        for (let i = 0; i < n; i++) {
+          const { image } = await dec.decode({ frameIndex: i });
+          cv.width = image.displayWidth; cv.height = image.displayHeight;
+          ctx.drawImage(image, 0, 0);
+          image.close();
+          const c = analyzeSimonFrame(ctx, cv.width, cv.height);
+          // consecutive frames of the same glow count once
+          if (c && seq[seq.length - 1] !== c) seq.push(c);
+        }
+        return { colors: seq, note: `GIF ${n} frames` };
+      } catch (e) {
+        console.warn('Simon GIF decode failed, falling back to first frame', e);
+      }
+    }
+    let source = img;
+    if (!source && blob) source = await createImageBitmap(blob);
+    if (!source) return { colors: [], note: '' };
+    const w = source.naturalWidth || source.width, h = source.naturalHeight || source.height;
+    cv.width = w; cv.height = h;
+    ctx.drawImage(source, 0, 0);
+    const c = analyzeSimonFrame(ctx, w, h);
+    return { colors: c ? [c] : [], note: isGif ? 'GIF: first frame only (ImageDecoder unsupported)' : '' };
+  };
+
+  const ingest = async (items) => {
+    const found = [];
+    for (const { blob, img } of items) {
+      try {
+        const r = await analyzeBlob(blob, img);
+        found.push(...r.colors);
+      } catch (e) {}
+    }
+    if (found.length) {
+      setEntries(prev => [...prev, ...found]);
+      showToast(`FLASH${found.length > 1 ? 'ES' : ''} DETECTED: ${found.map(c => SINAMES[c] || c).join(' → ')} ✓`);
+    } else {
+      showToast('NO GLOW DETECTED — TAP BUTTONS TO ADD SEQUENCE');
+    }
+  };
+
+  const handleImage = (img, dataUri, fileBlob) => {
+    setPreviewUri(dataUri);
+    setPreviewMeta(`${img.naturalWidth}×${img.naturalHeight} px source`);
+    setLastImage(img, fileBlob);
+    ingest([{ blob: fileBlob, img }]);
+  };
+
+  // Several frames at once: process in file-name order (frame1, frame2, …)
+  const handleFiles = (files) => {
+    const list = Array.from(files).filter(f => f && (!f.type || f.type.startsWith('image/')));
+    list.sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { numeric: true }));
+    if (list[0]) {
+      const reader = new FileReader();
+      reader.onload = ev => { setPreviewUri(ev.target.result); setPreviewMeta(`${list.length} file(s)`); };
+      reader.readAsDataURL(list[0]);
+    }
+    ingest(list.map(f => ({ blob: f, img: null })));
+  };
+
   const handleAddColor = (c) => {
     setEntries(prev => [...prev, c]);
   };
@@ -89,9 +160,14 @@ export function SimonsModule({ isActive = true }) {
     showToast('SIMON CLEARED ✓');
   };
 
+  const evenSeq = entries.map(c => (rules.even || {})[c] || c).join(' ');
+  const oddSeq = entries.map(c => (rules.odd || {})[c] || c).join(' ');
+
   const copyItems = [];
   if (pressedSeq.length > 0) {
     copyItems.push({ label: `COPY SEQUENCE (${copyFormatted})`, value: copyFormatted });
+    copyItems.push({ label: `EVEN: ${evenSeq}`, value: evenSeq });
+    copyItems.push({ label: `ODD: ${oddSeq}`, value: oddSeq });
     pressedSeq.forEach((c, i) => {
       copyItems.push({ label: `#${i + 1}: ${c}`, value: c });
     });
@@ -105,29 +181,9 @@ export function SimonsModule({ isActive = true }) {
         <ModuleInput
           dropzone={
             <Dropzone
-              onImage={(img, dataUri, fileBlob) => {
-                setPreviewUri(dataUri);
-                setPreviewMeta(`${img.naturalWidth}×${img.naturalHeight} px source`);
-                setLastImage(img, fileBlob);
-
-                try {
-                  const w = img.naturalWidth || img.width;
-                  const h = img.naturalHeight || img.height;
-                  const cv = document.createElement('canvas');
-                  cv.width = w; cv.height = h;
-                  const ctx = cv.getContext('2d', { willReadFrequently: true });
-                  ctx.drawImage(img, 0, 0);
-                  const flashed = analyzeSimonFrame(ctx, w, h);
-                  if (flashed) {
-                    setEntries(prev => [...prev, flashed]);
-                    showToast(`FLASH DETECTED: ${SINAMES[flashed] || flashed} ✓`);
-                  } else {
-                    showToast('IMAGE LOADED — TAP BUTTONS TO ADD SEQUENCE');
-                  }
-                } catch (e) {
-                  showToast('IMAGE LOADED — TAP BUTTONS TO ADD SEQUENCE');
-                }
-              }}
+              onImage={handleImage}
+              onFiles={handleFiles}
+              multiple
               icon="🔴 🔵 🟡 🟢"
               title="Click here, then paste Simon Says frame or GIF"
             />

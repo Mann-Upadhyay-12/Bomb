@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { VennCore } from './diagramCore.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
@@ -12,6 +12,34 @@ import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
 import { DiagramWorking, DG_LAYOUTS } from './working.jsx';
 
 const DG_LETTERS = ['A', 'B', 'C'];
+
+// Render A/B/C in a few common fonts and add them as extra glyph templates
+// (ported from the original single-file app) to improve circle-label recognition.
+let fontTemplatesAdded = false;
+function ensureFontTemplates() {
+  if (fontTemplatesAdded) return;
+  fontTemplatesAdded = true;
+  try {
+    const c = document.createElement('canvas'); c.width = c.height = 96;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    ['Arial', 'Verdana', 'Georgia', '"IBM Plex Mono"', '"Trebuchet MS"'].forEach(font => {
+      DG_LETTERS.forEach(letter => {
+        x.fillStyle = '#000'; x.fillRect(0, 0, 96, 96);
+        x.fillStyle = '#fff'; x.font = 'bold 64px ' + font + ', sans-serif';
+        x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(letter, 48, 50);
+        const d = x.getImageData(0, 0, 96, 96).data;
+        let x0 = 96, y0 = 96, x1 = -1, y1 = -1;
+        for (let yy = 0; yy < 96; yy++) for (let xx = 0; xx < 96; xx++) {
+          if (d[(yy * 96 + xx) * 4] > 110) { x0 = Math.min(x0, xx); x1 = Math.max(x1, xx); y0 = Math.min(y0, yy); y1 = Math.max(y1, yy); }
+        }
+        if (x1 < 0) return;
+        const w = x1 - x0 + 1, h = y1 - y0 + 1, cov = new Float32Array(w * h);
+        for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) cov[yy * w + xx] = d[((y0 + yy) * 96 + x0 + xx) * 4] / 255;
+        VennCore.addTemplate(letter, VennCore.resampleGlyph(cov, w, h));
+      });
+    });
+  } catch (e) {}
+}
 
 export function DiagramModule({ isActive = true }) {
   const { copyOnDecode, setLastCopyString } = useAppState();
@@ -90,6 +118,98 @@ export function DiagramModule({ isActive = true }) {
     }
   }, [expr, isActive]);
 
+  // Tracks the current "round" of screenshots: the game shows the circle labels and
+  // the shading in separate screenshots, so a labels-only shot must not wipe shading.
+  const roundRef = useRef({ lk: null, labels: false, shade: false });
+  const [hint, setHint] = useState({ text: '', kind: '' });
+
+  const analyzeImage = (img, dataUri) => {
+    try {
+      ensureFontTemplates();
+      const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+      const sc = Math.min(1, 480 / Math.max(iw, ih));
+      const w = Math.max(1, Math.round(iw * sc));
+      const h = Math.max(1, Math.round(ih * sc));
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const ctx = c.getContext('2d', { willReadFrequently: true });
+      ctx.fillStyle = '#1f2228'; ctx.fillRect(0, 0, w, h);
+      ctx.imageSmoothingQuality = 'high'; ctx.drawImage(img, 0, 0, w, h);
+      const res = VennCore.analyze(ctx.getImageData(0, 0, w, h));
+
+      if (!res || !res.ok) {
+        const reason = (res && res.reason) || 'Could not analyse that image.';
+        setShots(prev => [...prev.filter(sh => sh.type !== 'bad').slice(-1), { url: dataUri, type: 'bad', meta: reason }]);
+        setHint({ text: reason, kind: 'bad' });
+        showToast('DIAGRAM NOT RECOGNISED');
+        return;
+      }
+
+      const lk = res.layout;
+      const LL = DG_LAYOUTS[lk];
+      const hasLetters = !!res.letters;
+      const masks = (res.shade && res.shade.masks) || [];
+      const shadedCount = masks.length;
+      const type = hasLetters ? (shadedCount > 0 ? 'both' : 'labels') : 'shade';
+
+      let rd = roundRef.current;
+      let freshRound = false;
+      if (rd.lk !== lk || (rd.labels && rd.shade)) {
+        rd = { lk, labels: false, shade: false };
+        freshRound = true;
+      }
+
+      if (lk === 'c3') setMode(3);
+      else { setMode(2); setOrient2(lk === 'c2h' ? 'h' : 'v'); }
+
+      if (hasLetters) {
+        setLettersState(prev => ({ ...prev, [lk]: Object.assign({}, res.letters.slotLetters) }));
+        rd.labels = true;
+      }
+      if (!hasLetters || shadedCount > 0 || !rd.shade) {
+        setSelState(prev => ({ ...prev, [lk]: new Set(masks) }));
+        if (!hasLetters || shadedCount > 0) rd.shade = true;
+      }
+      roundRef.current = rd;
+
+      const parts = [];
+      if (type !== 'labels') parts.push(`${shadedCount} region${shadedCount === 1 ? '' : 's'} shaded`);
+      if (hasLetters) parts.push(LL.slots.map(sl => `${LL.names[sl]} = ${res.letters.slotLetters[sl]}`).join(' · '));
+      const meta = (lk === 'c3' ? '3 circles' : '2 circles') + (parts.length ? ' · ' + parts.join(' · ') : '');
+
+      setShots(prev => {
+        let list = freshRound ? [] : prev.filter(sh => sh.type !== 'bad');
+        list = list.filter(sh => sh.type !== type && sh.type !== 'both' && type !== 'both');
+        return [...list, { url: dataUri, type, meta }].slice(-2);
+      });
+
+      let msg = '✓ ' + meta;
+      if (!hasLetters) {
+        msg += res.lettersTried
+          ? ' — letters unclear, set the circle names manually if needed.'
+          : (rd.labels ? '' : ' — add the lettered screenshot to set circle names.');
+      }
+      setHint({ text: msg, kind: 'ok' });
+      showToast('DIAGRAM ANALYZED ✓');
+    } catch (err) {
+      setHint({ text: (err && err.message) || 'Could not analyse that image.', kind: 'bad' });
+    }
+  };
+
+  // Multiple screenshots (labels + shading) dropped/pasted at once: process sequentially
+  const handleFiles = (files) => {
+    Array.from(files)
+      .filter(f => f && (!f.type || f.type.startsWith('image/')))
+      .forEach(f => {
+        const reader = new FileReader();
+        reader.onload = ev => {
+          const img = new Image();
+          img.onload = () => analyzeImage(img, ev.target.result);
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(f);
+      });
+  };
+
   const handleSample = () => {
     setMode(3);
     setSelState(prev => ({
@@ -99,11 +219,21 @@ export function DiagramModule({ isActive = true }) {
     showToast('SAMPLE VENN DIAGRAM SHADED ✓');
   };
 
+  // Clears only the shading of the current layout (used by the region CLEAR chip)
+  const handleClearShading = () => {
+    setSelState({ ...selState, [layoutKey]: new Set() });
+  };
+
+  // Full reset: shading, circle names, screenshots and the screenshot round
   const handleClear = () => {
-    setSelState({
-      ...selState,
-      [layoutKey]: new Set()
+    setSelState({ c3: new Set(), c2h: new Set(), c2v: new Set() });
+    setLettersState({
+      c3: Object.assign({}, DG_LAYOUTS.c3.defaults),
+      c2h: Object.assign({}, DG_LAYOUTS.c2h.defaults),
+      c2v: Object.assign({}, DG_LAYOUTS.c2v.defaults)
     });
+    roundRef.current = { lk: null, labels: false, shade: false };
+    setHint({ text: '', kind: '' });
     setShots([]);
     setLastCopyString('');
     showToast('SHADING CLEARED ✓');
@@ -149,46 +279,8 @@ export function DiagramModule({ isActive = true }) {
         <ModuleInput
           dropzone={
             <Dropzone
-              onImage={(img, dataUri, fileBlob) => {
-                setShots(prev => [...prev, { url: dataUri }]);
-                try {
-                  const sc = Math.min(1, 480 / Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height));
-                  const w = Math.max(1, Math.round((img.naturalWidth || img.width) * sc));
-                  const h = Math.max(1, Math.round((img.naturalHeight || img.height) * sc));
-                  const c = document.createElement('canvas'); c.width = w; c.height = h;
-                  const ctx = c.getContext('2d', { willReadFrequently: true });
-                  ctx.fillStyle = '#1f2228'; ctx.fillRect(0, 0, w, h);
-                  ctx.imageSmoothingQuality = 'high'; ctx.drawImage(img, 0, 0, w, h);
-                  const imgData = ctx.getImageData(0, 0, w, h);
-                  const res = VennCore.analyze(imgData);
-
-                  if (res && res.ok) {
-                    const lk = res.layout;
-                    if (lk === 'c3') setMode(3);
-                    else {
-                      setMode(2);
-                      setOrient2(lk === 'c2h' ? 'h' : 'v');
-                    }
-                    if (res.letters && res.letters.slotLetters) {
-                      setLettersState(prev => ({
-                        ...prev,
-                        [lk]: Object.assign({}, res.letters.slotLetters)
-                      }));
-                    }
-                    if (res.shade && res.shade.masks) {
-                      setSelState(prev => ({
-                        ...prev,
-                        [lk]: new Set(res.shade.masks)
-                      }));
-                    }
-                    showToast('DIAGRAM ANALYZED ✓');
-                  } else {
-                    showToast(res && res.reason ? res.reason : 'DIAGRAM IMAGE ADDED ✓');
-                  }
-                } catch (err) {
-                  showToast('DIAGRAM IMAGE ADDED ✓');
-                }
-              }}
+              onImage={(img, dataUri) => analyzeImage(img, dataUri)}
+              onFiles={handleFiles}
               multiple
               icon="🔵 🔴 🟡"
               title="Upload diagram screenshot (multiple tiles supported)"
@@ -211,6 +303,9 @@ export function DiagramModule({ isActive = true }) {
           }
         >
           <div className="diagram-config" style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '16px' }}>
+            {hint.text && (
+              <div className={`module-hint ${hint.kind === 'bad' ? 'bad' : 'ok'}`}>{hint.text}</div>
+            )}
             <div className="mode-row" style={{ display: 'flex', gap: '10px' }}>
               <button
                 type="button"
@@ -288,7 +383,7 @@ export function DiagramModule({ isActive = true }) {
                 })}
                 <button type="button" className="bg-btn" onClick={handleAll}>ALL (S)</button>
                 <button type="button" className="bg-btn" onClick={handleInvert}>INVERT</button>
-                <button type="button" className="bg-btn" onClick={handleClear}>CLEAR</button>
+                <button type="button" className="bg-btn" onClick={handleClearShading}>CLEAR</button>
               </div>
             </div>
           </div>

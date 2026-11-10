@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { MAZE_SIZE, solveMazeBFS } from './mazeSolver.js';
 import { detectMazeWalls, detectMazeDots, isDotsImage } from './mazeVision.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
@@ -27,6 +27,7 @@ export function MazeModule({ isActive = true }) {
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
+  const uid = useId(); // per-instance ids: missions can show the same module several times
 
   const [wallsGrid, setWallsGrid] = useState(() =>
     Array.from({ length: 8 }, () =>
@@ -41,8 +42,20 @@ export function MazeModule({ isActive = true }) {
   const [previewMeta, setPreviewMeta] = useState('');
 
   // Solve BFS
-  const path = solveMazeBFS(wallsGrid, startPos, goalPos) || [];
+  // Only solve once both the walls and the start/goal dots are known (matches original behaviour)
+  const ready = wallsLoaded && dotsLoaded;
+  const rawPath = ready ? solveMazeBFS(wallsGrid, startPos, goalPos) : null;
+  const path = rawPath || [];
   const moves = path.map(p => p.move).join('');
+  const placeholder = !wallsLoaded && !dotsLoaded
+    ? 'UPLOAD WALLS & DOTS'
+    : !wallsLoaded
+    ? 'NEED WALLS IMAGE'
+    : !dotsLoaded
+    ? 'NEED DOTS IMAGE'
+    : (startPos.r === goalPos.r && startPos.c === goalPos.c)
+    ? 'START = GOAL'
+    : 'NO PATH FOUND — CHECK WALLS';
 
   useEffect(() => {
     if (!isActive) return;
@@ -74,29 +87,35 @@ export function MazeModule({ isActive = true }) {
 
   const handleWallsUpload = (e) => {
     const file = e.target.files && e.target.files[0];
+    e.target.value = '';
     if (!file) return;
     const img = new Image();
+    const url = URL.createObjectURL(file);
     img.onload = () => {
+      URL.revokeObjectURL(url);
       const walls = detectMazeWalls(img);
       setWallsGrid(walls);
       setWallsLoaded(true);
       showToast('MAZE WALLS DETECTED ✓');
     };
-    img.src = URL.createObjectURL(file);
+    img.src = url;
   };
 
   const handleDotsUpload = (e) => {
     const file = e.target.files && e.target.files[0];
+    e.target.value = '';
     if (!file) return;
     const img = new Image();
+    const url = URL.createObjectURL(file);
     img.onload = () => {
+      URL.revokeObjectURL(url);
       const dots = detectMazeDots(img);
       if (dots.startPos) setStartPos(dots.startPos);
       if (dots.goalPos) setGoalPos(dots.goalPos);
       setDotsLoaded(true);
       showToast('MAZE DOTS DETECTED ✓');
     };
-    img.src = URL.createObjectURL(file);
+    img.src = url;
   };
 
   const handleSample = () => {
@@ -174,16 +193,16 @@ export function MazeModule({ isActive = true }) {
               <div className="maze-upload-card" style={{ flex: 1, minWidth: '220px' }}>
                 <span className="maze-upload-card-title">1. MAZE WALLS IMAGE:</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' }}>
-                  <label className="upload-btn" htmlFor="mazeWallsInput">UPLOAD WALLS</label>
-                  <input type="file" id="mazeWallsInput" accept="image/*" style={{ display: 'none' }} onChange={handleWallsUpload} />
+                  <label className="upload-btn" htmlFor={`${uid}-walls`}>UPLOAD WALLS</label>
+                  <input type="file" id={`${uid}-walls`} accept="image/*" style={{ display: 'none' }} onChange={handleWallsUpload} />
                   <span className="maze-status-tag">{wallsLoaded ? 'Walls Loaded ✓' : 'No walls image'}</span>
                 </div>
               </div>
               <div className="maze-upload-card" style={{ flex: 1, minWidth: '220px' }}>
                 <span className="maze-upload-card-title">2. DOTS / POSITIONS IMAGE:</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' }}>
-                  <label className="upload-btn" htmlFor="mazeDotsInput">UPLOAD DOTS</label>
-                  <input type="file" id="mazeDotsInput" accept="image/*" style={{ display: 'none' }} onChange={handleDotsUpload} />
+                  <label className="upload-btn" htmlFor={`${uid}-dots`}>UPLOAD DOTS</label>
+                  <input type="file" id={`${uid}-dots`} accept="image/*" style={{ display: 'none' }} onChange={handleDotsUpload} />
                   <span className="maze-status-tag">{dotsLoaded ? 'Dots Loaded ✓' : 'No dots image'}</span>
                 </div>
               </div>
@@ -206,7 +225,7 @@ export function MazeModule({ isActive = true }) {
           stats={stampStats}
           answers={moves ? moves.split('') : []}
           copyValue={moves}
-          placeholder="UPLOAD WALLS &amp; DOTS"
+          placeholder={placeholder}
         />
       }
       copylines={<CopyLines items={copyItems} />}
@@ -219,8 +238,8 @@ export function MazeModule({ isActive = true }) {
             startPos={startPos}
             goalPos={goalPos}
             foundPath={path}
-            onCellLeftClick={(r, c) => setStartPos({ r, c })}
-            onCellRightClick={(r, c) => setGoalPos({ r, c })}
+            onCellLeftClick={(r, c) => { setStartPos({ r, c }); setDotsLoaded(true); }}
+            onCellRightClick={(r, c) => { setGoalPos({ r, c }); setDotsLoaded(true); }}
           />
         </WorkingPanel>
       }

@@ -7,21 +7,25 @@ export function ToastProvider({ children }) {
   const [show, setShow] = useState(false);
   const [flash, setFlash] = useState(false);
 
-  const showToast = (msg = 'COPIED ✓') => {
+  const [seq, setSeq] = useState(0);
+
+  // `withFlash` pulses the answer stamp — only used for real clipboard copies,
+  // so informational toasts ("CLEARED", "SAMPLE LOADED") don't look like a copy.
+  const showToast = (msg = 'COPIED ✓', withFlash = false) => {
     setToastMsg(msg);
     setShow(true);
-    setFlash(true);
-    setTimeout(() => setFlash(false), 200);
+    setSeq(n => n + 1); // restart the hide timer even when the same message repeats
+    if (withFlash) {
+      setFlash(true);
+      setTimeout(() => setFlash(false), 220);
+    }
   };
 
   useEffect(() => {
     if (!show) return;
-    const timer = setTimeout(() => {
-      setShow(false);
-      setToastMsg('COPIED ✓');
-    }, 1600);
+    const timer = setTimeout(() => setShow(false), 1800);
     return () => clearTimeout(timer);
-  }, [show, toastMsg]);
+  }, [show, seq]);
 
   return (
     <ToastContext.Provider value={{ showToast, toastMsg, show, flash }}>

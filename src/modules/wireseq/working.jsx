@@ -29,7 +29,12 @@ export function WireseqWorking({
             badgeText = 'KEEP';
             badgeColor = '#EF5350';
             textColor = '#EF5350';
+          } else if (res.state === 'norule') {
+            badgeText = 'NO RULE';
+            badgeColor = 'var(--brass)';
+            textColor = 'var(--brass)';
           }
+          const occ = res.n ? `#${res.n}` : '';
 
           return (
             <div
@@ -39,6 +44,7 @@ export function WireseqWorking({
                 alignItems: 'center',
                 gap: '12px',
                 padding: '8px 12px',
+                flexWrap: 'wrap',
                 background: 'var(--paper)',
                 border: '1px solid var(--line)',
                 borderRadius: '8px'
@@ -102,7 +108,7 @@ export function WireseqWorking({
                   fontSize: '12px'
                 }}
               >
-                {badgeText}
+                {badgeText}{occ && <span style={{ opacity: 0.7, marginLeft: 6 }}>{occ}</span>}
               </div>
             </div>
           );
@@ -110,10 +116,10 @@ export function WireseqWorking({
       </div>
 
       {/* Cumulative Occurrence Counts */}
-      <div style={{ display: 'flex', gap: '14px', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ display: 'flex', gap: '14px', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
         {WS_COLORS.map(c => (
           <div key={c} style={{ fontFamily: 'monospace', fontSize: '13px', fontWeight: 700, color: WS_CVAR[c] }}>
-            {wsCap(c)}: {counts[c]} cut/seen
+            {wsCap(c)}: {counts[c]} before
           </div>
         ))}
       </div>

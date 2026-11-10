@@ -167,8 +167,12 @@ export function DiagramWorking({
       {shots.length > 0 && (
         <div className="shots" style={{ display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: 'wrap' }}>
           {shots.map((sh, idx) => (
-            <div key={idx} className="shot-card" style={{ padding: '4px', border: '1px solid var(--line)', borderRadius: '6px' }}>
-              <img src={sh.url} alt={`shot ${idx}`} style={{ height: '60px', display: 'block' }} />
+            <div key={idx} className={`shot-card ${sh.type === 'bad' ? 'bad' : ''}`}>
+              <img src={sh.url} alt={`shot ${idx + 1}`} />
+              <div className="shot-card-tag">
+                {sh.type === 'labels' ? 'LABELS' : sh.type === 'shade' ? 'SHADING' : sh.type === 'both' ? 'LABELS + SHADING' : sh.type === 'bad' ? 'NOT RECOGNISED' : 'SCREENSHOT'}
+              </div>
+              {sh.meta && <div className="shot-card-meta">{sh.meta}</div>}
             </div>
           ))}
         </div>
@@ -180,7 +184,7 @@ export function DiagramWorking({
           width={DG_CW}
           height={DG_CH}
           onClick={handleCanvasClick}
-          style={{ cursor: 'pointer', maxWidth: '100%', borderRadius: '10px' }}
+          style={{ cursor: 'pointer', width: `${DG_CW}px`, maxWidth: '100%', height: 'auto', borderRadius: '10px' }}
         />
         <div className="dg-hover" style={{ marginTop: '8px', fontSize: '11px', color: 'var(--ink-soft)' }}>
           Click a region to toggle shading (inside circles or outside universe)
