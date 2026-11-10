@@ -6,7 +6,9 @@ export function MissionSidebar({
   onClose,
   activeMission,
   onSelectMission,
-  onSelectAll
+  onSelectAll,
+  customLevels = [],
+  onGenerate = null
 }) {
   // Collapsed sections state: default open or first open
   const [collapsedSections, setCollapsedSections] = useState({});
@@ -63,6 +65,44 @@ export function MissionSidebar({
               </div>
             </button>
           </div>
+
+          {onGenerate && (
+            <div className="sidebar-all-row">
+              <button type="button" className="sidebar-all-btn" onClick={onGenerate}>
+                <span className="all-icon">🧨</span>
+                <div className="all-info">
+                  <span className="all-label">GENERATE LEVEL</span>
+                  <span className="all-desc">Paste a bomb board screenshot</span>
+                </div>
+              </button>
+            </div>
+          )}
+
+          {customLevels.length > 0 && (
+            <div className="sidebar-section">
+              <div className="sidebar-section-header" style={{ cursor: 'default' }}>
+                <span className="sidebar-section-title">My Levels</span>
+              </div>
+              <div className="sidebar-missions-group">
+                {customLevels.map(m => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    className={`sidebar-mission-card ${activeMission && activeMission.id === m.id ? 'active' : ''}`}
+                    onClick={() => onSelectMission(m)}
+                  >
+                    <div className="mission-card-top">
+                      <span className="mission-id-badge">{m.label}</span>
+                      <span className="mission-mod-count">{m.modules.length} {m.modules.length === 1 ? 'mod' : 'mods'}</span>
+                    </div>
+                    <div className="mission-modules-list">
+                      {m.modules.map((name, i) => <span key={i} className="mission-mod-pill">{name}</span>)}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="sidebar-divider" />
 
