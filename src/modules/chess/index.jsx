@@ -38,6 +38,10 @@ export function ChessModule({ isActive = true }) {
   const [previewMeta, setPreviewMeta] = useState('');
 
   const [activeTarget, setActiveTarget] = useState('white');
+  const engineOwner = React.useId(); // this window's searches only replace each other
+  // the engine answers asynchronously, so read the latest tab state rather than the one captured at call time
+  const activeRef = React.useRef(isActive);
+  activeRef.current = isActive;
 
   useEffect(() => {
     const onStatus = statusText => setEngineStatus(statusText);
@@ -62,7 +66,7 @@ export function ChessModule({ isActive = true }) {
       const uci = await askEngine(fen, 3000, ({ depth, cp, mate }) => {
         const e = mate ? `Mate in ${mate}` : `Eval ${(Number(cp) / 100).toFixed(2)}`;
         setEngineStatus(`Thinking… depth ${depth} (${e})`);
-      });
+      }, engineOwner);
       if (uci === SUPERSEDED) return; // a newer search replaced this one
       if (uci && uci !== '(none)') {
         let san = uci;
@@ -75,7 +79,7 @@ export function ChessModule({ isActive = true }) {
         }
         setBestMove(san);
         setEngineStatus('Ready ✓');
-        if (isActive) {
+        if (activeRef.current) {
           setLastCopyString(san);
           if (copyOnDecode) copy(san);
         }

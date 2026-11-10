@@ -373,3 +373,8 @@
 .lvlgen-saved-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; border: 1px solid var(--line);
   border-radius: 10px; padding: 8px 12px; background: var(--paper); font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; color: var(--ink); }
 .lvlgen-saved-mods { color: var(--ink-soft); font-size: 11.5px; margin-top: 3px; }
+.lvlgen-palette { display: flex; flex-wrap: wrap; gap: 6px; }
+.lvlgen-chip { font-family: ui-monospace, Consolas, monospace; font-size: 12px; font-weight: 600; padding: 6px 10px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
+.lvlgen-chip:hover { border-color: var(--brass); }
+.lvlgen-chip.on { border-color: var(--brass); color: var(--brass); }

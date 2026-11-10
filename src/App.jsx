@@ -6,8 +6,12 @@ import { ModeRouter } from './core/ModeRouter.jsx';
 import { MissionSidebar } from './core/components/MissionSidebar.jsx';
 import { KNOWN_MODULE_NAMES } from './core/sectionsData.js';
 import { LevelGenerator } from './core/level/LevelGenerator.jsx';
+import { ModuleGroup } from './core/components/ModuleGroup.jsx';
+import { MODULE_REGISTRY } from './core/ModeRouter.jsx';
 
 const CUSTOM_LEVELS_KEY = 'bomb_custom_levels';
+// module ids whose copies all use the same manual (see sectionsData `shared`)
+const SHARED_IDS = new Set(Object.values(KNOWN_MODULE_NAMES).filter(k => k.shared && k.isImplemented).map(k => k.id));
 
 // Import all puzzle modules
 import { MinesModule, minesModule } from './modules/mines/index.jsx';
@@ -48,6 +52,8 @@ export function App() {
   const [activeSlotIndex, setActiveSlotIndex] = useState(0);
   // Modules opened in "all modules" mode stay mounted (hidden) so switching tabs keeps their data
   const [visitedModes, setVisitedModes] = useState(() => [appMode]);
+  // "Same manual" modules (Password, Simon …) in all-modules mode: how many copies to solve at once
+  const [groupCounts, setGroupCounts] = useState({});
   React.useEffect(() => {
     setVisitedModes(prev => (prev.includes(appMode) ? prev : [...prev, appMode]));
   }, [appMode]);
@@ -235,6 +241,26 @@ export function App() {
                 // Which copy of this module this slot is (Symbols #1, #2 …) and how many copies the level has
                 const instance = activeMission.modules.slice(0, slotIdx).filter(n => n === modName).length;
                 const instanceCount = activeMission.modules.filter(n => n === modName).length;
+                // "Same manual" modules: all copies live in one grouped window on the first copy's slot
+                if (known.shared && instanceCount > 1) {
+                  if (instance > 0) return null;
+                  const reg = MODULE_REGISTRY.find(m => m.id === known.id);
+                  return (
+                    <div
+                      key={`mission-${activeMission.id}-group-${known.id}`}
+                      className="mission-module-window"
+                      style={{ display: isSlotActive ? 'block' : 'none' }}
+                    >
+                      <ModuleGroup
+                        id={known.id}
+                        label={(reg ? reg.label : modName).toUpperCase()}
+                        count={instanceCount}
+                        isActive={isSlotActive}
+                        renderInstance={(i, active) => renderModuleById(known.id, active, i, instanceCount)}
+                      />
+                    </div>
+                  );
+                }
                 return (
                   <div
                     key={`mission-${activeMission.id}-slot-${slotIdx}-${known.id}`}
@@ -254,7 +280,16 @@ export function App() {
                   className="mission-module-window"
                   style={{ display: id === appMode ? 'block' : 'none' }}
                 >
-                  {renderModuleById(id, id === appMode)}
+                  {SHARED_IDS.has(id) ? (
+                    <ModuleGroup
+                      id={id}
+                      label={((MODULE_REGISTRY.find(m => m.id === id) || {}).label || id).toUpperCase()}
+                      count={groupCounts[id] || 1}
+                      onCountChange={n => setGroupCounts(prev => ({ ...prev, [id]: n }))}
+                      isActive={id === appMode}
+                      renderInstance={(i, active) => renderModuleById(id, active, i, groupCounts[id] || 1)}
+                    />
+                  ) : renderModuleById(id, id === appMode)}
                 </div>
               ))}
             </div>

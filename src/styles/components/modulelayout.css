@@ -19,3 +19,36 @@
 .module-layout-working {
   width: 100%;
 }
+
+/* ═══════════ MODULE GROUP (several copies of a "same manual" module) ═══════════ */
+.mgroup { display: flex; flex-direction: column; gap: 14px; }
+.mgroup-manual { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--paper-raised); }
+.mgroup-manual summary { cursor: pointer; font-family: ui-monospace, Consolas, monospace; font-weight: 700; font-size: 11.5px;
+  letter-spacing: .08em; color: var(--brass); }
+.mgroup-manual[open] summary { margin-bottom: 10px; }
+.mgroup-manual textarea { width: 100%; box-sizing: border-box; resize: vertical; font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px; line-height: 1.45; }
+.mgroup-manual .search-btn-row { margin-top: 8px; }
+.mgroup-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.mgroup-hint { font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--ink-soft); }
+.mgroup-manual-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px;
+  font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--ink-soft); }
+.mgroup-count { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 12px;
+  padding: 8px 12px; background: var(--paper-raised); }
+.mgroup-count-btn { width: 32px; height: 30px; border-radius: 7px; border: 1px solid var(--line); background: transparent; color: var(--ink);
+  font-family: ui-monospace, Consolas, monospace; font-weight: 700; cursor: pointer; }
+.mgroup-count-btn:hover { border-color: var(--brass); }
+.mgroup-count-btn.on { background: var(--brass); color: #121419; border-color: var(--brass); }
+.mgroup-card { border: 1.5px solid var(--line); border-radius: 16px; padding: 14px; transition: border-color .12s, box-shadow .12s; }
+.mgroup-card.selected { border-color: var(--brass); box-shadow: 0 0 0 3px rgba(229, 184, 75, .25); }
+.mgroup-card.drag { background: rgba(229, 184, 75, .08); border-color: var(--brass); border-style: dashed; }
+.mgroup-card-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;
+  font-family: ui-monospace, Consolas, monospace; }
+.mgroup-card-n { font-size: 12.5px; font-weight: 800; letter-spacing: .1em; color: var(--brass); }
+.mgroup-card-tag { font-size: 10px; font-weight: 800; letter-spacing: .08em; padding: 2px 7px; border-radius: 5px; background: var(--brass); color: #121419; }
+.mgroup-card-ans { margin-left: auto; font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+.mgroup-card-ans.done { color: #4ADE80; }
+.mgroup-card .dropzone.compact { padding: 14px 12px; min-height: 0; }
+.mgroup-card .dropzone.compact .dz-icon { font-size: 18px; margin-bottom: 4px; }
+.mgroup-card .dropzone.compact .dz-title { font-size: 15px; }
+.mgroup-card .dropzone.compact .dz-sub { display: none; }

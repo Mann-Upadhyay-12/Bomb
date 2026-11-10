@@ -13,6 +13,8 @@ import { Dropzone } from '../../core/Dropzone.jsx';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
+import { useSharedSetting } from '../../core/sharedSetting.js';
+import { useInstance } from '../../core/InstanceContext.jsx';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
 import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
@@ -21,6 +23,8 @@ import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
 import { WireseqWorking } from './working.jsx';
 
 export function WireseqModule({ isActive = true }) {
+  const inst = useInstance();
+  const grouped = Boolean(inst && inst.grouped);
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
@@ -33,15 +37,9 @@ export function WireseqModule({ isActive = true }) {
   const [active, setActive] = useState(0); // 0-based stage index
   const [quickText, setQuickText] = useState('');
   const [status, setStatus] = useState({ text: '', ok: null });
-  const [rulesText, setRulesText] = useState(() => {
-    try {
-      const sv = localStorage.getItem('bombvision_wireseq_rules_v3');
-      return sv && sv.trim() ? sv : WS_DEFAULT_MANUAL;
-    } catch (e) {
-      return WS_DEFAULT_MANUAL;
-    }
-  });
-  const [rules, setRules] = useState(() => wsParseManual(rulesText));
+  // The manual is the same for every copy of this module, so all windows share it
+  const [rulesText, setRulesText] = useSharedSetting('bombvision_wireseq_rules_v3', WS_DEFAULT_MANUAL);
+  const rules = React.useMemo(() => wsParseManual(rulesText), [rulesText]);
 
   const perStage = wsSolveAll(stages, rules);
   const results = perStage[active];
@@ -114,8 +112,9 @@ export function WireseqModule({ isActive = true }) {
     const res = wsReadImage(g.getImageData(0, 0, W, H));
     const th = document.createElement('canvas'); th.width = 96; th.height = Math.max(1, Math.round(96 * H / W));
     th.getContext('2d').drawImage(c2, 0, 0, th.width, th.height);
-    const stageIdx = res.stageNo ? res.stageNo - 1 : stageHint;
-    return { stageIdx, fromDots: !!res.stageNo, wires: res.wires, thumb: th.toDataURL('image/jpeg', 0.7) };
+    const fromDots = res.stageNo >= 1 && res.stageNo <= WS_STAGES; // ignore a misread dot count
+    const stageIdx = Math.max(0, Math.min(WS_STAGES - 1, fromDots ? res.stageNo - 1 : stageHint));
+    return { stageIdx, fromDots, wires: res.wires, thumb: th.toDataURL('image/jpeg', 0.7) };
   };
 
   const applyTraces = (traces) => {
@@ -201,19 +200,10 @@ export function WireseqModule({ isActive = true }) {
 
   const handleRulesChange = (text) => {
     setRulesText(text);
-    const parsed = wsParseManual(text);
-    setRules(parsed);
-    try {
-      localStorage.setItem('bombvision_wireseq_rules_v3', text);
-    } catch (e) {}
   };
 
   const handleRestoreDefaultRules = () => {
     setRulesText(WS_DEFAULT_MANUAL);
-    setRules(wsParseManual(WS_DEFAULT_MANUAL));
-    try {
-      localStorage.setItem('bombvision_wireseq_rules_v3', WS_DEFAULT_MANUAL);
-    } catch (e) {}
     showToast('RESTORED DEFAULT WIRE SEQUENCE RULES ✓');
   };
 
@@ -338,6 +328,7 @@ export function WireseqModule({ isActive = true }) {
             <div className={`module-hint ${status.ok === false ? 'bad' : 'ok'}`}>{status.text}</div>
           )}
 
+          {!grouped && (
           <details className="wireseq-manual-details" style={{ marginTop: '8px' }}>
             <summary style={{ cursor: 'pointer', fontFamily: 'monospace', fontWeight: 600, fontSize: '12px', letterSpacing: '0.08em', color: 'var(--ink-soft)', marginBottom: '8px' }}>
               📖 MANUAL RULES — PASTE &amp; PARSE (RED / BLUE / BLACK)
@@ -371,6 +362,7 @@ export function WireseqModule({ isActive = true }) {
               </div>
             </div>
           </details>
+          )}
         </ModuleInput>
       }
       answers={

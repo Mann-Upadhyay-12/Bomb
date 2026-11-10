@@ -9,6 +9,8 @@ import {
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
+import { useSharedSetting } from '../../core/sharedSetting.js';
+import { useInstance } from '../../core/InstanceContext.jsx';
 import { Dropzone } from '../../core/Dropzone.jsx';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
@@ -21,19 +23,15 @@ import { wofReadImage } from './wofOCR.js';
 export const KEY = 'bombvision_wof_rules_v2';
 
 export function WofModule({ isActive = true }) {
+  const inst = useInstance();
+  const grouped = Boolean(inst && inst.grouped);
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
 
-  const [rulesText, setRulesText] = useState(() => {
-    try {
-      const sv = localStorage.getItem(KEY);
-      return sv && sv.trim() ? sv : DEFAULT_RULES;
-    } catch (e) {
-      return DEFAULT_RULES;
-    }
-  });
-  const [rules, setRules] = useState(() => parseRules(rulesText));
+  // The manual is the same for every copy of this module, so all windows share it
+  const [rulesText, setRulesText] = useSharedSetting(KEY, DEFAULT_RULES);
+  const rules = React.useMemo(() => parseRules(rulesText), [rulesText]);
   const [disp, setDisp] = useState('');
   const [btns, setBtns] = useState(['', '', '', '', '', '']);
   const [previewUri, setPreviewUri] = useState('');
@@ -61,19 +59,10 @@ export function WofModule({ isActive = true }) {
 
   const handleRulesChange = (text) => {
     setRulesText(text);
-    const parsed = parseRules(text);
-    setRules(parsed);
-    try {
-      localStorage.setItem(KEY, text);
-    } catch (e) {}
   };
 
   const handleRestoreDefaultRules = () => {
     setRulesText(DEFAULT_RULES);
-    setRules(parseRules(DEFAULT_RULES));
-    try {
-      localStorage.setItem(KEY, DEFAULT_RULES);
-    } catch (e) {}
     showToast('RESTORED DEFAULT WOF RULES ✓');
   };
 
@@ -90,7 +79,7 @@ export function WofModule({ isActive = true }) {
     setPreviewUri(dataUri);
     setPreviewMeta(`${img.naturalWidth}×${img.naturalHeight} px source`);
     setLastImage(img, fileBlob);
-    if (ocrBusy) return;
+    if (ocrBusy) { showToast('STILL READING THE LAST SCREENSHOT — PASTE AGAIN IN A MOMENT'); return; }
     setOcrBusy(true);
     try {
       const r = await wofReadImage(img, rules, setOcrStatus);
@@ -182,6 +171,7 @@ export function WofModule({ isActive = true }) {
           }
         >
           {ocrStatus && <div className="module-hint">{ocrStatus}</div>}
+          {!grouped && (
           <details className="wof-manual-details" style={{ marginTop: '8px' }}>
             <summary style={{ cursor: 'pointer', fontFamily: 'monospace', fontWeight: 600, fontSize: '12px', letterSpacing: '0.08em', color: 'var(--ink-soft)', marginBottom: '8px' }}>
               📖 PASTE MANUAL RULES (STEP 1 &amp; STEP 2)
@@ -215,6 +205,7 @@ export function WofModule({ isActive = true }) {
               </div>
             </div>
           </details>
+          )}
         </ModuleInput>
       }
       answers={

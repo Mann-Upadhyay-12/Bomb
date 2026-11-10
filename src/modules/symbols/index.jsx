@@ -131,7 +131,7 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
     const g1 = ['STAR_SOLID','YAT','INV_QUESTION','YAT','YAT','YAT','INV_QUESTION','LAMBDA_STROKE','YAT','YAT','OT','OT','COPYRIGHT','INV_QUESTION','LAMBDA_STROKE','YAT','LAMBDA_STROKE','OT','OT','INV_QUESTION','KOPPA','YAT','LAMBDA_STROKE','OT','YAT'];
     const g2 = ['YAT','YAT','YAT','YAT','YAT','STAR_HOLLOW','ZHE','ZHE','STAR_HOLLOW','ZHE','YAT','STAR_HOLLOW','ZHE','ZHE','DOUBLE_CROSS','INV_QUESTION','ZHE','KOPPA','ZHE','YAT','ZHE','STAR_HOLLOW','ZHE','YAT','STAR_HOLLOW'];
     stripStore.setGrids([{ id: ++gridSeq, cells: g1 }, { id: ++gridSeq, cells: g2 }]);
-    setButtons(['LAMBDA_STROKE', 'YAT', 'INV_QUESTION', 'ZHE']);
+    setButtons(['OT', 'YAT', 'COPYRIGHT', 'LAMBDA_STROKE']); // grid #1: Ѣ 9, Ѿ 5, ƛ 4, © 1 → press 2 1 4 3
     showToast('SAMPLE STRIP LOADED ✓');
   };
 

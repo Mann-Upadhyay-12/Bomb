@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { decodeMorseRLE } from './morseDecoder.js';
 import { parseGIFFrames, framesToRLE } from '../../utils/gif.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
@@ -24,6 +24,9 @@ export function MorseModule({ isActive = true }) {
   const [previewMeta, setPreviewMeta] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // async results read the live tab state, not the one captured when the work started
+  const activeRef = useRef(isActive);
+  activeRef.current = isActive;
 
   const handleImage = async (img, dataUri, fileBlob) => {
     setPreviewUri(dataUri);
@@ -51,7 +54,7 @@ export function MorseModule({ isActive = true }) {
       setFrameCount(frames.length);
 
       const word = (dec && dec.word) || '';
-      if (isActive) {
+      if (activeRef.current) {
         setLastCopyString(word);
         if (copyOnDecode && word) {
           copy(word);
