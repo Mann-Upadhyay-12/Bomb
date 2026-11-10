@@ -25,6 +25,7 @@ const DEFAULT_VARS = {
 };
 
 export function LogicModule({ isActive = true }) {
+  const uid = React.useId();
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();

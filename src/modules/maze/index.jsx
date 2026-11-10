@@ -207,15 +207,6 @@ export function MazeModule({ isActive = true }) {
                 </div>
               </div>
             </div>
-
-            <div className="search-btn-row">
-              <button type="button" className="bg-btn" onClick={handleSample}>
-                ⚡ LOAD SAMPLE MAZE
-              </button>
-              <button type="button" className="bg-btn" onClick={handleClear}>
-                🗑️ CLEAR MAZE
-              </button>
-            </div>
           </div>
         </ModuleInput>
       }
