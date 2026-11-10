@@ -34,6 +34,11 @@ export function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeMission, setActiveMission] = useState(null);
   const [activeSlotIndex, setActiveSlotIndex] = useState(0);
+  // Modules opened in "all modules" mode stay mounted (hidden) so switching tabs keeps their data
+  const [visitedModes, setVisitedModes] = useState(() => [appMode]);
+  React.useEffect(() => {
+    setVisitedModes(prev => (prev.includes(appMode) ? prev : [...prev, appMode]));
+  }, [appMode]);
 
   const handleSelectMission = (mission) => {
     setActiveMission(mission);
@@ -200,7 +205,17 @@ export function App() {
               })}
             </div>
           ) : (
-            renderModuleById(appMode, true)
+            <div className="mission-modules-container">
+              {visitedModes.map(id => (
+                <div
+                  key={`all-${id}`}
+                  className="mission-module-window"
+                  style={{ display: id === appMode ? 'block' : 'none' }}
+                >
+                  {renderModuleById(id, id === appMode)}
+                </div>
+              ))}
+            </div>
           )}
 
           {/* About / Settings Footer */}

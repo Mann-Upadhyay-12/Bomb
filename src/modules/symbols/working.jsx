@@ -1,135 +1,195 @@
-import React from 'react';
-import { SY, SY_KEYS } from './symbolsConstants.js';
+import React, { useState } from 'react';
+import { SY, SY_KEYS, SY_RANK_COLORS } from './symbolsConstants.js';
+import { SymbolGlyph } from './SymbolGlyph.jsx';
 
 export function SymbolsWorking({
+  grids = [],
   buttons = [null, null, null, null],
   counts = {},
   order = [],
+  warnings = [],
+  pasteMode = 'replace',
+  onPasteMode = () => {},
   onButtonSelect = () => {},
+  onClearButtons = () => {},
+  onCellSet = () => {},
+  onRemoveGrid = () => {},
+  onAddBlankGrid = null,
+  onClearGrids = () => {},
   onCountAdj = () => {}
 }) {
-  return (
-    <div className="symbols-working-container" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      {/* 4 Module Buttons */}
-      <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-        {buttons.map((k, i) => (
-          <div
-            key={i}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '10px 14px',
-              background: 'var(--paper)',
-              border: '1px solid var(--line)',
-              borderRadius: '8px',
-              minWidth: '110px'
-            }}
-          >
-            <div style={{ fontSize: '10px', color: 'var(--brass)', fontWeight: 700 }}>
-              BUTTON {i + 1}
-            </div>
-            <div style={{ fontSize: '32px', minHeight: '40px' }}>
-              {k && SY[k] ? SY[k].glyph : '—'}
-            </div>
-            <div style={{ fontSize: '11px', color: 'var(--ink-soft)' }}>
-              {k && SY[k] ? `${SY[k].name} · ${counts[k] || 0}` : 'not set'}
-            </div>
-            <select
-              value={k || ''}
-              onChange={(e) => onButtonSelect(i, e.target.value || null)}
-              style={{
-                background: 'var(--paper-raised)',
-                color: 'var(--ink)',
-                border: '1px solid var(--line)',
-                borderRadius: '4px',
-                padding: '2px 4px',
-                fontSize: '11px',
-                width: '100%'
-              }}
-            >
-              <option value="">— select —</option>
-              {SY_KEYS.map(x => (
-                <option key={x} value={x}>{SY[x].glyph} {SY[x].name}</option>
-              ))}
-            </select>
-          </div>
-        ))}
-      </div>
+  const [editing, setEditing] = useState(null); // { gi, ci } of the cell being corrected
 
-      {/* Symbol Counts Table with +/- buttons */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <span className="search-config-label">SYMBOL OCCURRENCE COUNTS (± to adjust):</span>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '8px' }}>
+  // symbol → press rank (0..3) so cells / counts of keypad symbols get highlighted
+  const rankOf = {};
+  order.forEach((r, i) => { if (rankOf[r.k] === undefined) rankOf[r.k] = i; });
+  const onKeypad = new Set(buttons.filter(Boolean));
+  const multi = grids.length > 1;
+
+  const pickCell = (k) => {
+    if (!editing) return;
+    onCellSet(editing.gi, editing.ci, k);
+    setEditing(null);
+  };
+
+  return (
+    <div className="sy-working">
+      {/* ── 1. Keypad (2×2 module buttons) ── */}
+      <section className="sy-section">
+        <div className="sy-section-head">
+          <span className="search-config-label">KEYPAD (2×2 BUTTONS)</span>
+          <button type="button" className="bg-btn" onClick={onClearButtons}>Clear keypad</button>
+        </div>
+        <div className="sy-btns">
+          {buttons.map((k, i) => {
+            const rank = k ? order.findIndex(r => r.n === i + 1) : -1;
+            return (
+              <div
+                key={i}
+                className={`sy-btn ${rank >= 0 ? 'ranked' : ''}`}
+                style={rank >= 0 ? { borderColor: SY_RANK_COLORS[rank] } : undefined}
+              >
+                <div className="n">
+                  BUTTON {i + 1}
+                  {rank >= 0 && <span className="sy-rank" style={{ background: SY_RANK_COLORS[rank] }}>#{rank + 1}</span>}
+                </div>
+                <div className="g">{k ? <SymbolGlyph k={k} size={36} /> : '—'}</div>
+                <div className="c">{k ? `${SY[k].name} · ${counts[k] || 0}` : 'not set'}</div>
+                <select value={k || ''} onChange={(e) => onButtonSelect(i, e.target.value || null)}>
+                  <option value="">— select —</option>
+                  {SY_KEYS.map(x => (
+                    <option key={x} value={x}>{SY[x].glyph} {SY[x].name}</option>
+                  ))}
+                </select>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ── 2. Reference grids (strip) ── */}
+      <section className="sy-section">
+        <div className="sy-section-head">
+          <span className="search-config-label">
+            REFERENCE GRID{multi ? `S (${grids.length}) — COUNTS ARE SUMMED` : ''}
+          </span>
+          <div className="sy-head-actions">
+            <div className="sy-seg" role="group" aria-label="What a new grid paste does">
+              <button type="button" className={pasteMode === 'replace' ? 'on' : ''} onClick={() => onPasteMode('replace')}
+                title="A new grid screenshot replaces the current grids">
+                PASTE REPLACES
+              </button>
+              <button type="button" className={pasteMode === 'add' ? 'on' : ''} onClick={() => onPasteMode('add')}
+                title="A new grid screenshot is added next to the current grids">
+                PASTE ADDS
+              </button>
+            </div>
+            {onAddBlankGrid && <button type="button" className="bg-btn" onClick={onAddBlankGrid}>+ Blank grid</button>}
+            {grids.length > 0 && <button type="button" className="bg-btn" onClick={() => { setEditing(null); onClearGrids(); }}>Clear grids</button>}
+          </div>
+        </div>
+
+        {grids.length === 0 ? (
+          <div className="sy-empty">
+            Paste the grid screenshot. One grid is read as-is; a strip with <b>SYMBOLS #1</b>, <b>#2</b> … headers is
+            split into its grids. Click any cell afterwards to fix a misread.
+          </div>
+        ) : (
+          <div className={`sy-strip ${onKeypad.size ? 'has-keypad' : ''}`}>
+            {grids.map((g, gi) => (
+              <div key={g.id} className="sy-grid-card">
+                {multi && (
+                  <div className="sy-grid-header">
+                    <span>SYMBOLS #{gi + 1}</span>
+                    <button type="button" title={`Remove grid #${gi + 1}`} onClick={() => { setEditing(null); onRemoveGrid(gi); }}>✕</button>
+                  </div>
+                )}
+                <div className="sy-grid">
+                  {g.cells.map((k, ci) => {
+                    const rank = k ? rankOf[k] : undefined;
+                    const isEdit = editing && editing.gi === gi && editing.ci === ci;
+                    return (
+                      <button
+                        key={ci}
+                        type="button"
+                        className={`sy-cell ${(ci + Math.floor(ci / 5)) % 2 ? 'alt' : ''} ${k && onKeypad.has(k) ? 'hit' : ''} ${isEdit ? 'editing' : ''} ${!k ? 'blank' : ''}`}
+                        style={rank !== undefined ? { boxShadow: `inset 0 0 0 2px ${SY_RANK_COLORS[rank]}` } : undefined}
+                        title={k ? `${SY[k].name} — click to change` : 'Unread — click to set'}
+                        onClick={() => setEditing(isEdit ? null : { gi, ci })}
+                      >
+                        {k ? <SymbolGlyph k={k} size={24} /> : '·'}
+                      </button>
+                    );
+                  })}
+                </div>
+                {!multi && (
+                  <div className="sy-grid-foot">
+                    <button type="button" className="bg-btn" onClick={() => { setEditing(null); onRemoveGrid(gi); }}>Remove grid</button>
+                  </div>
+                )}
+                {editing && editing.gi === gi && (
+                  <div className="sy-palette">
+                    {SY_KEYS.map(x => (
+                      <button key={x} type="button" title={SY[x].name} onClick={() => pickCell(x)}
+                        className={g.cells[editing.ci] === x ? 'on' : ''}>
+                        <SymbolGlyph k={x} size={20} />
+                      </button>
+                    ))}
+                    <button type="button" title="Clear cell" onClick={() => pickCell(null)}>∅</button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ── 3. Totals ── */}
+      <section className="sy-section">
+        <span className="search-config-label">SYMBOL COUNTS (± TO FIX A MISREAD)</span>
+        <div className="sy-counts">
           {SY_KEYS.map(k => {
             const cnt = counts[k] || 0;
+            const rank = rankOf[k];
             return (
               <div
                 key={k}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '4px',
-                  padding: '6px 8px',
-                  background: 'var(--paper)',
-                  border: '1px solid var(--line)',
-                  borderRadius: '6px'
-                }}
+                className={`sy-count ${onKeypad.has(k) ? 'keypad' : ''}`}
+                style={rank !== undefined ? { borderColor: SY_RANK_COLORS[rank] } : undefined}
               >
-                <span style={{ fontSize: '20px' }}>{SY[k].glyph}</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <button
-                    type="button"
-                    onClick={() => onCountAdj(k, -1)}
-                    style={{ background: 'none', border: 'none', color: 'var(--ink)', cursor: 'pointer', fontWeight: 700 }}
-                  >
-                    −
-                  </button>
-                  <span style={{ fontWeight: 700, fontSize: '13px', color: cnt > 0 ? 'var(--brass)' : 'var(--ink-soft)' }}>
-                    {cnt}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => onCountAdj(k, 1)}
-                    style={{ background: 'none', border: 'none', color: 'var(--ink)', cursor: 'pointer', fontWeight: 700 }}
-                  >
-                    +
-                  </button>
+                <div className="g"><SymbolGlyph k={k} size={22} /></div>
+                <div className={`k ${cnt > 0 ? 'on' : ''}`}>
+                  <button type="button" aria-label={`Decrease ${SY[k].name}`} onClick={() => onCountAdj(k, -1)}>−</button>
+                  {cnt}
+                  <button type="button" aria-label={`Increase ${SY[k].name}`} onClick={() => onCountAdj(k, 1)}>+</button>
                 </div>
               </div>
             );
           })}
         </div>
-      </div>
+      </section>
 
-      {/* Press Order Steps */}
-      {order.length === 4 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <span className="search-config-label">PRESS ORDER (HIGHEST COUNT FIRST):</span>
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+      {/* ── 4. Press order ── */}
+      <section className="sy-section">
+        <span className="search-config-label">PRESS ORDER (HIGHEST COUNT FIRST)</span>
+        {order.length === 4 ? (
+          <div className="sy-seq">
             {order.map((r, i) => (
-              <div
-                key={i}
-                style={{
-                  padding: '8px 12px',
-                  background: 'var(--paper)',
-                  border: '1px solid var(--brass)',
-                  borderRadius: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  fontSize: '13px'
-                }}
-              >
-                <span style={{ color: 'var(--brass)', fontWeight: 700 }}>{i + 1}. Press Button #{r.n}</span>
-                <span>({SY[r.k]?.glyph} count: {r.c})</span>
+              <div key={i} className="sy-step" style={{ borderColor: SY_RANK_COLORS[i] }}>
+                <span>{i + 1}. press <b style={{ color: SY_RANK_COLORS[i] }}>button {r.n}</b></span>
+                <span><SymbolGlyph k={r.k} size={20} /> {SY[r.k].name} · {r.c}</span>
               </div>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="sy-empty">Set all 4 keypad buttons (paste the keypad screenshot or pick each one) to get the press order.</div>
+        )}
+        {warnings.length > 0 && (
+          <ul className="sy-warn">
+            {warnings.map((w, i) => <li key={i}>⚠ {w}</li>)}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

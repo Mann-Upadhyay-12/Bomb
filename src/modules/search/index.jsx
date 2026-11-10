@@ -27,6 +27,7 @@ export const SAMPLE_SEARCH_GRIDS = [
 export const SEARCH_WORDS_KEY = 'bombvision_search_words';
 
 export function SearchModule({ isActive = true }) {
+  const uid = React.useId();
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
@@ -72,25 +73,25 @@ export function SearchModule({ isActive = true }) {
 
     if (char) {
       if (c < 4) {
-        document.getElementById(`sc_${r}_${c + 1}`)?.focus();
+        document.getElementById(`${uid}sc_${r}_${c + 1}`)?.focus();
       } else if (r < 4 && c === 4) {
-        document.getElementById(`sc_${r + 1}_0`)?.focus();
+        document.getElementById(`${uid}sc_${r + 1}_0`)?.focus();
       }
     }
   };
 
   const handleCellKeyDown = (r, c, e) => {
     if (e.key === 'Backspace' && !gridData[r][c]) {
-      if (c > 0) document.getElementById(`sc_${r}_${c - 1}`)?.focus();
-      else if (r > 0) document.getElementById(`sc_${r - 1}_4`)?.focus();
+      if (c > 0) document.getElementById(`${uid}sc_${r}_${c - 1}`)?.focus();
+      else if (r > 0) document.getElementById(`${uid}sc_${r - 1}_4`)?.focus();
     } else if (e.key === 'ArrowRight' && c < 4) {
-      document.getElementById(`sc_${r}_${c + 1}`)?.focus();
+      document.getElementById(`${uid}sc_${r}_${c + 1}`)?.focus();
     } else if (e.key === 'ArrowLeft' && c > 0) {
-      document.getElementById(`sc_${r}_${c - 1}`)?.focus();
+      document.getElementById(`${uid}sc_${r}_${c - 1}`)?.focus();
     } else if (e.key === 'ArrowDown' && r < 4) {
-      document.getElementById(`sc_${r + 1}_${c}`)?.focus();
+      document.getElementById(`${uid}sc_${r + 1}_${c}`)?.focus();
     } else if (e.key === 'ArrowUp' && r > 0) {
-      document.getElementById(`sc_${r - 1}_${c}`)?.focus();
+      document.getElementById(`${uid}sc_${r - 1}_${c}`)?.focus();
     }
   };
 
@@ -315,11 +316,11 @@ export function SearchModule({ isActive = true }) {
         >
           <div className="search-config" style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '16px' }}>
             <div className="search-config-row">
-              <label className="search-config-label" htmlFor="searchWordInput">
+              <label className="search-config-label" htmlFor={`${uid}-words`}>
                 TARGET WORDS (AUTO-SAVED &amp; EDITABLE):
               </label>
               <textarea
-                id="searchWordInput"
+                id={`${uid}-words`}
                 className="search-words-field"
                 style={{ height: '70px', resize: 'vertical', fontSize: '12px', lineHeight: 1.45, fontFamily: 'monospace' }}
                 value={wordsText}
@@ -373,6 +374,7 @@ export function SearchModule({ isActive = true }) {
           title="SEARCH BOARD (5×5) — Type letters, paste 25 letters, or upload screenshot"
         >
           <SearchWorking
+            idPrefix={uid}
             gridData={gridData}
             confidence={confidence}
             hitCells={hitCells}

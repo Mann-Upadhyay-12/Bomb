@@ -13,6 +13,7 @@ import { PasswordWorking } from './working.jsx';
 export const PASSWORD_WORDS_KEY = 'bombvision_password_words';
 
 export function PasswordModule({ isActive = true }) {
+  const uid = React.useId();
   const { copyOnDecode, setLastCopyString } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
@@ -107,11 +108,11 @@ export function PasswordModule({ isActive = true }) {
         >
           <div className="password-config" style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '16px' }}>
             <div className="search-config-row">
-              <label className="search-config-label" htmlFor="passwordRowsInput">
+              <label className="search-config-label" htmlFor={`${uid}-rows`}>
                 SCROLLING LETTER ROWS (1 ROW PER LINE, e.g. "LHLOD"):
               </label>
               <textarea
-                id="passwordRowsInput"
+                id={`${uid}-rows`}
                 className="password-rows-field"
                 rows={4}
                 value={rowsText}
@@ -122,11 +123,11 @@ export function PasswordModule({ isActive = true }) {
             </div>
 
             <div className="search-config-row">
-              <label className="search-config-label" htmlFor="passwordMasterInput">
+              <label className="search-config-label" htmlFor={`${uid}-master`}>
                 35 MASTER PASSWORDS LIST (SPACE-SEPARATED):
               </label>
               <textarea
-                id="passwordMasterInput"
+                id={`${uid}-master`}
                 className="search-words-field"
                 style={{ height: '70px', resize: 'vertical', fontSize: '12px', lineHeight: 1.45, fontFamily: 'monospace' }}
                 value={masterText}

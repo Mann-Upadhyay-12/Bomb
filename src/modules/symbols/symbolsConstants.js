@@ -14,3 +14,6 @@ export const SY = {
 };
 
 export const SY_KEYS = Object.keys(SY);
+
+// Rank colours for the 4 module buttons (press order 1 → 4)
+export const SY_RANK_COLORS = ['#E5B84B', '#4CAF50', '#42A5F5', '#E57373'];
