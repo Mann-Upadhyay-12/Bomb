@@ -1,7 +1,6 @@
 import React from 'react';
 
 export function SearchWorking({
-  idPrefix = "",
   gridData = [],
   confidence = [],
   hitCells = new Set(),
@@ -34,7 +33,7 @@ export function SearchWorking({
             return (
               <input
                 key={`${r}-${c}`}
-                id={`${idPrefix}sc_${r}_${c}`}
+                id={`sc_${r}_${c}`}
                 type="text"
                 className={cls}
                 maxLength={1}

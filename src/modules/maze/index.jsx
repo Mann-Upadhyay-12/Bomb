@@ -24,7 +24,6 @@ export const SAMPLE_MAZE_WALLS = [
 ];
 
 export function MazeModule({ isActive = true }) {
-  const uid = React.useId();
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
@@ -73,31 +72,32 @@ export function MazeModule({ isActive = true }) {
     }
   };
 
-  const loadUpload = (e, kind) => {
+  const handleWallsUpload = (e) => {
     const file = e.target.files && e.target.files[0];
-    e.target.value = '';
     if (!file) return;
-    const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
-      if (kind === 'walls') {
-        setWallsGrid(detectMazeWalls(img));
-        setWallsLoaded(true);
-        showToast('MAZE WALLS DETECTED ✓');
-      } else {
-        const dots = detectMazeDots(img);
-        if (dots.startPos) setStartPos(dots.startPos);
-        if (dots.goalPos) setGoalPos(dots.goalPos);
-        setDotsLoaded(true);
-        showToast(dots.startPos || dots.goalPos ? 'MAZE DOTS DETECTED ✓' : 'NO DOTS FOUND — CLICK CELLS TO SET');
-      }
-      URL.revokeObjectURL(url);
+      const walls = detectMazeWalls(img);
+      setWallsGrid(walls);
+      setWallsLoaded(true);
+      showToast('MAZE WALLS DETECTED ✓');
     };
-    img.onerror = () => { URL.revokeObjectURL(url); showToast('COULD NOT LOAD IMAGE'); };
-    img.src = url;
+    img.src = URL.createObjectURL(file);
   };
-  const handleWallsUpload = (e) => loadUpload(e, 'walls');
-  const handleDotsUpload = (e) => loadUpload(e, 'dots');
+
+  const handleDotsUpload = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const img = new Image();
+    img.onload = () => {
+      const dots = detectMazeDots(img);
+      if (dots.startPos) setStartPos(dots.startPos);
+      if (dots.goalPos) setGoalPos(dots.goalPos);
+      setDotsLoaded(true);
+      showToast('MAZE DOTS DETECTED ✓');
+    };
+    img.src = URL.createObjectURL(file);
+  };
 
   const handleSample = () => {
     setWallsGrid(SAMPLE_MAZE_WALLS);
@@ -174,21 +174,30 @@ export function MazeModule({ isActive = true }) {
               <div className="maze-upload-card" style={{ flex: 1, minWidth: '220px' }}>
                 <span className="maze-upload-card-title">1. MAZE WALLS IMAGE:</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' }}>
-                  <label className="upload-btn" htmlFor={`${uid}-walls`}>UPLOAD WALLS</label>
-                  <input type="file" id={`${uid}-walls`} accept="image/*" style={{ display: 'none' }} onChange={handleWallsUpload} />
+                  <label className="upload-btn" htmlFor="mazeWallsInput">UPLOAD WALLS</label>
+                  <input type="file" id="mazeWallsInput" accept="image/*" style={{ display: 'none' }} onChange={handleWallsUpload} />
                   <span className="maze-status-tag">{wallsLoaded ? 'Walls Loaded ✓' : 'No walls image'}</span>
                 </div>
               </div>
               <div className="maze-upload-card" style={{ flex: 1, minWidth: '220px' }}>
                 <span className="maze-upload-card-title">2. DOTS / POSITIONS IMAGE:</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' }}>
-                  <label className="upload-btn" htmlFor={`${uid}-dots`}>UPLOAD DOTS</label>
-                  <input type="file" id={`${uid}-dots`} accept="image/*" style={{ display: 'none' }} onChange={handleDotsUpload} />
+                  <label className="upload-btn" htmlFor="mazeDotsInput">UPLOAD DOTS</label>
+                  <input type="file" id="mazeDotsInput" accept="image/*" style={{ display: 'none' }} onChange={handleDotsUpload} />
                   <span className="maze-status-tag">{dotsLoaded ? 'Dots Loaded ✓' : 'No dots image'}</span>
                 </div>
               </div>
             </div>
-                    </div>
+
+            <div className="search-btn-row">
+              <button type="button" className="bg-btn" onClick={handleSample}>
+                ⚡ LOAD SAMPLE MAZE
+              </button>
+              <button type="button" className="bg-btn" onClick={handleClear}>
+                🗑️ CLEAR MAZE
+              </button>
+            </div>
+          </div>
         </ModuleInput>
       }
       answers={
@@ -197,7 +206,7 @@ export function MazeModule({ isActive = true }) {
           stats={stampStats}
           answers={moves ? moves.split('') : []}
           copyValue={moves}
-          placeholder={wallsLoaded ? 'NO PATH — CHECK WALLS / START / GOAL' : 'UPLOAD WALLS & DOTS'}
+          placeholder="UPLOAD WALLS &amp; DOTS"
         />
       }
       copylines={<CopyLines items={copyItems} />}
