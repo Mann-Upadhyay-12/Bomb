@@ -34,7 +34,8 @@ export const KNOWN_MODULE_NAMES = {
   'Breaker': { id: 'breaker', isImplemented: false }
 };
 
-export const SECTIONS_DATA = [
+// Raw level list as it appears in the game (includes modules with no solver yet)
+export const SECTIONS_RAW = [
   {
     title: 'Section 1',
     missions: [
@@ -110,3 +111,12 @@ export const SECTIONS_DATA = [
     ]
   }
 ];
+
+// Levels only list modules that have a solver in this app; unimplemented ones are left out.
+export const SECTIONS_DATA = SECTIONS_RAW.map(sec => ({
+  ...sec,
+  missions: sec.missions.map(m => ({
+    ...m,
+    modules: m.modules.filter(name => KNOWN_MODULE_NAMES[name] && KNOWN_MODULE_NAMES[name].isImplemented)
+  }))
+}));

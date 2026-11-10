@@ -10,7 +10,8 @@ import {
 import {
   imageToData,
   findBoards,
-  readBoard
+  readBoard,
+  detectBoardColor
 } from './chessVision.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
@@ -113,14 +114,18 @@ export function ChessModule({ isActive = true }) {
       const { data, W, H } = imageToData(img);
       const found = findBoards(data, W, H);
       if (found && found.length >= 2) {
-        const resW = readBoard(data, W, found[0], 'white');
-        const resB = readBoard(data, W, found[1], 'black');
+        // Boards may come in either order — detect which one holds the white pieces
+        const firstIsWhite = detectBoardColor(data, W, found[0]) === 'white';
+        const bWhite = firstIsWhite ? found[0] : found[1];
+        const bBlack = firstIsWhite ? found[1] : found[0];
+        const resW = readBoard(data, W, bWhite, 'white');
+        const resB = readBoard(data, W, bBlack, 'black');
         setWhiteBoard(resW.pieces);
         setBlackBoard(resB.pieces);
         mergeAndSolve(resW.pieces, resB.pieces);
         showToast('DUAL BOARDS DETECTED ✓');
       } else if (found && found.length === 1) {
-        const targetColor = activeTarget;
+        const targetColor = detectBoardColor(data, W, found[0]) || activeTarget;
         const res = readBoard(data, W, found[0], targetColor);
         if (targetColor === 'white') {
           setWhiteBoard(res.pieces);
