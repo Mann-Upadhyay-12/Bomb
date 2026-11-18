@@ -1,12 +1,13 @@
 // Sections and missions configuration for the Bomb Boomed sidebar
 // Each mission maps to a sequence of modules.
 // Missing/placeholder modules are flagged with isImplemented: false.
-// shared: true = every copy on a bomb uses the same manual (Password, Piano …): repeated copies are
-// shown as ONE window with the manual once and a box per copy. Others get a window per copy.
+// shared: true = every copy on a bomb uses the same manual (Password, Piano …) or the same manual-side
+// image strip (Maze, Symbols, Diagram, Chess): repeated copies are shown as ONE page with a card per copy,
+// side by side. Others get a window per copy.
 
 export const KNOWN_MODULE_NAMES = {
   // Implemented modules in bomb_boomed:
-  'Maze': { id: 'maze', isImplemented: true },
+  'Maze': { id: 'maze', isImplemented: true, shared: true },
   'Password': { id: 'password', isImplemented: true, shared: true },
   'Switches': { id: 'switches', isImplemented: true },
   'Search': { id: 'search', isImplemented: true },
@@ -16,12 +17,12 @@ export const KNOWN_MODULE_NAMES = {
   'Wire Sequences': { id: 'wireseq', isImplemented: true, shared: true },
   'Complex Wires': { id: 'complexwires', isImplemented: true },
   'Logic': { id: 'logic', isImplemented: true },
-  'Chess': { id: 'chess', isImplemented: true },
+  'Chess': { id: 'chess', isImplemented: true, shared: true },
   'Mines': { id: 'mines', isImplemented: true },
-  'Symbols': { id: 'symbols', isImplemented: true },
+  'Symbols': { id: 'symbols', isImplemented: true, shared: true },
   'Simon Says': { id: 'simons', isImplemented: true, shared: true },
   'Rubik\'s Cube': { id: 'cube', isImplemented: true },
-  'Diagram': { id: 'diagram', isImplemented: true },
+  'Diagram': { id: 'diagram', isImplemented: true, shared: true },
   'Morse Code': { id: 'morse', isImplemented: true, shared: true },
   'Queens': { id: 'queens', isImplemented: true },
   'The Button': { id: 'button', isImplemented: true, shared: true },

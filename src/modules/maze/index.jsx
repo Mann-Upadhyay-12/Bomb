@@ -47,6 +47,9 @@ export function MazeModule({ isActive = true }) {
   const rawPath = ready ? solveMazeBFS(wallsGrid, startPos, goalPos) : null;
   const path = rawPath || [];
   const moves = path.map(p => p.move).join('');
+  // The game is played with W A S D, so that is the answer that gets copied
+  const WASD = { U: 'W', L: 'A', D: 'S', R: 'D' };
+  const wasd = moves.split('').map(m => WASD[m] || m).join('');
   const placeholder = !wallsLoaded && !dotsLoaded
     ? 'UPLOAD WALLS & DOTS'
     : !wallsLoaded
@@ -145,8 +148,9 @@ export function MazeModule({ isActive = true }) {
   const copyItems = [];
   if (moves) {
     copyItems.push({ label: `COPY FULL PATH (${moves})`, value: moves });
+    copyItems.push({ label: `WASD (${wasd})`, value: wasd });
     const arrowMoves = moves.split('').map(m => (m === 'U' ? '↑' : m === 'D' ? '↓' : m === 'L' ? '←' : '→')).join(' ');
-    copyItems.push({ label: `ARROWS (${arrowMoves})`, value: moves });
+    copyItems.push({ label: `ARROWS (${arrowMoves})`, value: arrowMoves });
   }
 
   const stampStats = `STEPS: ${path.length} | START: (${startPos.r + 1},${startPos.c + 1}) | GOAL: (${goalPos.r + 1},${goalPos.c + 1})`;

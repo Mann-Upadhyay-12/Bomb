@@ -1,89 +1,81 @@
 import React from 'react';
 import { SINAMES } from './simonsSolver.js';
 
+export function SimonChip({ c, sm = false }) {
+  return c
+    ? <span className={`simon-chip ${c}${sm ? ' sm' : ''}`} title={SINAMES[c]}>{c}</span>
+    : <span className={`simon-chip none${sm ? ' sm' : ''}`}>–</span>;
+}
+
+/**
+ * Stage log for one Simon module: every upload with its thumbnail, the colour read from it,
+ * what it maps to (ODD | EVEN) and one-tap R/B/Y/G buttons to fix a misread.
+ */
 export function SimonsWorking({
   entries = [],
+  rules = { even: {}, odd: {} },
+  compact = false,
   onAddColor = () => {},
-  onRemoveEntry = () => {},
-  onClear = () => {}
+  onFixEntry = () => {},
+  onRemoveEntry = () => {}
 }) {
-  const COLOR_BUTTONS = [
-    { key: 'R', bg: '#EF5350', label: 'RED' },
-    { key: 'B', bg: '#42A5F5', label: 'BLUE' },
-    { key: 'Y', bg: '#FDD835', label: 'YELLOW' },
-    { key: 'G', bg: '#66BB6A', label: 'GREEN' }
-  ];
-
+  let stage = 0;
   return (
-    <div className="simons-working-container" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {/* 4 Colored Buttons for Manual Input */}
-      <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-        {COLOR_BUTTONS.map(btn => (
-          <button
-            key={btn.key}
-            type="button"
-            className="bg-btn"
-            onClick={() => onAddColor(btn.key)}
-            style={{
-              background: btn.bg,
-              color: btn.key === 'Y' ? '#000' : '#FFF',
-              fontWeight: 700,
-              padding: '10px 18px',
-              borderRadius: '8px'
-            }}
-          >
-            + {btn.label}
+    <div className={`simon-working ${compact ? 'compact' : ''}`}>
+      <div className="simon-add-row">
+        <span className="search-config-label" style={{ margin: 0 }}>ADD STAGE BY HAND:</span>
+        {['R', 'B', 'Y', 'G'].map(c => (
+          <button key={c} type="button" className={`simon-add ${c}`} onClick={() => onAddColor(c)} title={`Add a ${SINAMES[c]} flash`}>
+            + {compact ? c : SINAMES[c].toUpperCase()}
           </button>
         ))}
       </div>
 
-      {/* Flashed sequence list */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span className="search-config-label">FLASHED COLORS SEQUENCE ({entries.length} STEPS):</span>
-          {entries.length > 0 && (
-            <button type="button" className="bg-btn" onClick={onClear}>
-              Clear sequence
-            </button>
-          )}
+      {entries.length === 0 ? (
+        <div className="simon-status">Nothing yet — paste the stage-1 GIF.</div>
+      ) : (
+        <div className="simon-log">
+          {entries.map((e, i) => {
+            if (e.color) stage++;
+            return (
+              <div key={i} className={`simon-ent ${e.color ? '' : 'miss'}`}>
+                <span className="simon-ent-n">{e.color ? `#${stage}` : '—'}</span>
+                {e.thumb ? <img src={e.thumb} alt="" /> : <span className="simon-ent-noimg" />}
+                <div className="simon-ent-body">
+                  <div className="simon-ent-read">
+                    {e.color
+                      ? <><SimonChip c={e.color} sm /> <b>{SINAMES[e.color]}</b> → <span className="simon-ent-map">ODD <SimonChip c={rules.odd[e.color]} sm /> EVEN <SimonChip c={rules.even[e.color]} sm /></span></>
+                      : <span className="simon-status warn">no glow found — pick the colour</span>}
+                  </div>
+                  {!compact && <div className="simon-status">{e.note}</div>}
+                  {e.warn && <div className="simon-status warn">⚠ {e.warn}</div>}
+                  <div className="simon-fix">
+                    {['R', 'B', 'Y', 'G'].map(c => (
+                      <button key={c} type="button" className={`simon-fix-btn ${c} ${e.color === c ? 'on' : ''}`} onClick={() => onFixEntry(i, c)} title={`It was ${SINAMES[c]}`}>{c}</button>
+                    ))}
+                  </div>
+                </div>
+                <button type="button" className="simon-del" onClick={() => onRemoveEntry(i)} title="Remove this upload">✕</button>
+              </div>
+            );
+          })}
         </div>
+      )}
 
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {entries.map((c, idx) => (
-            <div
-              key={idx}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 12px',
-                background: 'var(--paper)',
-                border: '1px solid var(--line)',
-                borderRadius: '8px',
-                fontFamily: 'monospace'
-              }}
-            >
-              <span style={{ fontWeight: 700, color: 'var(--brass)' }}>#{idx + 1}:</span>
-              <span style={{ fontWeight: 700, color: c === 'R' ? '#EF5350' : c === 'B' ? '#42A5F5' : c === 'Y' ? '#FDD835' : '#66BB6A' }}>
-                {SINAMES[c] || c}
-              </span>
-              <button
-                type="button"
-                onClick={() => onRemoveEntry(idx)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--ink-soft)',
-                  cursor: 'pointer',
-                  fontWeight: 700
-                }}
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
+      {!compact && (
+        <table className="simon-rules-table">
+          <thead><tr><th>Flash</th><th>Odd → press</th><th>Even → press</th></tr></thead>
+          <tbody>
+            {['R', 'B', 'Y', 'G'].map(c => (
+              <tr key={c}>
+                <td><SimonChip c={c} sm /> {SINAMES[c]}</td>
+                <td><SimonChip c={rules.odd[c]} sm /></td>
+                <td><SimonChip c={rules.even[c]} sm /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

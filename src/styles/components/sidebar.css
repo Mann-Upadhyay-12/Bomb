@@ -378,3 +378,18 @@
   border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
 .lvlgen-chip:hover { border-color: var(--brass); }
 .lvlgen-chip.on { border-color: var(--brass); color: var(--brass); }
+
+/* ── Phones: dropdowns instead of rows of buttons ── */
+.mode-select, .mgroup-count-select { display: none; }
+.mode-select, .mgroup-count-select {
+  font-family: ui-monospace, Consolas, monospace; font-weight: 700; letter-spacing: .04em; color: var(--ink);
+  background: var(--paper-raised); border: 1.5px solid var(--brass); border-radius: 12px; cursor: pointer;
+}
+.mode-select { width: 100%; font-size: 14px; padding: 12px 14px; }
+.mgroup-count-select { font-size: 14px; padding: 6px 12px; min-width: 70px; }
+@media (max-width: 700px) {
+  .mode-select, .mgroup-count-select { display: block; }
+  .mode-toggle-wrapper .mode-toggle-main, .mode-toggle-main { display: none; }
+  .mgroup-count .mgroup-count-btn { display: none; }
+  .mgroup-head .mgroup-hint { display: none; }
+}

@@ -17,14 +17,24 @@ const MAX_GRIDS = 6;
 const EMPTY_BUTTONS = [null, null, null, null];
 let gridSeq = 0;
 
-function toImageData(img) {
+function toCanvas(img) {
   const sc = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
   const W = Math.round(img.naturalWidth * sc), H = Math.round(img.naturalHeight * sc);
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
   const g = cv.getContext('2d', { willReadFrequently: true });
   g.drawImage(img, 0, 0, W, H);
-  return g.getImageData(0, 0, W, H);
+  return { cv, data: g.getImageData(0, 0, W, H) };
+}
+
+// Small picture of the part of the screenshot a grid / keypad was read from, so you can see
+// which image is applied where (a misread is easy to spot against the original).
+function cropThumb(cv, x, y, w, h, max = 150) {
+  const sc = Math.min(1, max / Math.max(w, h));
+  const t = document.createElement('canvas');
+  t.width = Math.max(1, Math.round(w * sc)); t.height = Math.max(1, Math.round(h * sc));
+  t.getContext('2d').drawImage(cv, x, y, w, h, 0, 0, t.width, t.height);
+  return t.toDataURL('image/jpeg', 0.8);
 }
 
 export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1 }) {
@@ -32,23 +42,31 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
   const { showToast } = useToast();
   const { copy } = useClipboard();
 
-  // The strip ("SYMBOLS #1", "#2" … grids) is shared by every Symbols window;
-  // this window uses grid #(instance + 1) by default, and can be pointed at another one.
+  // The strip is shared by every Symbols window. Its grids are split into puzzles: the grids in the
+  // top section (under the first header / in the top row) are puzzle #1, the next section #2 …
+  // This window adds up every grid of puzzle #(instance + 1) by default, and can be pointed at another.
   const { grids, version } = useStrip();
-  const [gridIdx, setGridIdx] = useState(instance);
+  const [gridIdx, setGridIdx] = useState(instance); // = the puzzle number this window counts (0-based)
   const [buttons, setButtons] = useState(EMPTY_BUTTONS);
   const [adj, setAdj] = useState({});
+  const [keypadThumb, setKeypadThumb] = useState('');
+  // 'mine' = only this puzzle's grids; 'all' = add up every grid in the strip (old app)
+  const [countFrom, setCountFrom] = useState('mine');
 
   // A new strip resets this window's ± corrections and goes back to its own grid number
   React.useEffect(() => { setAdj({}); setGridIdx(instance); }, [version, instance]);
 
-  const myGrid = grids[gridIdx] || null;
+  const groupOf = g => (g.group ?? 0);
+  const groups = grids.length ? Math.max(...grids.map(groupOf)) + 1 : 0;
+  const myGrids = grids.filter(g => groupOf(g) === gridIdx);
+  const myGrid = myGrids[0] || null;
   const [previewUri, setPreviewUri] = useState('');
   const [previewMeta, setPreviewMeta] = useState('');
 
   // Totals = symbols read in every grid + manual ± corrections
   const rawCounts = {};
-  if (myGrid) for (const k of myGrid.cells) if (k) rawCounts[k] = (rawCounts[k] || 0) + 1;
+  const countedGrids = countFrom === 'all' ? grids : myGrids;
+  for (const g of countedGrids) for (const k of g.cells) if (k) rawCounts[k] = (rawCounts[k] || 0) + 1;
   const counts = { ...rawCounts };
   for (const [k, d] of Object.entries(adj)) counts[k] = Math.max(0, (rawCounts[k] || 0) + d);
 
@@ -71,9 +89,9 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
         warnings.push(`Tie: buttons ${order[i - 1].n} & ${order[i].n} both have ${order[i].c}`);
       }
     }
-    if (!myGrid && !Object.keys(adj).length) {
+    if (!countedGrids.length && !Object.keys(adj).length) {
       warnings.push(grids.length
-        ? `The strip has ${grids.length} grid${grids.length > 1 ? 's' : ''} — there is no SYMBOLS #${gridIdx + 1}`
+        ? `The strip has ${groups} puzzle${groups > 1 ? 's' : ''} — there is no puzzle #${gridIdx + 1}`
         : 'No reference grid loaded yet');
     }
   }
@@ -89,8 +107,8 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
     setPreviewMeta(`${img.naturalWidth}×${img.naturalHeight} px source`);
     setLastImage(img, fileBlob);
 
-    let d;
-    try { d = toImageData(img); } catch (e) { showToast('IMAGE LOADED — SET SYMBOLS BELOW'); return; }
+    let d, cv;
+    try { ({ cv, data: d } = toCanvas(img)); } catch (e) { showToast('IMAGE LOADED — SET SYMBOLS BELOW'); return; }
 
     // A reference grid is checked first: a full 5×5 read means it is a grid, not the 2×2 keypad
     const pr = syReadPanels(d);
@@ -100,6 +118,7 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
       const probe = syReadModule(d);
       if (probe.tiles >= 4) {
         setButtons(prev => prev.map((k, i) => probe.buttons[i] || k));
+        setKeypadThumb(cropThumb(cv, 0, 0, cv.width, cv.height, 170));
         const got = probe.buttons.filter(Boolean).length;
         showToast(got === 4 ? 'KEYPAD READ: 4/4 BUTTONS ✓' : `KEYPAD READ: ${got}/4 — PICK THE REST`);
         return;
@@ -109,16 +128,23 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
     const panels = fullGrids.length ? fullGrids : pr.panels;
     if (!panels.length) { showToast('COULD NOT DETECT SYMBOLS'); return; }
 
-    stripStore.setGrids(panels.slice(0, MAX_GRIDS).map(p => ({ id: ++gridSeq, cells: p.cells })));
-    const cells = panels.reduce((s, p) => s + p.cells.filter(Boolean).length, 0);
-    showToast(panels.length > 1
-      ? `STRIP READ: ${panels.length} GRIDS · ${cells} CELLS ✓`
+    const kept = panels.slice(0, MAX_GRIDS);
+    const usedGroups = [...new Set(kept.map(p => p.group || 0))].sort((a, b) => a - b);
+    stripStore.setGrids(kept.map(p => ({
+      id: ++gridSeq,
+      cells: p.cells,
+      group: usedGroups.indexOf(p.group || 0),
+      thumb: cropThumb(cv, p.x, p.y, p.w, p.h)
+    })));
+    const cells = kept.reduce((s, p) => s + p.cells.filter(Boolean).length, 0);
+    showToast(kept.length > 1
+      ? `STRIP READ: ${kept.length} GRIDS IN ${usedGroups.length} PUZZLE${usedGroups.length > 1 ? 'S' : ''} · ${cells} CELLS ✓`
       : `GRID READ: ${cells}/25 CELLS ✓`);
   };
 
   const handleAddBlankGrid = () => {
     if (grids.length >= MAX_GRIDS) return;
-    stripStore.setGrids([...grids, { id: ++gridSeq, cells: Array(25).fill(null) }]);
+    stripStore.setGrids([...grids, { id: ++gridSeq, cells: Array(25).fill(null), group: gridIdx }]);
   };
 
   const handleCountAdj = (k, delta) => {
@@ -130,7 +156,7 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
     // The two-grid strip from the game: Ѣ 17, Ж 9, ¿ 5, ƛ 4 …
     const g1 = ['STAR_SOLID','YAT','INV_QUESTION','YAT','YAT','YAT','INV_QUESTION','LAMBDA_STROKE','YAT','YAT','OT','OT','COPYRIGHT','INV_QUESTION','LAMBDA_STROKE','YAT','LAMBDA_STROKE','OT','OT','INV_QUESTION','KOPPA','YAT','LAMBDA_STROKE','OT','YAT'];
     const g2 = ['YAT','YAT','YAT','YAT','YAT','STAR_HOLLOW','ZHE','ZHE','STAR_HOLLOW','ZHE','YAT','STAR_HOLLOW','ZHE','ZHE','DOUBLE_CROSS','INV_QUESTION','ZHE','KOPPA','ZHE','YAT','ZHE','STAR_HOLLOW','ZHE','YAT','STAR_HOLLOW'];
-    stripStore.setGrids([{ id: ++gridSeq, cells: g1 }, { id: ++gridSeq, cells: g2 }]);
+    stripStore.setGrids([{ id: ++gridSeq, cells: g1, group: 0 }, { id: ++gridSeq, cells: g2, group: 1 }]);
     setButtons(['OT', 'YAT', 'COPYRIGHT', 'LAMBDA_STROKE']); // grid #1: Ѣ 9, Ѿ 5, ƛ 4, © 1 → press 2 1 4 3
     showToast('SAMPLE STRIP LOADED ✓');
   };
@@ -139,6 +165,7 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
     stripStore.setGrids([]); // the strip is shared — clearing it clears every Symbols window
     setButtons(EMPTY_BUTTONS);
     setAdj({});
+    setKeypadThumb('');
     setPreviewUri('');
     setPreviewMeta('');
     setLastImage(null, null);
@@ -154,8 +181,12 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
     });
   }
 
-  const gridInfo = myGrid
-    ? (grids.length > 1 ? `USING SYMBOLS #${gridIdx + 1} OF ${grids.length}` : '1 GRID')
+  const gridInfo = countFrom === 'all' && grids.length
+    ? `COUNTING ALL ${grids.length} GRID${grids.length > 1 ? 'S' : ''}`
+    : myGrid
+    ? (groups > 1 || myGrids.length > 1
+      ? `PUZZLE #${gridIdx + 1} OF ${groups} · ${myGrids.length} GRID${myGrids.length > 1 ? 'S' : ''}`
+      : '1 GRID')
     : 'NO GRID';
   const stampStats = order.length === 4
     ? `${gridInfo} | PRESS ORDER: ${copyFormatted}${warnings.length ? ' | ⚠ CHECK' : ''}`
@@ -172,7 +203,7 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
               title="Click here, then paste the grid strip or the 2×2 keypad"
               sub={
                 <>
-                  press <kbd>Ctrl</kbd>+<kbd>V</kbd> anywhere — a strip with <b>SYMBOLS #1, #2 …</b> grids is split, one grid per Symbols module
+                  press <kbd>Ctrl</kbd>+<kbd>V</kbd> anywhere — a strip is split by section: all grids in section #n are added for Symbols #n
                 </>
               }
             />
@@ -219,13 +250,17 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
             grids={grids}
             gridIdx={gridIdx}
             onUseGrid={setGridIdx}
+            countFrom={countFrom}
+            onCountFrom={setCountFrom}
+            keypadThumb={keypadThumb}
             buttons={buttons}
             counts={counts}
             order={order}
             warnings={warnings}
             onButtonSelect={(i, k) => setButtons(prev => prev.map((x, j) => (j === i ? k : x)))}
-            onClearButtons={() => setButtons(EMPTY_BUTTONS)}
+            onClearButtons={() => { setButtons(EMPTY_BUTTONS); setKeypadThumb(''); }}
             onCellSet={stripStore.setCell}
+            onSetGroup={stripStore.setGroup}
             onRemoveGrid={stripStore.removeGrid}
             onAddBlankGrid={grids.length < MAX_GRIDS ? handleAddBlankGrid : null}
             onClearGrids={() => stripStore.setGrids([])}
@@ -243,6 +278,6 @@ export const symbolsModule = {
   tabLabel: '🔣 SYMBOLS',
   eyebrow: 'SYMBOLS PUZZLE SOLVER',
   title: 'Symbols Vision',
-  sub: 'Paste the reference grid screenshot — a single 5×5 grid, or a <b>strip of SYMBOLS #1, #2 …</b> grids where grid #n belongs to Symbols module #n — plus the 2×2 keypad. Buttons are pressed from <b>highest count to lowest</b>.',
+  sub: 'Paste the reference grid screenshot — a single 5×5 grid, or a <b>strip</b>: every grid in the top section is added up for Symbols #1, the next section for #2 … — plus the 2×2 keypad. Buttons are pressed from <b>highest count to lowest</b>.',
   Component: SymbolsModule
 };

@@ -15,11 +15,6 @@ import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
 import { useSharedSetting } from '../../core/sharedSetting.js';
 import { useInstance } from '../../core/InstanceContext.jsx';
-import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
-import { ModuleInput } from '../../core/components/ModuleInput.jsx';
-import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
-import { CopyLines } from '../../core/components/CopyLines.jsx';
-import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
 import { WireseqWorking } from './working.jsx';
 
 export function WireseqModule({ isActive = true }) {
@@ -34,6 +29,7 @@ export function WireseqModule({ isActive = true }) {
   // so correcting an earlier stage re-flows the later answers (matches the original).
   const [stages, setStages] = useState(() => Array.from({ length: WS_STAGES }, wsBlankStage));
   const [thumbs, setThumbs] = useState(() => Array(WS_STAGES).fill(null));
+  const [previews, setPreviews] = useState(() => Array(WS_STAGES).fill(null));
   const [active, setActive] = useState(0); // 0-based stage index
   const [quickText, setQuickText] = useState('');
   const [status, setStatus] = useState({ text: '', ok: null });
@@ -83,6 +79,7 @@ export function WireseqModule({ isActive = true }) {
   const handleClearStage = () => {
     setStage(active, wsBlankStage());
     setThumbs(prev => prev.map((t, i) => (i === active ? null : t)));
+    setPreviews(prev => prev.map((t, i) => (i === active ? null : t)));
   };
 
   const applyQuick = (advance) => {
@@ -112,9 +109,12 @@ export function WireseqModule({ isActive = true }) {
     const res = wsReadImage(g.getImageData(0, 0, W, H));
     const th = document.createElement('canvas'); th.width = 96; th.height = Math.max(1, Math.round(96 * H / W));
     th.getContext('2d').drawImage(c2, 0, 0, th.width, th.height);
+    const pv = document.createElement('canvas'); const ps = Math.min(1, 360 / W);
+    pv.width = Math.max(1, Math.round(W * ps)); pv.height = Math.max(1, Math.round(H * ps));
+    pv.getContext('2d').drawImage(c2, 0, 0, pv.width, pv.height);
     const fromDots = res.stageNo >= 1 && res.stageNo <= WS_STAGES; // ignore a misread dot count
     const stageIdx = Math.max(0, Math.min(WS_STAGES - 1, fromDots ? res.stageNo - 1 : stageHint));
-    return { stageIdx, fromDots, wires: res.wires, thumb: th.toDataURL('image/jpeg', 0.7) };
+    return { stageIdx, fromDots, wires: res.wires, thumb: th.toDataURL('image/jpeg', 0.7), preview: pv.toDataURL('image/jpeg', 0.8) };
   };
 
   const applyTraces = (traces) => {
@@ -129,6 +129,11 @@ export function WireseqModule({ isActive = true }) {
       traces.forEach(t => { next[t.stageIdx] = t.thumb; });
       return next;
     });
+    setPreviews(prev => {
+      const next = [...prev];
+      traces.forEach(t => { next[t.stageIdx] = t.preview; });
+      return next;
+    });
     const last = traces[traces.length - 1];
     const nextIdx = Math.min(WS_STAGES - 1, last.stageIdx + 1);
     const found = last.wires.filter(w => w.c).length;
@@ -136,7 +141,7 @@ export function WireseqModule({ isActive = true }) {
     setStatus({
       text: traces.length > 1
         ? `Read ${traces.length} screenshots. Check each stage below.`
-        : `Stage ${last.stageIdx + 1}${last.fromDots ? ' (read from the dots)' : ''}: ${desc}. Tap a wire to fix any mistake.`,
+        : `Stage ${last.stageIdx + 1}: ${desc}`,
       ok: found > 0
     });
     // show the stage that was just read; the answer for it is what the user needs now
@@ -210,6 +215,7 @@ export function WireseqModule({ isActive = true }) {
   const handleClear = () => {
     setStages(Array.from({ length: WS_STAGES }, wsBlankStage));
     setThumbs(Array(WS_STAGES).fill(null));
+    setPreviews(Array(WS_STAGES).fill(null));
     setActive(0);
     setQuickText('');
     setStatus({ text: '', ok: null });
@@ -218,101 +224,103 @@ export function WireseqModule({ isActive = true }) {
     showToast('WIRE SEQUENCE RESET ✓');
   };
 
-  const copyItems = [];
-  if (cuts.length > 0) {
-    copyItems.push({ label: `COPY CUTS (${copyFormatted})`, value: copyFormatted });
-    cuts.forEach(n => {
-      copyItems.push({ label: `Wire ${n}`, value: `Wire ${n}` });
-    });
-  }
+  // The group's card header shows this copy's answer
+  const summary = filled ? `S${panelNo}: ${cuts.length ? 'CUT ' + cuts.join(' ') : 'NONE'}` : '';
+  React.useEffect(() => { if (inst && inst.report) inst.report(summary); }, [summary]);
 
-  const stampStats = `STAGE ${panelNo} / ${WS_STAGES} | CUTS: ${cuts.length} | WIRES BEFORE THIS STAGE: ${counts.red + counts.blue + counts.black}`;
-  const ruleCount = (Object.keys(rules.red || {}).length) + (Object.keys(rules.blue || {}).length) + (Object.keys(rules.black || {}).length);
+  const ruleCount = Object.keys(rules.red || {}).length + Object.keys(rules.blue || {}).length + Object.keys(rules.black || {}).length;
+  const upto = wsCountsBefore(stages, active + 1); // occurrences up to and including this stage
+  const preview = previews[active] || thumbs[active];
 
+  // Same layout as the standalone wireseq.html: stage tabs, screenshot, CUT THESE, chips, counts
   return (
-    <ModuleLayout
-      input={
-        <ModuleInput
-          dropzone={
-            <Dropzone
-              onImage={handleImage}
-              onFiles={handleFiles}
-              multiple
-              icon="🔌 1 2 3 → A B C"
-              title="Click here, then paste a Wire Sequence screenshot"
-              sub={<>paste / drop one stage screenshot (or several at once) — the stage is read from the pager dots</>}
-            />
-          }
-          controls={
-            <>
-              <button className="reset-btn" type="button" onClick={handleClear}>
-                clear
-              </button>
-              <button
-                className="reset-btn"
-                type="button"
-                style={{ borderColor: 'var(--brass)', color: 'var(--brass)' }}
-                onClick={handleSample}
-              >
-                ⚡ SAMPLE
-              </button>
-            </>
-          }
-        >
-          <div className="ws-stage-strip">
+    <div className={`wsq ${inst && inst.multi ? 'compact' : ''}`}>
+      <div className="wsq-head">
+        <span className="wsq-badge">STAGE {panelNo} / {WS_STAGES}</span>
+        <div className="wsq-tabs">
+          {perStage.map((rs, i) => (
+            <button key={i} type="button"
+              className={`wsq-tab ${i === active ? 'on' : ''} ${stages[i].some(w => w.c && w.d) ? 'has' : ''}`}
+              onClick={() => goTo(i)}>Stage {i + 1}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="wsq-body">
+        <div className="wsq-left">
+          <Dropzone
+            onImage={handleImage}
+            onFiles={handleFiles}
+            multiple
+            icon="📷"
+            title={`Drop Stage ${panelNo} screenshot`}
+            sub={<>click · <kbd>Ctrl</kbd>+<kbd>V</kbd> · drag &amp; drop — stage read from the dots</>}
+          />
+          {preview && (
+            <div className="wsq-preview">
+              <img src={preview} alt={`Stage ${panelNo}`} />
+            </div>
+          )}
+          {status.text && <div className={`wsq-note ${status.ok === false ? 'bad' : ''}`}>{status.text}</div>}
+          <div className="wsq-strip">
             {perStage.map((rs, i) => {
               const isFilled = rs.some(r => r.state !== 'empty');
               const cutsHere = rs.filter(r => r.state === 'cut').map(r => r.i + 1);
               return (
-                <button
-                  key={i}
-                  type="button"
-                  className={`ws-stage-card ${i === active ? 'active' : ''} ${isFilled ? 'done' : ''}`}
-                  onClick={() => goTo(i)}
-                >
+                <button key={i} type="button" className={`wsq-strip-card ${i === active ? 'on' : ''}`} onClick={() => goTo(i)}>
                   {thumbs[i] && <img src={thumbs[i]} alt="" />}
-                  <span className="ws-stage-card-title">STAGE {i + 1}</span>
-                  <span className="ws-stage-card-sub">
-                    {!isFilled ? '—' : cutsHere.length ? <>cut <b>{cutsHere.join(' ')}</b></> : 'no cuts'}
-                  </span>
+                  <span>Stage {i + 1}</span>
+                  <span>{!isFilled ? '—' : cutsHere.length ? <>cut <b>{cutsHere.join(' ')}</b></> : 'none'}</span>
                 </button>
               );
             })}
           </div>
+        </div>
 
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', margin: '12px 0', flexWrap: 'wrap' }}>
-            <span className="search-config-label" style={{ margin: 0 }}>STAGE {panelNo} / {WS_STAGES}</span>
-            <button type="button" className="bg-btn" disabled={active === 0} onClick={handleUndo}>
-              ← PREV
-            </button>
-            <button
-              type="button"
-              className="bg-btn"
-              style={{ borderColor: 'var(--brass)', color: 'var(--brass)', fontWeight: 700 }}
-              onClick={handleNextPanel}
-            >
-              NEXT STAGE →
-            </button>
-            <button type="button" className="bg-btn" onClick={handleClearStage}>
-              CLEAR STAGE
-            </button>
-            <button type="button" className="bg-btn" onClick={handleClear}>
-              RESET ALL
-            </button>
+        <div className="wsq-right">
+          <div className="wsq-stamp" role="button" tabIndex={0} title="Click to copy"
+            onClick={() => { if (copyFormatted) { copy(copyFormatted); showToast(`COPIED: ${copyFormatted}`); } }}>
+            <div className="wsq-stamp-lbl">CUT THESE</div>
+            <div className="wsq-stamp-main">
+              {!filled ? <span className="ph">— — —</span>
+                : cuts.length ? cuts.map(n => <span key={n} className="wsq-cut">Wire {n}</span>)
+                : <span className="ph">NONE TO CUT</span>}
+            </div>
           </div>
 
-          <div className="search-config-row" style={{ marginBottom: '10px' }}>
-            <label className="search-config-label" htmlFor={`${uid}-quick`}>
-              QUICK INPUT (e.g. <code>1RA 2RB 3BC</code> · Enter = apply, Shift+Enter = apply &amp; next):
-            </label>
-            <div style={{ display: 'flex', gap: '8px' }}>
+          <div className="wsq-chips">
+            {results.map(r => {
+              if (r.state === 'empty') return <span key={r.i} className="wsq-chip">Wire {r.i + 1}: —</span>;
+              const tag = `${r.w.c[0].toUpperCase() + r.w.c.slice(1)} → ${r.w.d} (#${r.n})`;
+              if (r.state === 'cut') return <span key={r.i} className="wsq-chip cut">Cut {r.i + 1} ({tag})</span>;
+              if (r.state === 'skip') return <span key={r.i} className="wsq-chip skip">Keep {r.i + 1} ({tag})</span>;
+              return <span key={r.i} className="wsq-chip skip">No rule for {tag}</span>;
+            })}
+          </div>
+
+          <div className="wsq-counts">
+            {['red', 'blue', 'black'].map(c => (
+              <span key={c} className="wsq-pill"><span className={`wsq-dot ${c}`}></span> {c[0].toUpperCase() + c.slice(1)}: {upto[c]}</span>
+            ))}
+          </div>
+
+          <div className="wsq-tools">
+            <button type="button" className="wsq-next" onClick={handleNextPanel}>Next Stage →</button>
+            <button type="button" className="bg-btn" disabled={active === 0} onClick={handleUndo}>← Prev</button>
+            <button type="button" className="bg-btn" onClick={handleClearStage}>Clear Stage</button>
+            <button type="button" className="bg-btn" onClick={handleClear}>Reset</button>
+          </div>
+
+          <details className="wsq-fix">
+            <summary>✎ Fix wires by hand</summary>
+            <div style={{ display: 'flex', gap: '8px', margin: '8px 0' }}>
               <input
                 id={`${uid}-quick`}
                 type="text"
                 className="search-words-field"
                 style={{ flex: 1, minWidth: 0 }}
                 value={quickText}
-                placeholder="1RA 2BB 3KC  (R=red, B/U=blue, K=black)"
+                placeholder="1RA 2BB 3KC  (Enter · Shift+Enter = & next)"
                 spellCheck="false"
                 autoComplete="off"
                 onChange={(e) => setQuickText(e.target.value)}
@@ -322,73 +330,33 @@ export function WireseqModule({ isActive = true }) {
               />
               <button type="button" className="bg-btn" onClick={() => applyQuick(false)}>APPLY</button>
             </div>
-          </div>
-
-          {status.text && (
-            <div className={`module-hint ${status.ok === false ? 'bad' : 'ok'}`}>{status.text}</div>
-          )}
-
-          {!grouped && (
-          <details className="wireseq-manual-details" style={{ marginTop: '8px' }}>
-            <summary style={{ cursor: 'pointer', fontFamily: 'monospace', fontWeight: 600, fontSize: '12px', letterSpacing: '0.08em', color: 'var(--ink-soft)', marginBottom: '8px' }}>
-              📖 MANUAL RULES — PASTE &amp; PARSE (RED / BLUE / BLACK)
-            </summary>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                <label className="search-config-label" style={{ margin: 0 }}>
-                  PASTE WIRE OCCURRENCE RULES:
-                </label>
-                <span className="maze-status-tag" style={{ fontSize: '11px', padding: '3px 8px' }}>
-                  {ruleCount} rules loaded
-                </span>
-              </div>
-              <textarea
-                className="search-words-field"
-                style={{ height: '140px', resize: 'vertical', fontSize: '12px', lineHeight: 1.45, fontFamily: 'monospace' }}
-                spellCheck={false}
-                placeholder="Paste the Red / Blue / Black rules here..."
-                value={rulesText}
-                onChange={e => handleRulesChange(e.target.value)}
-              />
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button
-                  type="button"
-                  className="bg-btn"
-                  style={{ fontSize: '11px', padding: '4px 10px' }}
-                  onClick={handleRestoreDefaultRules}
-                >
-                  🔄 RESTORE DEFAULT RULES
-                </button>
-              </div>
-            </div>
+            <WireseqWorking
+              panel={panel}
+              counts={counts}
+              results={results}
+              onWireColorChange={handleWireColorChange}
+              onWireDestChange={handleWireDestChange}
+            />
+            <button type="button" className="bg-btn" style={{ marginTop: 8 }} onClick={handleSample}>⚡ SAMPLE</button>
           </details>
-          )}
-        </ModuleInput>
-      }
-      answers={
-        <AnswerPanel
-          label={`STAGE ${panelNo} — WIRES TO CUT`}
-          stats={stampStats}
-          answers={cuts.length ? cuts.map(n => `Wire ${n}`) : []}
-          copyValue={copyFormatted}
-          placeholder={filled ? 'NONE TO CUT' : 'SELECT WIRE COLORS & DESTINATIONS'}
-        />
-      }
-      copylines={<CopyLines items={copyItems} />}
-      working={
-        <WorkingPanel
-          title={`WIRE SEQUENCE — Stage ${panelNo} (wires 1 to 3)`}
-        >
-          <WireseqWorking
-            panel={panel}
-            counts={counts}
-            results={results}
-            onWireColorChange={handleWireColorChange}
-            onWireDestChange={handleWireDestChange}
+        </div>
+      </div>
+
+      {!grouped && (
+        <details className="wsq-fix" style={{ marginTop: 12 }}>
+          <summary>📖 Manual rules (red / blue / black) — {ruleCount} loaded</summary>
+          <textarea
+            className="search-words-field"
+            style={{ height: '140px', resize: 'vertical', fontSize: '12px', lineHeight: 1.45, fontFamily: 'monospace', marginTop: 8 }}
+            spellCheck={false}
+            placeholder="Paste the Red / Blue / Black rules here..."
+            value={rulesText}
+            onChange={e => handleRulesChange(e.target.value)}
           />
-        </WorkingPanel>
-      }
-    />
+          <button type="button" className="bg-btn" onClick={handleRestoreDefaultRules}>🔄 Restore default rules</button>
+        </details>
+      )}
+    </div>
   );
 }
 

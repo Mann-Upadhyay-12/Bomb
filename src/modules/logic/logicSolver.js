@@ -20,6 +20,7 @@ export function evaluateExpression(src, greek, vars) {
              .replace(/[&∧]/g, '^')
              .replace(/[|∨v]/g, 'V')
              .replace(/[pqrst]/g, c => c.toUpperCase())
+             .replace(/ß/g, 'β')
              .replace(/\s+/g, '');
   let p = 0;
   const peek = () => s[p];
@@ -249,7 +250,9 @@ export function classify(f) {
   if (f.holes >= 2) return 'β';
   if (f.holeCy > 0.6) return 'δ';
   if (f.hRel < SHORT && f.aspect >= 0.8) return 'α';
-  if (f.stem < 0.85) return 'Q';
+  // The game's thin italic β often reads as ONE loop. Unlike Q (round, about as wide as tall,
+  // left side solid all the way down) it is narrow and its left edge is mostly empty.
+  if (f.stem < 0.85) return f.aspect < 0.72 && f.leftEdge < 0.6 ? 'β' : 'Q';
   if (f.hRel > TALL) return 'β';
   return f.BRq > 0.09 ? 'R' : 'P';
 }

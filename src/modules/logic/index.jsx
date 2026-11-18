@@ -194,11 +194,17 @@ onImage={(img, dataUri, fileBlob) => {
   const { data } = ctx.getImageData(0, 0, w, h);
 
   const { text } = readLogicGrid(data, w, h);
-  const { idx } = detectStage(data, w, h);
+  const { idx, count } = detectStage(data, w, h);
 
   if (text) {
-    handleStageChange(Math.min(idx, 4), text);
-    showToast(`STAGE ${idx + 1} READ: ${text}`);
+    // Stage from the pager dots when they can be read; otherwise the selected stage field
+    // (the old app did this — always falling back to stage 1 overwrote α with the stage-2 formula)
+    const target = count > 0 ? Math.min(idx, 4) : activeStageIdx;
+    setStages(prev => prev.map((st, i) => (i === target ? text : st)));
+    setActiveStageIdx(Math.min(4, target + 1)); // the next paste fills the next stage
+    const unsure = text.includes('?');
+    setPreviewMeta(`Stage ${target + 1}${count > 0 ? ` (of ${count}, from the dots)` : ' (selected field)'}: ${text}${unsure ? ' — ⚠ unreadable symbol (?), fix it by hand' : ''}`);
+    showToast(`STAGE ${target + 1} READ: ${text}${unsure ? ' ⚠' : ''}`);
   } else {
     showToast('COULD NOT READ GRID — TYPE IT MANUALLY');
   }

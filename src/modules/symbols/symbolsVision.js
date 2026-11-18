@@ -113,54 +113,101 @@ export function syReadBox(img, x0, y0, w, h, margin, thresh, skip) {
 // The game stacks one grid per panel; when there is more than one, each panel sits under a dark
 // "SYMBOLS #n" header strip. A single grid comes with no header at all.
 // Returns { panels: [{ x, y, w, h, cells: [25 symbol keys | null], counts }], hasHeader }.
-export function syReadPanels(img) {
+/**
+ * Where the 5×5 grids are, and which puzzle each belongs to.
+ * Grids side by side in one row are one puzzle's grids (added together). Between rows:
+ *  - when the strip has headers ("SYMBOLS #1" …) between grids, a header starts the next puzzle,
+ *    so every grid under header #n is added for puzzle #n;
+ *  - without headers, each row is the next puzzle (#1 on top, #2 below …).
+ * @returns {{ rects: [{x,y,w,h,group}], hasHeader, groups }}
+ */
+export function syLayoutPanels(img) {
   const { data, width: W, height: H } = img;
   const isLight = i => syGray(data, i) > 150;
 
-  // 1. rows that are mostly light belong to a grid, dark rows are headers / gaps
-  const rowLight = new Uint8Array(H);
+  // 1. rows with enough light pixels belong to a grid row; dark rows are headers / gaps
+  const rowN = new Uint32Array(H);
+  let maxN = 0;
   for (let y = 0; y < H; y++) {
     let n = 0;
     for (let x = 0; x < W; x++) if (isLight((y * W + x) * 4)) n++;
-    rowLight[y] = n > W * 0.45 ? 1 : 0;
+    rowN[y] = n; if (n > maxN) maxN = n;
   }
   const minSide = Math.max(40, Math.min(W, H) * 0.08);
+  // relative to the fullest row, so a row with fewer grids than another still counts
+  const rowThr = Math.max(minSide * 0.6, Math.min(W * 0.45, maxN * 0.4));
   const bands = [];
   for (let y = 0; y < H;) {
-    if (!rowLight[y]) { y++; continue; }
+    if (rowN[y] < rowThr) { y++; continue; }
     let y2 = y;
     // tolerate 1-2px dark rows (thick grid lines) inside a band
-    while (y2 < H && (rowLight[y2] || (y2 + 2 < H && (rowLight[y2 + 1] || rowLight[y2 + 2])))) y2++;
+    while (y2 < H && (rowN[y2] >= rowThr || (y2 + 2 < H && (rowN[y2 + 1] >= rowThr || rowN[y2 + 2] >= rowThr)))) y2++;
     if (y2 - y >= minSide) bands.push({ y1: y, y2 });
     y = y2;
   }
   if (!bands.length) bands.push({ y1: 0, y2: H });
 
-  // a header is a solid dark strip above a grid (or between two grids)
-  const hasHeader = bands.length > 1 || bands[0].y1 >= Math.max(8, H * 0.03);
+  // 2. is there a header (text) in the gap above each band?
+  const textIn = (y0, y1) => {
+    y0 = Math.max(0, y0 + 2); y1 = Math.min(H, y1 - 2);
+    if (y1 - y0 < 6) return false;
+    let n = 0;
+    for (let y = y0; y < y1; y++) for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4, r = data[i], b = data[i + 2];
+      if (syGray(data, i) > 120 || (r > 150 && r - b > 60)) n++;
+    }
+    return n >= Math.max(15, (y1 - y0) * W * 0.002);
+  };
+  const headerAbove = bands.map((b, k) => textIn(k ? bands[k - 1].y2 : 0, b.y1));
+  const hasHeader = headerAbove.some(Boolean) || bands[0].y1 >= Math.max(8, H * 0.03);
+  const splitByHeaders = headerAbove.slice(1).some(Boolean);
 
-  const panels = [];
-  for (const b of bands) {
+  // 3. grids inside each band: runs of light columns (two grids side by side = two runs)
+  const rects = [];
+  let group = 0;
+  bands.forEach((b, k) => {
+    if (k > 0 && (!splitByHeaders || headerAbove[k])) group++;
     const bh = b.y2 - b.y1;
-    // 2. horizontal extent of the light area inside this band (crops side margins)
-    let x1 = -1, x2 = -1;
+    const colGap = Math.max(4, Math.round(bh * 0.06)); // cell separators are thinner than the gap between grids
+    const runs = [];
+    let s = -1, last = -1;
     for (let x = 0; x < W; x++) {
       let n = 0;
       for (let y = b.y1; y < b.y2; y++) if (isLight((y * W + x) * 4)) n++;
-      if (n > bh * 0.45) { if (x1 < 0) x1 = x; x2 = x + 1; }
+      if (n > bh * 0.45) { if (s < 0) s = x; last = x; }
+      else if (s >= 0 && x - last > colGap) { runs.push([s, last + 1]); s = -1; }
     }
-    if (x1 < 0) { x1 = 0; x2 = W; }
-    const pw = x2 - x1;
-    if (pw < minSide || pw / bh > 2.2 || bh / pw > 2.2) continue; // not a square-ish grid
+    if (s >= 0) runs.push([s, last + 1]);
+    if (!runs.length) runs.push([0, W]);
+    for (const [x1, x2] of runs) {
+      const pw = x2 - x1;
+      // grids touching each other read as one wide run: cut it into square pieces
+      const k2 = pw / bh > 1.6 ? Math.round(pw / bh) : 1;
+      for (let q = 0; q < k2; q++) {
+        const qx = Math.round(x1 + q * pw / k2), qw = Math.round(pw / k2);
+        if (qw < minSide || qw / bh > 2.2 || bh / qw > 2.2) continue; // not a square-ish grid
+        rects.push({ x: qx, y: b.y1, w: qw, h: bh, group });
+      }
+    }
+  });
+  // renumber groups so they run 0,1,2… even if a band had no grid
+  const used = [...new Set(rects.map(r => r.group))].sort((a, b) => a - b);
+  rects.forEach(r => { r.group = used.indexOf(r.group); });
+  return { rects, hasHeader, groups: used.length };
+}
 
-    // 3. classify the 25 cells
+export function syReadPanels(img) {
+  const { rects, hasHeader, groups } = syLayoutPanels(img);
+  const panels = [];
+  for (const { x: x1, y: y1, w: pw, h: bh, group } of rects) {
+    // classify the 25 cells
     const cw = pw / 5, ch = bh / 5;
     const cells = [];
     const counts = {};
     for (let r = 0; r < 5; r++) {
       for (let c = 0; c < 5; c++) {
         const cx0 = Math.floor(x1 + c * cw), cx1 = Math.floor(x1 + (c + 1) * cw);
-        const cy0 = Math.floor(b.y1 + r * ch), cy1 = Math.floor(b.y1 + (r + 1) * ch);
+        const cy0 = Math.floor(y1 + r * ch), cy1 = Math.floor(y1 + (r + 1) * ch);
         const mg = Math.max(2, Math.round(Math.min(cw, ch) * 0.06));
         const res = syReadBox(img, cx0, cy0, cx1 - cx0, cy1 - cy0, mg, 110, null);
         const k = res && res.symbol !== '?' ? res.symbol : null;
@@ -168,9 +215,9 @@ export function syReadPanels(img) {
         if (k) counts[k] = (counts[k] || 0) + 1;
       }
     }
-    if (cells.some(Boolean)) panels.push({ x: x1, y: b.y1, w: pw, h: bh, cells, counts });
+    if (cells.some(Boolean)) panels.push({ x: x1, y: y1, w: pw, h: bh, group, cells, counts });
   }
-  return { panels, hasHeader };
+  return { panels, hasHeader, groups };
 }
 
 // Back-compat: summed counts across every grid in the image

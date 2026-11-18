@@ -242,7 +242,8 @@ export function App() {
                 const instance = activeMission.modules.slice(0, slotIdx).filter(n => n === modName).length;
                 const instanceCount = activeMission.modules.filter(n => n === modName).length;
                 // "Same manual" modules: all copies live in one grouped window on the first copy's slot
-                if (known.shared && instanceCount > 1) {
+                // (also a single copy, so the manual is always the hidden one-line bar)
+                if (known.shared) {
                   if (instance > 0) return null;
                   const reg = MODULE_REGISTRY.find(m => m.id === known.id);
                   return (

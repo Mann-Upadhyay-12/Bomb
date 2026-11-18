@@ -10,9 +10,13 @@ export function SymbolsWorking({
   warnings = [],
   gridIdx = 0,
   onUseGrid = () => {},
+  countFrom = 'mine',
+  onCountFrom = () => {},
+  keypadThumb = '',
   onButtonSelect = () => {},
   onClearButtons = () => {},
   onCellSet = () => {},
+  onSetGroup = () => {},
   onRemoveGrid = () => {},
   onAddBlankGrid = null,
   onClearGrids = () => {},
@@ -25,6 +29,11 @@ export function SymbolsWorking({
   order.forEach((r, i) => { if (rankOf[r.k] === undefined) rankOf[r.k] = i; });
   const onKeypad = new Set(buttons.filter(Boolean));
   const multi = grids.length > 1;
+  const groupOf = g => (g.group ?? 0);
+  const groups = grids.length ? Math.max(...grids.map(groupOf)) + 1 : 0;
+  // gridIdx = the puzzle (group) this module counts
+  const isCounted = (gi) => countFrom === 'all' || !multi || groupOf(grids[gi]) === gridIdx;
+  const nthInGroup = (gi) => grids.slice(0, gi + 1).filter(g => groupOf(g) === groupOf(grids[gi])).length;
 
   const pickCell = (k) => {
     if (!editing) return;
@@ -40,6 +49,12 @@ export function SymbolsWorking({
           <span className="search-config-label">KEYPAD (2×2 BUTTONS)</span>
           <button type="button" className="bg-btn" onClick={onClearButtons}>Clear keypad</button>
         </div>
+        {keypadThumb && (
+          <div className="sy-applied">
+            <img src={keypadThumb} alt="keypad screenshot" />
+            <span>Keypad read from this screenshot — check the 4 symbols below against it.</span>
+          </div>
+        )}
         <div className="sy-btns">
           {buttons.map((k, i) => {
             const rank = k ? order.findIndex(r => r.n === i + 1) : -1;
@@ -71,9 +86,16 @@ export function SymbolsWorking({
       <section className="sy-section">
         <div className="sy-section-head">
           <span className="search-config-label">
-            REFERENCE GRID{multi ? `S (${grids.length}) — THIS MODULE USES SYMBOLS #${gridIdx + 1}` : ''}
+            REFERENCE GRID{multi ? `S (${grids.length} IN ${groups} PUZZLE${groups > 1 ? 'S' : ''}) — THIS MODULE ADDS UP PUZZLE #${gridIdx + 1}` : ''}
           </span>
           <div className="sy-head-actions">
+            {multi && (
+              <span className="sy-countfrom">
+                <span>COUNT FROM:</span>
+                <button type="button" className={`bg-btn ${countFrom === 'mine' ? 'active' : ''}`} onClick={() => onCountFrom('mine')}>THIS PUZZLE</button>
+                <button type="button" className={`bg-btn ${countFrom === 'all' ? 'active' : ''}`} onClick={() => onCountFrom('all')}>ALL GRIDS</button>
+              </span>
+            )}
             {onAddBlankGrid && <button type="button" className="bg-btn" onClick={onAddBlankGrid}>+ Blank grid</button>}
             {grids.length > 0 && <button type="button" className="bg-btn" onClick={() => { setEditing(null); onClearGrids(); }}>Clear grids</button>}
           </div>
@@ -81,27 +103,41 @@ export function SymbolsWorking({
 
         {grids.length === 0 ? (
           <div className="sy-empty">
-            Paste the grid screenshot. One grid is read as-is; a strip with <b>SYMBOLS #1</b>, <b>#2</b> … headers is
-            split so grid #n goes to Symbols module #n. Click any cell afterwards to fix a misread.
+            Paste the grid screenshot. One grid is read as-is. In a strip, every grid in the top section (under the
+            first header, or the top row) is added up for Symbols #1, the next section for #2, and so on.
+            Click any cell afterwards to fix a misread.
           </div>
         ) : (
           <div className={`sy-strip ${onKeypad.size ? 'has-keypad' : ''}`}>
             {grids.map((g, gi) => (
-              <div key={g.id} className={`sy-grid-card ${multi ? (gi === gridIdx ? 'mine' : 'other') : ''}`}>
+              <div key={g.id} className={`sy-grid-card ${multi ? (isCounted(gi) ? 'mine' : 'other') : ''}`}>
                 {multi && (
                   <div className="sy-grid-header">
                     <span>
-                      SYMBOLS #{gi + 1}
-                      {gi === gridIdx
+                      <select className="sy-group-pick" value={groupOf(g)} title="Which puzzle this grid belongs to"
+                        onChange={e => onSetGroup(gi, Number(e.target.value))}>
+                        {Array.from({ length: Math.min(9, groups + 1) }, (_, n) => (
+                          <option key={n} value={n}>PUZZLE #{n + 1}</option>
+                        ))}
+                      </select>
+                      <span className="sy-grid-n">grid {nthInGroup(gi)}</span>
+                      {groupOf(g) === gridIdx
                         ? <span className="sy-mine-tag">THIS MODULE</span>
-                        : <button type="button" className="sy-use-btn" onClick={() => onUseGrid(gi)}>USE</button>}
+                        : countFrom === 'all' ? <span className="sy-mine-tag">COUNTED</span>
+                        : <button type="button" className="sy-use-btn" onClick={() => onUseGrid(groupOf(g))}>USE</button>}
                     </span>
                     <button type="button" title={`Remove grid #${gi + 1}`} onClick={() => { setEditing(null); onRemoveGrid(gi); }}>✕</button>
                   </div>
                 )}
+                {g.thumb && (
+                  <div className="sy-applied small">
+                    <img src={g.thumb} alt={`screenshot of grid ${gi + 1}`} />
+                    <span>read from this part of the screenshot</span>
+                  </div>
+                )}
                 <div className="sy-grid">
                   {g.cells.map((k, ci) => {
-                    const rank = k && (!multi || gi === gridIdx) ? rankOf[k] : undefined;
+                    const rank = k && isCounted(gi) ? rankOf[k] : undefined;
                     const isEdit = editing && editing.gi === gi && editing.ci === ci;
                     return (
                       <button

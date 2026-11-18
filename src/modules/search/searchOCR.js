@@ -195,3 +195,43 @@ export async function recognizeCell(worker, padCanvas) {
 
   return { letter: '?', confidence: 0 };
 }
+
+/**
+ * Word Search cell reader (the original app's pipeline, which read every letter of the 5×5
+ * grid): runs PSM 6 / 8 / 13 / 10 on the same cell and votes. Single-mode reading dropped
+ * letters such as V, J, M and Z.
+ */
+export async function recognizeCellConsensus(worker, padCanvas) {
+  const rawResults = [];
+  for (const psm of ['6', '8', '13', '10']) {
+    try {
+      const call = (async () => {
+        await worker.setParameters({
+          tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ012568',
+          tessedit_pageseg_mode: psm,
+          user_defined_dpi: '300'
+        });
+        const { data } = await worker.recognize(padCanvas);
+        return { letter: sanitizeSearchLetter(data?.text), conf: Number(data?.confidence ?? 0) };
+      })();
+      let timer;
+      const timeout = new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('Cell OCR timeout')), 4000); });
+      const res = await Promise.race([call, timeout]);
+      clearTimeout(timer);
+      if (res.letter) rawResults.push(res);
+    } catch (_) {}
+  }
+  if (!rawResults.length) return { letter: '?', confidence: 0 };
+
+  // agreement across modes outweighs one mode's confidence
+  const groups = {};
+  for (const r of rawResults) {
+    const g = groups[r.letter] || (groups[r.letter] = { letter: r.letter, count: 0, confs: [], maxConf: 0 });
+    g.count++; g.confs.push(r.conf); g.maxConf = Math.max(g.maxConf, r.conf);
+  }
+  const options = Object.values(groups).map(g => ({
+    ...g, score: g.count * 60 + g.maxConf + g.confs.reduce((a, b) => a + b, 0) / g.count
+  }));
+  options.sort((a, b) => b.score - a.score);
+  return { letter: options[0].letter, confidence: Math.round(options[0].maxConf || options[0].confs[0] || 50) };
+}

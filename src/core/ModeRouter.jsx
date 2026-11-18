@@ -106,6 +106,27 @@ export function ModeRouter({
           )}
         </div>
       )}
+      {/* Phones: one dropdown instead of the wrapping row of tabs */}
+      <select
+        className="mode-select"
+        aria-label="Module"
+        value={(() => {
+          const t = renderedTabs.find(tab => (activeMission
+            ? tab.isImplemented && tab.slotIndex === activeSlotIndex
+            : tab.isImplemented && activeMode === tab.id));
+          return t ? t.key : '';
+        })()}
+        onChange={(e) => {
+          const tab = renderedTabs.find(t => t.key === e.target.value);
+          if (!tab || !tab.isImplemented) return;
+          if (activeMission && onSelectSlot) onSelectSlot(tab.slotIndex, tab.id);
+          else handleSelect(tab.id);
+        }}
+      >
+        {renderedTabs.map(tab => (
+          <option key={tab.key} value={tab.key} disabled={!tab.isImplemented}>{tab.label}</option>
+        ))}
+      </select>
       <div className="mode-toggle-main">
         {renderedTabs.map(tab => {
           const isActive = activeMission

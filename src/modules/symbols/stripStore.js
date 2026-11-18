@@ -1,6 +1,6 @@
 // Shared store for the Symbols reference strip.
-// The game shows one 5×5 grid per Symbols module on the bomb, stacked under "SYMBOLS #1", "SYMBOLS #2"…
-// headers. A paste in any Symbols window fills this store, and window #n reads grid #n from it.
+// The strip can hold several 5×5 grids per Symbols module: each grid has a `group` (puzzle number, 0-based).
+// A paste in any Symbols window fills this store, and window #n adds up the grids of group n.
 import { useSyncExternalStore } from 'react';
 
 let state = { grids: [], version: 0 };
@@ -16,6 +16,10 @@ export const stripStore = {
       ...state,
       grids: state.grids.map((g, i) => (i === gi ? { ...g, cells: g.cells.map((x, j) => (j === ci ? k : x)) } : g))
     };
+    emit();
+  },
+  setGroup: (gi, group) => {
+    state = { ...state, grids: state.grids.map((g, i) => (i === gi ? { ...g, group } : g)) };
     emit();
   },
   removeGrid: (gi) => { state = { ...state, grids: state.grids.filter((_, i) => i !== gi) }; emit(); }

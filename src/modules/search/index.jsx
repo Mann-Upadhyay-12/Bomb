@@ -4,7 +4,7 @@ import {
   ensureOCRWorker,
   getSearchGrid,
   preprocessCellCanvas,
-  recognizeCell
+  recognizeCellConsensus
 } from './searchOCR.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
@@ -182,7 +182,7 @@ export function SearchModule({ isActive = true }) {
     setOcrStatus('Reading 25 letter cells…');
     setOcrProgress(15);
 
-    const MAXDIM = 880;
+    const MAXDIM = 1200;
     let iw = img.naturalWidth, ih = img.naturalHeight;
     const scl = Math.min(1, MAXDIM / Math.max(iw, ih));
     iw = Math.round(iw * scl);
@@ -195,9 +195,11 @@ export function SearchModule({ isActive = true }) {
     ctx.drawImage(img, 0, 0, iw, ih);
 
     const { rowCenters, colCenters, cellW, cellH } = getSearchGrid(iw, ih);
-    const UPSCALE = 2; // Optimal letter height ~60-80px for fast, accurate Tesseract recognition
-    const CROP = 0.88;
-    const PAD_PX = 12;
+    // Same settings as the original app, which read every letter (the faster 2× / no-dilation
+    // pass lost V, J, M, Z): 8× upscale, ~36px of the 40px cell, white margin for Tesseract
+    const UPSCALE = 8;
+    const CROP = 0.90;
+    const PAD_PX = 24;
 
     const newGrid = Array.from({ length: 5 }, () => Array(5).fill(''));
     const newConf = Array.from({ length: 5 }, () => Array(5).fill(100));
@@ -229,19 +231,26 @@ export function SearchModule({ isActive = true }) {
         cellCanvas.width = sw2 * UPSCALE;
         cellCanvas.height = sh2 * UPSCALE;
         cellCtx.imageSmoothingEnabled = true;
-        cellCtx.imageSmoothingQuality = 'medium';
-        cellCtx.drawImage(workCanvas, sx2, sy2, sw2, sh2, 0, 0, cellCanvas.width, cellCanvas.height);
+        cellCtx.imageSmoothingQuality = 'high';
+        const readCell = async (mode) => {
+          cellCtx.drawImage(workCanvas, sx2, sy2, sw2, sh2, 0, 0, cellCanvas.width, cellCanvas.height);
+          preprocessCellCanvas(cellCtx, cellCanvas.width, cellCanvas.height, mode, 1);
+          padCanvas.width = cellCanvas.width + PAD_PX * 2;
+          padCanvas.height = cellCanvas.height + PAD_PX * 2;
+          padCtx.fillStyle = '#FFFFFF';
+          padCtx.fillRect(0, 0, padCanvas.width, padCanvas.height);
+          padCtx.drawImage(cellCanvas, PAD_PX, PAD_PX);
+          return recognizeCellConsensus(worker, padCanvas);
+        };
 
-        preprocessCellCanvas(cellCtx, cellCanvas.width, cellCanvas.height, 'otsu', 0);
-
-        padCanvas.width = cellCanvas.width + PAD_PX * 2;
-        padCanvas.height = cellCanvas.height + PAD_PX * 2;
-        padCtx.fillStyle = '#FFFFFF';
-        padCtx.fillRect(0, 0, padCanvas.width, padCanvas.height);
-        padCtx.drawImage(cellCanvas, PAD_PX, PAD_PX);
-
-        const rec = await recognizeCell(worker, padCanvas);
+        let rec = await readCell('otsu');
         if (stale()) return;
+        // unreadable or unsure: retry with the simple brightness threshold
+        if (rec.letter === '?' || rec.confidence < 30) {
+          const retry = await readCell('adaptive');
+          if (stale()) return;
+          if (retry.confidence > rec.confidence) rec = retry;
+        }
         newGrid[r][c] = rec.letter;
         newConf[r][c] = rec.confidence;
         done++;

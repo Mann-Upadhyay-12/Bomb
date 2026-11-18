@@ -10,8 +10,21 @@ import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
 import { CopyLines } from '../../core/components/CopyLines.jsx';
 import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
 import { DiagramWorking, DG_LAYOUTS } from './working.jsx';
+import { useInstance } from '../../core/InstanceContext.jsx';
+import { dgSplitPanels, dgStripStore, useDiagramStrip } from './diagramStrip.js';
 
 const DG_LETTERS = ['A', 'B', 'C'];
+
+// Several Diagram cards side by side: the by-hand controls fold away so the answer stays on screen
+function HandControls({ folded, children }) {
+  if (!folded) return <>{children}</>;
+  return (
+    <details className="dg-hand">
+      <summary>✎ Set circles / shading by hand</summary>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px' }}>{children}</div>
+    </details>
+  );
+}
 
 // Render A/B/C in a few common fonts and add them as extra glyph templates
 // (ported from the original single-file app) to improve circle-label recognition.
@@ -42,6 +55,8 @@ function ensureFontTemplates() {
 }
 
 export function DiagramModule({ isActive = true }) {
+  const inst = useInstance();
+  const myIndex = inst ? inst.index : 0;
   const { copyOnDecode, setLastCopyString } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
@@ -195,6 +210,40 @@ export function DiagramModule({ isActive = true }) {
     }
   };
 
+  // A screenshot with several DIAGRAM panels (the strip): panel #n goes to Diagram card #n
+  const onPicture = (img, dataUri) => {
+    let pieces = [];
+    try {
+      const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+      const sc = Math.min(1, 2000 / Math.max(iw, ih));
+      const W = Math.max(1, Math.round(iw * sc)), H = Math.max(1, Math.round(ih * sc));
+      const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+      const g = cv.getContext('2d', { willReadFrequently: true });
+      g.drawImage(img, 0, 0, W, H);
+      pieces = dgSplitPanels(g.getImageData(0, 0, W, H).data, W, H).map(r => {
+        const pc = document.createElement('canvas'); pc.width = r.w; pc.height = r.h;
+        pc.getContext('2d').drawImage(cv, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
+        return { url: pc.toDataURL('image/png') };
+      });
+    } catch (e) { pieces = []; }
+    if (pieces.length < 2) { analyzeImage(img, dataUri); return; }
+    const room = inst && inst.grow ? inst.grow(pieces.length) : (inst ? inst.count : 1);
+    dgStripStore.publish(pieces);
+    showToast(pieces.length > room
+      ? `${pieces.length} DIAGRAMS FOUND — ONLY ${room} CARD${room > 1 ? 'S' : ''} ON THIS LEVEL`
+      : `${pieces.length} DIAGRAMS FOUND — ONE PER CARD ✓`);
+  };
+
+  // Take this card's piece of the latest strip (also when the card was just added for it)
+  const strip = useDiagramStrip();
+  React.useEffect(() => {
+    const piece = dgStripStore.take(myIndex);
+    if (!piece) return;
+    const im = new Image();
+    im.onload = () => analyzeImage(im, piece.url);
+    im.src = piece.url;
+  }, [strip.version, myIndex]);
+
   // Multiple screenshots (labels + shading) dropped/pasted at once: process sequentially
   const handleFiles = (files) => {
     Array.from(files)
@@ -203,7 +252,7 @@ export function DiagramModule({ isActive = true }) {
         const reader = new FileReader();
         reader.onload = ev => {
           const img = new Image();
-          img.onload = () => analyzeImage(img, ev.target.result);
+          img.onload = () => onPicture(img, ev.target.result);
           img.src = ev.target.result;
         };
         reader.readAsDataURL(f);
@@ -262,8 +311,11 @@ export function DiagramModule({ isActive = true }) {
     setLettersState({ ...lettersState, [layoutKey]: updated });
   };
 
+  // "Null" is only an answer once the shading screenshot was read (or something was shaded by hand) —
+  // not after a labels-only screenshot
+  const shown = Boolean(expr) && (expr !== 'Null' || currentSel.size > 0 || roundRef.current.shade);
   const copyItems = [];
-  if (expr && expr !== 'Null') {
+  if (shown) {
     copyItems.push({ label: `COPY FORMULA (${expr})`, value: expr });
   }
 
@@ -279,11 +331,11 @@ export function DiagramModule({ isActive = true }) {
         <ModuleInput
           dropzone={
             <Dropzone
-              onImage={(img, dataUri) => analyzeImage(img, dataUri)}
+              onImage={(img, dataUri) => onPicture(img, dataUri)}
               onFiles={handleFiles}
               multiple
               icon="🔵 🔴 🟡"
-              title="Upload diagram screenshot (multiple tiles supported)"
+              title="Paste a diagram — a strip of several DIAGRAM panels fills one card each"
             />
           }
           controls={
@@ -303,9 +355,18 @@ export function DiagramModule({ isActive = true }) {
           }
         >
           <div className="diagram-config" style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '16px' }}>
+            {/* Which region the answer describes — the simple switch from the original app */}
+            <div className="seg-wrap">
+              <span className="seg-label">ANSWER FOR</span>
+              <div className="seg" role="group" aria-label="Answer for the shaded or the unshaded region">
+                <button type="button" className={!showUnshaded ? 'on' : ''} aria-pressed={!showUnshaded} onClick={() => setShowUnshaded(false)}>SHADED</button>
+                <button type="button" className={showUnshaded ? 'on' : ''} aria-pressed={showUnshaded} onClick={() => setShowUnshaded(true)}>UNSHADED</button>
+              </div>
+            </div>
             {hint.text && (
               <div className={`module-hint ${hint.kind === 'bad' ? 'bad' : 'ok'}`}>{hint.text}</div>
             )}
+            <HandControls folded={Boolean(inst && inst.multi)}>
             <div className="mode-row" style={{ display: 'flex', gap: '10px' }}>
               <button
                 type="button"
@@ -386,6 +447,7 @@ export function DiagramModule({ isActive = true }) {
                 <button type="button" className="bg-btn" onClick={handleClearShading}>CLEAR</button>
               </div>
             </div>
+            </HandControls>
           </div>
         </ModuleInput>
       }
@@ -393,8 +455,8 @@ export function DiagramModule({ isActive = true }) {
         <AnswerPanel
           label={`SET NOTATION — ${word} REGION`}
           stats={stampStats}
-          answers={expr && expr !== 'Null' ? [expr] : []}
-          copyValue={expr}
+          answers={shown ? [expr] : []}
+          copyValue={shown ? expr : ''}
           placeholder={`Null — nothing ${word.toLowerCase()}`}
         />
       }
