@@ -1,6 +1,8 @@
 // Stockfish web worker controller & FEN utilities
+import { INLINE_ENGINE, loadStockfishSource } from './stockfishSource.js';
 
 export const ENGINE_URLS = [
+  INLINE_ENGINE,
   '/stockfish.js',
   'stockfish.js',
   'https://cdn.jsdelivr.net/npm/stockfish.js@10.0.2/stockfish.js',
@@ -33,7 +35,7 @@ export function startEngine(onStatusChange) {
       try {
         let source = '';
         try {
-          source = await (await fetch(url)).text();
+          source = url === INLINE_ENGINE ? await loadStockfishSource() : await (await fetch(url)).text();
         } catch (e) {}
 
         if (source) {
@@ -105,6 +107,7 @@ export async function askEngine(fen, milliseconds, onInfo, owner = 'default') {
     // After 'stop' the old search still prints its bestmove; UCI processes commands in
     // order, so everything before the 'readyok' answering our 'isready' belongs to it.
     let waitingForBarrier = stoppedPrevious;
+    let stopSent = false;
     const finish = (val) => {
       clearTimeout(timer);
       if (pendingResolve === finish) pendingResolve = null;
@@ -122,11 +125,18 @@ export async function askEngine(fen, milliseconds, onInfo, owner = 'default') {
         if (line.includes('readyok')) waitingForBarrier = false;
         return;
       }
-      if (line.startsWith('info') && line.includes(' score ') && onInfo) {
+      if (line.startsWith('info') && line.includes(' score ')) {
         const depth = (line.match(/ depth (\d+)/) || [])[1] || '';
         const cp = (line.match(/score cp (-?\d+)/) || [])[1] || '';
         const mate = (line.match(/score mate (-?\d+)/) || [])[1] || '';
-        onInfo({ depth, cp, mate });
+        if (onInfo) onInfo({ depth, cp, mate });
+        // A forced mate proven at a depth well past its length can't be beaten by thinking longer
+        // (any shorter mate would have shown up at a lower depth): answer now instead of after the
+        // full movetime. Same rule as the 5-Chess batch solver (chess63Core.js).
+        if (!stopSent && mate && +mate > 0 && +depth >= Math.min(12, +mate * 2 + 2)) {
+          stopSent = true;
+          worker.postMessage('stop');
+        }
       }
       if (line.startsWith('bestmove')) {
         finish(line.split(' ')[1]);

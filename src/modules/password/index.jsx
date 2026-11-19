@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useId, useRef } from 'react';
+import { preWarmOCR } from '../search/searchOCR.js';
 import { MASTER_PASSWORDS, filterPasswordCandidates } from './passwordSolver.js';
 import { readPasswordRow } from './passwordVision.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
@@ -20,6 +21,8 @@ export const PASSWORD_WORDS_KEY = 'bombvision_password_words';
 export const PASSWORD_DEFAULT_WORDS = MASTER_PASSWORDS.join(' ');
 
 export function PasswordModule({ isActive = true }) {
+  // start the OCR engine while the screenshot is being taken, so the first read doesn't wait for it
+  React.useEffect(() => { preWarmOCR(); }, []);
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();

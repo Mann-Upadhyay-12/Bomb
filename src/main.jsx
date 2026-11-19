@@ -50,6 +50,9 @@ function addStyle(text, id) {
 
 const rootEl = document.getElementById('root');
 const game = currentGame();
+// A hash edited by hand (#play=bomb ↔ #play=heist) doesn't reload the page on its own: do it, so
+// only one game's code and CSS are ever live.
+window.addEventListener('hashchange', () => { if (currentGame() !== game) location.reload(); });
 addStyle(chooserCss, 'css-chooser');
 
 async function boot() {

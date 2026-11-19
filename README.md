@@ -2,7 +2,7 @@
 
 A browser tool that solves the bomb-defusal puzzle modules of a heist minigame from screenshots. Paste a screenshot of a module, the page reads the board with computer vision or OCR, runs a solver, and copies the answer to the clipboard. Everything runs client-side in one static page; Tesseract.js, chess.js and the fonts are loaded from public CDNs.
 
-**Live demo:** not deployed yet.
+**Live demo:** not deployed yet. What changed when: [CHANGELOG.md](CHANGELOG.md). Plan for a cheaper captcha model: [docs/ml-roadmap.md](docs/ml-roadmap.md).
 
 ![Symbols module with the built-in sample](docs/symbols-solver.png)
 
@@ -36,13 +36,16 @@ npm install
 npm run dev        # http://localhost:3000
 npm run build      # dist/index.html with all app code inlined
 npm test
+npm run build:captcha-wasm   # only after editing src/heist/captcha/captchaKernel.c (needs clang)
 ```
+
+The Heist captcha reader runs its network in WebAssembly SIMD (`src/heist/captcha/captchaKernel.c`, embedded as base64 in `captchaKernelWasm.js`); browsers without WebAssembly SIMD use the plain-JS version of the same network.
 
 Several modules have a **SAMPLE** button that loads a built-in board, so you can see a solver work without a screenshot.
 
 ## Tests
 
-`npm test` runs 21 tests on the solvers with Node's built-in test runner (no extra dependencies):
+`npm test` runs 45 tests on the solvers with Node's built-in test runner (no extra dependencies):
 
 - **Mines**: on 2,000 random boards the solver never calls a mine safe or a safe square a mine; on 400 boards small enough to enumerate every mine layout, its output is exactly the set of squares forced by the clues.
 - **Morse**: every word in the frequency table decodes correctly, including captures that start mid-word and timings with 20% jitter.

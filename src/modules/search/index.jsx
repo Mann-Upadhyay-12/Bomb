@@ -235,70 +235,78 @@ export function SearchModule({ isActive = true }) {
     const newConf = Array.from({ length: 5 }, () => Array(5).fill(100));
     let done = 0;
 
-    const cellCanvas = document.createElement('canvas');
-    const cellCtx = cellCanvas.getContext('2d');
-    const padCanvas = document.createElement('canvas');
-    const padCtx = padCanvas.getContext('2d');
+    // Unclear cells are read in parallel (the OCR pool runs them on as many workers as it has);
+    // each cell has its own canvases, so the pixels Tesseract sees are the same as one at a time.
+    const readOne = async (r, c) => {
+      const cy = rowCenters[r];
+      const cx = colCenters[c];
+      const cW = Math.round(cellW * CROP);
+      const cH = Math.round(cellH * CROP);
+      const sx2 = Math.max(0, Math.round(cx - cW / 2));
+      const sy2 = Math.max(0, Math.round(cy - cH / 2));
+      const sw2 = Math.min(iw - sx2, cW);
+      const sh2 = Math.min(ih - sy2, cH);
 
+      if (sw2 < 4 || sh2 < 4) {
+        newGrid[r][c] = '?';
+        newConf[r][c] = 0;
+        done++;
+        return;
+      }
+
+      const cellCanvas = document.createElement('canvas');
+      const cellCtx = cellCanvas.getContext('2d');
+      const padCanvas = document.createElement('canvas');
+      const padCtx = padCanvas.getContext('2d');
+      cellCanvas.width = sw2 * UPSCALE;
+      cellCanvas.height = sh2 * UPSCALE;
+      cellCtx.imageSmoothingEnabled = true;
+      cellCtx.imageSmoothingQuality = 'high';
+      const readCell = async (mode) => {
+        cellCtx.drawImage(workCanvas, sx2, sy2, sw2, sh2, 0, 0, cellCanvas.width, cellCanvas.height);
+        preprocessCellCanvas(cellCtx, cellCanvas.width, cellCanvas.height, mode, 1);
+        padCanvas.width = cellCanvas.width + PAD_PX * 2;
+        padCanvas.height = cellCanvas.height + PAD_PX * 2;
+        padCtx.fillStyle = '#FFFFFF';
+        padCtx.fillRect(0, 0, padCanvas.width, padCanvas.height);
+        padCtx.drawImage(cellCanvas, PAD_PX, PAD_PX);
+        return recognizeCellConsensus(worker, padCanvas);
+      };
+
+      let rec = await readCell('otsu');
+      if (stale()) return;
+      // unreadable or unsure: retry with the simple brightness threshold
+      if (rec.letter === '?' || rec.confidence < 30) {
+        const retry = await readCell('adaptive');
+        if (stale()) return;
+        if (retry.confidence > rec.confidence) rec = retry;
+      }
+      // the shape vetoes OCR letters it clearly disagrees with (W read as J …)
+      newGrid[r][c] = combineGlyphOcr(shape[r][c].f, shape[r][c].m, rec.letter, SEARCH_GLYPHS);
+      newConf[r][c] = newGrid[r][c] === rec.letter ? rec.confidence : Math.round(shape[r][c].m.score * 100);
+      done++;
+
+      // Live progressive update of grid cells so user sees results in real time
+      setGridData(newGrid.map(row => [...row]));
+      setConfidence(newConf.map(row => [...row]));
+      setOcrProgress(Math.round(15 + (done / 25) * 85));
+      setOcrStatus(`Reading cell ${done}/25: [${rec.letter || '?'}]`);
+    };
+
+    const jobs = [];
     for (let r = 0; r < 5; r++) {
       for (let c = 0; c < 5; c++) {
         if (shape[r][c].m.sure) {
           newGrid[r][c] = shape[r][c].m.letter;
           newConf[r][c] = Math.round(shape[r][c].m.score * 100);
           done++;
-          continue;
+        } else {
+          jobs.push(readOne(r, c));
         }
-        const cy = rowCenters[r];
-        const cx = colCenters[c];
-        const cW = Math.round(cellW * CROP);
-        const cH = Math.round(cellH * CROP);
-        const sx2 = Math.max(0, Math.round(cx - cW / 2));
-        const sy2 = Math.max(0, Math.round(cy - cH / 2));
-        const sw2 = Math.min(iw - sx2, cW);
-        const sh2 = Math.min(ih - sy2, cH);
-
-        if (sw2 < 4 || sh2 < 4) {
-          newGrid[r][c] = '?';
-          newConf[r][c] = 0;
-          done++;
-          continue;
-        }
-
-        cellCanvas.width = sw2 * UPSCALE;
-        cellCanvas.height = sh2 * UPSCALE;
-        cellCtx.imageSmoothingEnabled = true;
-        cellCtx.imageSmoothingQuality = 'high';
-        const readCell = async (mode) => {
-          cellCtx.drawImage(workCanvas, sx2, sy2, sw2, sh2, 0, 0, cellCanvas.width, cellCanvas.height);
-          preprocessCellCanvas(cellCtx, cellCanvas.width, cellCanvas.height, mode, 1);
-          padCanvas.width = cellCanvas.width + PAD_PX * 2;
-          padCanvas.height = cellCanvas.height + PAD_PX * 2;
-          padCtx.fillStyle = '#FFFFFF';
-          padCtx.fillRect(0, 0, padCanvas.width, padCanvas.height);
-          padCtx.drawImage(cellCanvas, PAD_PX, PAD_PX);
-          return recognizeCellConsensus(worker, padCanvas);
-        };
-
-        let rec = await readCell('otsu');
-        if (stale()) return;
-        // unreadable or unsure: retry with the simple brightness threshold
-        if (rec.letter === '?' || rec.confidence < 30) {
-          const retry = await readCell('adaptive');
-          if (stale()) return;
-          if (retry.confidence > rec.confidence) rec = retry;
-        }
-        // the shape vetoes OCR letters it clearly disagrees with (W read as J …)
-        newGrid[r][c] = combineGlyphOcr(shape[r][c].f, shape[r][c].m, rec.letter, SEARCH_GLYPHS);
-        newConf[r][c] = newGrid[r][c] === rec.letter ? rec.confidence : Math.round(shape[r][c].m.score * 100);
-        done++;
-
-        // Live progressive update of grid cells so user sees results in real time
-        setGridData(newGrid.map(row => [...row]));
-        setConfidence(newConf.map(row => [...row]));
-        setOcrProgress(Math.round(15 + (done / 25) * 85));
-        setOcrStatus(`Reading cell ${done}/25: [${rec.letter || '?'}]`);
       }
     }
+    await Promise.all(jobs);
+    if (stale()) return;
 
     setGridData(newGrid.map(row => [...row]));
     setConfidence(newConf.map(row => [...row]));

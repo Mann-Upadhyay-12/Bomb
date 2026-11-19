@@ -1,60 +1,115 @@
-// Tesseract OCR pipeline for 5x5 Word Search & Knob modules
+// Tesseract OCR for every Bombs module that reads text (Word Search, Password, Who's on First,
+// Balance, Button, Knobs): the shared worker pool and the Word Search cell readers
 
 import { computeOtsuThreshold } from '../../utils/otsu.js';
 
-let _ocrWorker = null;
-let _ocrPromise = null;
+// ── Tesseract worker pool ──
+// Every OCR module asks ensureOCRWorker() for a worker. What it gets is a lightweight handle with
+// its own settings: setParameters() only records them, and recognize() borrows a real Tesseract
+// worker exclusively, applies the handle's settings, reads, and gives the worker back. So two
+// modules reading at once can no longer swap each other's whitelist / page mode between the two
+// calls (they shared one worker before), and independent reads can run on more than one worker.
+// A second worker is only started when a read has to wait, so single reads cost what they did.
 
-export async function ensureOCRWorker(onProgress) {
-  if (_ocrWorker) return _ocrWorker;
-  if (_ocrPromise) return _ocrPromise;
+const BASE_PARAMS = { tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ012568', tessedit_pageseg_mode: '10' };
+const POOL_MAX = (() => {
+  const cores = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 2;
+  const mem = (typeof navigator !== 'undefined' && navigator.deviceMemory) || 8;
+  return cores >= 12 && mem >= 8 ? 3 : cores >= 4 && mem >= 4 ? 2 : 1;
+})();
 
-  _ocrPromise = (async () => {
-    if (typeof Tesseract === 'undefined') {
-      throw new Error('Tesseract.js library not loaded — check network connection');
-    }
+const pool = [];        // { w, params, busy }
+const waiting = [];     // resolve functions of reads waiting for a worker
+let spawning = 0;
+let firstReady = null;  // promise of the first worker (null until asked, reset if it fails)
+let progressListener = null;
 
-    // Protect with a 60-second timeout (first run downloads the ~10MB model) so it never hangs indefinitely
-    let timerId;
-    const timeoutPromise = new Promise((_, reject) => {
-      timerId = setTimeout(() => {
-        reject(new Error('OCR engine initialization timed out (60s)'));
-      }, 60000);
+function createTessWorker() {
+  if (typeof Tesseract === 'undefined') {
+    return Promise.reject(new Error('Tesseract.js library not loaded — check network connection'));
+  }
+  // 60-second guard (the first run downloads the ~10MB model) so it never hangs indefinitely
+  let timerId;
+  const timeout = new Promise((_, reject) => {
+    timerId = setTimeout(() => reject(new Error('OCR engine initialization timed out (60s)')), 60000);
+  });
+  const init = (async () => {
+    const w = await Tesseract.createWorker('eng', 1, {
+      logger: m => { if (m && progressListener) { try { progressListener(m); } catch (_) {} } }
     });
-
-    const initWorker = async () => {
-      const worker = await Tesseract.createWorker('eng', 1, {
-        logger: m => {
-          if (m && onProgress) {
-            try { onProgress(m); } catch (_) {}
-          }
-        }
-      });
-
-      await worker.setParameters({
-        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ012568',
-        tessedit_pageseg_mode: '10'
-      });
-      return worker;
-    };
-
-    try {
-      _ocrWorker = await Promise.race([initWorker(), timeoutPromise]);
-      clearTimeout(timerId);
-      return _ocrWorker;
-    } catch (err) {
-      clearTimeout(timerId);
-      _ocrWorker = null;
-      _ocrPromise = null;
-      throw err;
-    }
+    await w.setParameters(BASE_PARAMS);
+    return { w, params: { ...BASE_PARAMS }, busy: false };
   })();
+  return Promise.race([init, timeout]).finally(() => clearTimeout(timerId));
+}
 
-  return _ocrPromise;
+function handOut(slot) {
+  const next = waiting.shift();
+  if (next) { slot.busy = true; next(slot); } else slot.busy = false;
+}
+
+function spawnExtra() {
+  spawning++;
+  createTessWorker().then(slot => { spawning--; pool.push(slot); handOut(slot); })
+    .catch(() => { spawning--; }); // the pool just stays smaller
+}
+
+async function lease() {
+  await ensurePool();
+  const free = pool.find(s => !s.busy);
+  if (free) { free.busy = true; return free; }
+  if (pool.length + spawning < POOL_MAX) spawnExtra();
+  return new Promise(resolve => waiting.push(resolve));
+}
+
+function ensurePool(onProgress) {
+  if (onProgress) progressListener = onProgress;
+  if (!firstReady) {
+    spawning++;
+    firstReady = createTessWorker().then(slot => { spawning--; pool.push(slot); handOut(slot); return slot; },
+      err => { spawning--; firstReady = null; throw err; });
+  }
+  return firstReady;
+}
+
+/**
+ * One read on a pooled worker with these settings (only the ones that differ are re-sent).
+ * `limitMs` times the read itself, not the wait for a free worker; a read that runs over is
+ * reported as a timeout but keeps its worker until Tesseract has actually finished.
+ */
+async function readWith(params, image, options, limitMs) {
+  const slot = await lease();
+  const job = (async () => {
+    const diff = {};
+    let changed = false;
+    for (const k in params) if (slot.params[k] !== params[k]) { diff[k] = params[k]; changed = true; }
+    if (changed) { await slot.w.setParameters(diff); Object.assign(slot.params, diff); }
+    return slot.w.recognize(image, options);
+  })();
+  job.then(() => handOut(slot), () => handOut(slot));
+  if (!limitMs) return job;
+  let timer;
+  const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Cell OCR timeout')), limitMs); });
+  try { return await Promise.race([job, timeout]); } finally { clearTimeout(timer); }
+}
+
+/**
+ * A worker handle for one OCR job. Same calls as a Tesseract worker (setParameters, recognize);
+ * use one handle per independent sequence of reads, so parallel reads keep their own settings.
+ */
+export async function ensureOCRWorker(onProgress) {
+  await ensurePool(onProgress);
+  let params = {};
+  return {
+    setParameters: async p => { params = { ...params, ...p }; return {}; },
+    recognize: (image, options) => readWith(params, image, options),
+    /** recognize() that gives up (rejects) after `ms` of reading time */
+    recognizeWithin: (ms, image, options) => readWith(params, image, options, ms)
+  };
 }
 
 export function preWarmOCR() {
-  ensureOCRWorker().catch(() => {});
+  ensurePool().catch(() => {});
 }
 
 export function applyMorphologicalDilation(binary, width, height, iterations = 1) {
@@ -154,26 +209,14 @@ export async function recognizeCell(worker, padCanvas) {
 
   for (const psm of psms) {
     try {
-      const callPromise = (async () => {
-        await worker.setParameters({
-          tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ012568',
-          tessedit_pageseg_mode: psm,
-          user_defined_dpi: '150'
-        });
-        const { data } = await worker.recognize(padCanvas);
-        const letter = sanitizeSearchLetter(data?.text);
-        const conf = Number(data?.confidence ?? 0);
-        return { letter, conf };
-      })();
-
-      // 2500ms timeout per cell to ensure nothing ever stalls the pipeline
-      let timer;
-      const timeout = new Promise((_, rej) => {
-        timer = setTimeout(() => rej(new Error('Cell OCR timeout')), 2500);
+      await worker.setParameters({
+        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ012568',
+        tessedit_pageseg_mode: psm,
+        user_defined_dpi: '150'
       });
-
-      const res = await Promise.race([callPromise, timeout]);
-      clearTimeout(timer);
+      // 2500ms of reading time per cell so nothing ever stalls the pipeline
+      const { data } = await worker.recognizeWithin(2500, padCanvas);
+      const res = { letter: sanitizeSearchLetter(data?.text), conf: Number(data?.confidence ?? 0) };
 
       if (res.letter) {
         candidates.push(res);
@@ -201,26 +244,22 @@ export async function recognizeCell(worker, padCanvas) {
  * grid): runs PSM 6 / 8 / 13 / 10 on the same cell and votes. Single-mode reading dropped
  * letters such as V, J, M and Z.
  */
-export async function recognizeCellConsensus(worker, padCanvas) {
-  const rawResults = [];
-  for (const psm of ['6', '8', '13', '10']) {
+export async function recognizeCellConsensus(_worker, padCanvas) {
+  // the four modes are independent reads of the same canvas: run them side by side (own handles,
+  // so each keeps its own page mode), then vote in the same mode order as before
+  const reads = await Promise.all(['6', '8', '13', '10'].map(async psm => {
     try {
-      const call = (async () => {
-        await worker.setParameters({
-          tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ012568',
-          tessedit_pageseg_mode: psm,
-          user_defined_dpi: '300'
-        });
-        const { data } = await worker.recognize(padCanvas);
-        return { letter: sanitizeSearchLetter(data?.text), conf: Number(data?.confidence ?? 0) };
-      })();
-      let timer;
-      const timeout = new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('Cell OCR timeout')), 4000); });
-      const res = await Promise.race([call, timeout]);
-      clearTimeout(timer);
-      if (res.letter) rawResults.push(res);
-    } catch (_) {}
-  }
+      const w = await ensureOCRWorker();
+      await w.setParameters({
+        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ012568',
+        tessedit_pageseg_mode: psm,
+        user_defined_dpi: '300'
+      });
+      const { data } = await w.recognizeWithin(4000, padCanvas);
+      return { letter: sanitizeSearchLetter(data?.text), conf: Number(data?.confidence ?? 0) };
+    } catch (_) { return null; }
+  }));
+  const rawResults = reads.filter(r => r && r.letter);
   if (!rawResults.length) return { letter: '?', confidence: 0 };
 
   // agreement across modes outweighs one mode's confidence

@@ -2,6 +2,7 @@
 // once after HeistApp has put the page markup in place. Only one app (Heist or Bombs) runs per
 // page load, so the window listeners it adds never need removing.
 /* eslint-disable */
+import { CAPTCHA_KERNEL_WASM } from './captcha/captchaKernelWasm.js';
 let mounted = false;
 export function mountHeist() {
   if (mounted) return;
@@ -405,14 +406,22 @@ const NATIVE = [[360, 4], [434, 6], [542, 8]];
 const DIFF = {4: 'EASY', 6: 'MID', 8: 'HARD'};
 let MODEL = null;
 
-function b64f16(s) {
-  const bin = atob(s), u = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
-  const h = new Uint16Array(u.buffer), f = new Float32Array(h.length);
-  for (let i = 0; i < h.length; i++) {
-    const x = h[i], sg = (x & 0x8000) ? -1 : 1, e = (x >> 10) & 31, m = x & 1023;
-    f[i] = e === 0 ? sg * Math.pow(2, -14) * (m / 1024) : e === 31 ? 0 : sg * Math.pow(2, e - 15) * (1 + m / 1024);
+// float16 → float32 for all 65536 bit patterns, built once (inf/NaN read as 0, as before).
+let F16 = null;
+function f16Table() {
+  if (F16) return F16;
+  F16 = new Float32Array(65536);
+  for (let x = 0; x < 65536; x++) {
+    const sg = (x & 0x8000) ? -1 : 1, e = (x >> 10) & 31, m = x & 1023;
+    F16[x] = e === 0 ? sg * Math.pow(2, -14) * (m / 1024) : e === 31 ? 0 : sg * Math.pow(2, e - 15) * (1 + m / 1024);
   }
+  return F16;
+}
+// base64 float16 weights → float32, into `out` (at element offset `at`) or a new array.
+function b64f16(s, out, at = 0) {
+  const bin = atob(s), n = bin.length >> 1, lut = f16Table();
+  const f = out || new Float32Array(n);
+  for (let i = 0, j = 0; i < n; i++, j += 2) f[at + i] = lut[bin.charCodeAt(j) | (bin.charCodeAt(j + 1) << 8)];
   return f;
 }
 
@@ -643,9 +652,7 @@ function getScratch(m, T, D, FF, C) {
       ffUp: new Float32Array(T * FF),
       ffDown: new Float32Array(T * D),
       logits: new Float32Array(T * C),
-      logProbs: new Float32Array(T * C),
-      decCur: new Float32Array(9 * C),
-      decNxt: new Float32Array(9 * C)
+      logProbs: new Float32Array(T * C)
     };
   }
   return m._bufs;
@@ -710,10 +717,9 @@ function forwardCTC(m, img, H, W) {
 function fixedLenDecode(lp, T, Kc, N, charset) {
   const B = Kc - 1;
   const NEG = -1e18;
-  const bufs = getScratch(MODEL, T, MODEL.d, 768, Kc);
   const stateLen = (N + 1) * Kc;
-  let cur = bufs.decCur;
-  let nxt = bufs.decNxt;
+  let cur = new Float32Array(stateLen);
+  let nxt = new Float32Array(stateLen);
   cur.fill(NEG, 0, stateLen);
   cur[0 * Kc + B] = 0.0;
 
@@ -831,6 +837,157 @@ function fixedLenDecode(lp, T, Kc, N, charset) {
   return {text, conf, slots};
 }
 
+// ── WebAssembly SIMD engine (captcha/captchaKernel.c) ──
+// The same network as forwardCTC, in float32 SIMD, with all TTA reads run as one batch.
+// Compiled in the background when the page mounts; until it is ready (or where WebAssembly SIMD is
+// missing) recognize() uses the JS forward pass above, so a captcha is never refused.
+let WASM = null, wasmStarted = false;
+
+function startWasm() {
+  if (wasmStarted) return;
+  wasmStarted = true;
+  try {
+    if (typeof WebAssembly !== 'object' || !CAPTCHA_KERNEL_WASM) return;
+    const bin = atob(CAPTCHA_KERNEL_WASM), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    if (!WebAssembly.validate(bytes)) return; // no SIMD support: stay on the JS path
+    const memory = new WebAssembly.Memory({initial: 1});
+    WebAssembly.instantiate(bytes, {env: {memory}})
+      .then(({instance}) => { WASM = buildWasmEngine(instance.exports, memory); })
+      .catch(e => { try { console.warn('[CaptchaVision] WebAssembly engine unavailable, using JS', e); } catch (_) {} });
+  } catch (e) { /* JS path */ }
+}
+
+// Lays out the weights and every scratch buffer in wasm memory once; shapes come from SPEC.
+function buildWasmEngine(ex, memory) {
+  const D = SPEC.d, FF = SPEC.ff || 768, C = SPEC.head.nout;
+  const B = SPEC.tta && Array.isArray(SPEC.tta.shifts) && SPEC.tta.shifts.length > 1 ? SPEC.tta.shifts.length : 1;
+  const H0 = 105, W0 = (NATIVE[NATIVE.length - 1][0] / 2) | 0; // largest half-res input
+  let top = (ex.__heap_base.value + 15) & ~15;
+  const plan = [];
+  const alloc = n => { const at = top; top += ((n * 4 + 15) & ~15); return at; };
+  const tensor = s => { const n = (s.length * 3) >> 3; const at = alloc(n); plan.push([s, at]); return at; };
+  const lin = (w, b, nin, nout) => ({w: tensor(w), b: tensor(b), nin, nout});
+  const ln = l => ({g: tensor(l.gamma), b: tensor(l.beta)});
+
+  // stem shapes for the largest input decide the conv buffers
+  let h = H0, w = W0, c = 3, maxAct = h * w * c, maxCol = 0;
+  const stem = SPEC.stem_conv.map(l => {
+    const py = pad(h, l.k, l.sy), px = pad(w, l.k, l.sx);
+    maxCol = Math.max(maxCol, py.out * px.out * l.k * l.k * c);
+    maxAct = Math.max(maxAct, py.out * px.out * l.cout);
+    const L = {k: l.k, sy: l.sy, sx: l.sx, cout: l.cout, w: tensor(l.w), b: tensor(l.b)};
+    h = py.out; w = px.out; c = l.cout;
+    return L;
+  });
+  const Tmax = w, F = h * c, R = B * Tmax;
+  if (F !== SPEC.dense0.nin) throw new Error('unexpected stem output');
+  const net = {
+    stem,
+    dense0: lin(SPEC.dense0.w, SPEC.dense0.b, F, D),
+    ln0: ln(SPEC.ln0),
+    blocks: SPEC.blocks.map(b => ({
+      ln_att: ln(b.ln_att), q: lin(b.q_w, b.q_b, D, D), k: lin(b.k_w, b.k_b, D, D), v: lin(b.v_w, b.v_b, D, D),
+      o: lin(b.o_w, b.o_b, D, D), ln_ff: ln(b.ln_ff), up: lin(b.up_w, b.up_b, D, FF), down: lin(b.down_w, b.down_b, FF, D)
+    })),
+    ln_final: ln(SPEC.ln_final),
+    head: lin(SPEC.head.w, SPEC.head.b, D, C)
+  };
+  const buf = {
+    img: alloc(H0 * W0 * 3), actA: alloc(maxAct), actB: alloc(maxAct), col: alloc(maxCol),
+    seq: alloc(R * F), cur: alloc(R * D), norm: alloc(R * D), Q: alloc(R * D), K: alloc(R * D), V: alloc(R * D),
+    concat: alloc(R * D), tmp: alloc(R * D), ffUp: alloc(R * FF), logits: alloc(R * C), scores: alloc(Tmax)
+  };
+  const need = Math.ceil(top / 65536) - memory.buffer.byteLength / 65536;
+  if (need > 0) memory.grow(need);
+  const f32 = new Float32Array(memory.buffer);
+  for (const [s, at] of plan) b64f16(s, f32, at >> 2);
+  // sinusoidal position table, same values posEnc adds
+  const pe = new Float64Array(Tmax * D), half = D >> 1;
+  for (let t = 0; t < Tmax; t++) for (let i = 0; i < half; i++) {
+    const ang = t / Math.pow(10000.0, (2.0 * i) / D);
+    pe[t * D + i] = Math.sin(ang); pe[t * D + half + i] = Math.cos(ang);
+  }
+  return {ex, f32, net, buf, pe, D, FF, C, F, H0, W0, maxBatch: B, Tmax};
+}
+
+// Forward pass for a batch of half-res images (each H×W×3) → per image {lp, T, K} log-probs.
+function forwardWasm(E, imgs, H, W) {
+  const {ex, f32, net, buf, pe, D, FF, C, F} = E;
+  const lin = (x, rows, L, y) => ex.linear(x, rows, L.nin, L.w, L.b, L.nout, y);
+  let T = 0;
+  imgs.forEach((img, b) => {
+    f32.set(img, buf.img >> 2);
+    let src = buf.img, h = H, w = W, c = 3, dst = buf.actA;
+    for (const L of net.stem) {
+      const py = pad(h, L.k, L.sy), px = pad(w, L.k, L.sx), rows = py.out * px.out;
+      ex.im2col(src, h, w, c, L.k, L.sy, L.sx, py.pad, px.pad, py.out, px.out, buf.col);
+      ex.linear(buf.col, rows, L.k * L.k * c, L.w, L.b, L.cout, dst);
+      ex.relu(dst, rows * L.cout);
+      src = dst; dst = dst === buf.actA ? buf.actB : buf.actA;
+      h = py.out; w = px.out; c = L.cout;
+    }
+    // columns become the sequence: seq[t, y*C + ch] = map[(y*W + t)*C + ch]
+    T = w;
+    const a = src >> 2, seq = (buf.seq >> 2) + b * T * F;
+    for (let t = 0; t < T; t++) for (let y = 0; y < h; y++) {
+      const from = a + (y * w + t) * c, to = seq + t * F + y * c;
+      f32.copyWithin(to, from, from + c);
+    }
+  });
+  const R = imgs.length * T;
+  lin(buf.seq, R, net.dense0, buf.tmp);
+  ex.layernorm(buf.tmp, R, D, net.ln0.g, net.ln0.b, buf.cur);
+  const cur = buf.cur >> 2;
+  for (let b = 0; b < imgs.length; b++) for (let i = 0; i < T * D; i++) f32[cur + b * T * D + i] += pe[i];
+  for (const blk of net.blocks) {
+    ex.layernorm(buf.cur, R, D, blk.ln_att.g, blk.ln_att.b, buf.norm);
+    lin(buf.norm, R, blk.q, buf.Q); lin(buf.norm, R, blk.k, buf.K); lin(buf.norm, R, blk.v, buf.V);
+    for (let b = 0; b < imgs.length; b++) {
+      const off = b * T * D * 4;
+      ex.attention(buf.Q + off, buf.K + off, buf.V + off, T, D, SPEC.heads, buf.concat + off, buf.scores);
+    }
+    lin(buf.concat, R, blk.o, buf.tmp);
+    ex.add(buf.cur, buf.tmp, R * D);
+    ex.layernorm(buf.cur, R, D, blk.ln_ff.g, blk.ln_ff.b, buf.norm);
+    lin(buf.norm, R, blk.up, buf.ffUp);
+    ex.gelu(buf.ffUp, R * FF);
+    lin(buf.ffUp, R, blk.down, buf.tmp);
+    ex.add(buf.cur, buf.tmp, R * D);
+  }
+  ex.layernorm(buf.cur, R, D, net.ln_final.g, net.ln_final.b, buf.norm);
+  lin(buf.norm, R, net.head, buf.logits);
+  // log-softmax per column, in JS doubles like forwardCTC
+  const lg = buf.logits >> 2;
+  return imgs.map((_, b) => {
+    const lp = new Float32Array(T * C);
+    for (let t = 0; t < T; t++) {
+      const base = lg + (b * T + t) * C;
+      let maxL = -1e18;
+      for (let k = 0; k < C; k++) if (f32[base + k] > maxL) maxL = f32[base + k];
+      let sumExp = 0;
+      for (let k = 0; k < C; k++) sumExp += Math.exp(f32[base + k] - maxL);
+      const logSum = maxL + Math.log(sumExp);
+      for (let k = 0; k < C; k++) lp[t * C + k] = f32[base + k] - logSum;
+    }
+    return {lp, T, K: C};
+  });
+}
+
+// All reads of one prepared captcha (one per TTA shift): wasm batch when ready, else the JS pass.
+function readAll(p, shifts) {
+  const imgs = shifts.map(([dx, dy]) => (dx || dy ? shiftImg(p.img, 105, p.W, dx, dy) : p.img));
+  if (WASM && imgs.length <= WASM.maxBatch && p.W <= WASM.W0) {
+    try { return forwardWasm(WASM, imgs, 105, p.W); }
+    catch (e) { try { console.warn('[CaptchaVision] WebAssembly read failed, using JS', e); } catch (_) {} WASM = null; }
+  }
+  if (!MODEL) MODEL = loadModel();
+  return imgs.map(img => {
+    const r = forwardCTC(MODEL, img, 105, p.W);
+    return {lp: Float32Array.from(r.logProbs.subarray(0, r.T * r.nClasses)), T: r.T, K: r.nClasses};
+  });
+}
+
 function prep(src) {
   const sw = src.naturalWidth || src.width, sh = src.naturalHeight || src.height;
   const w210 = sw * 210 / sh;
@@ -876,7 +1033,6 @@ function shiftImg(img, H, W, dx, dy) {
 }
 
 function recognize(src) {
-  if (!MODEL) MODEL = loadModel();
   const p = prep(src);
   // SPEC.tta (written by train_captcha.py): read the captcha at several small shifts and average the
   // per-column probabilities — fixes many one-off n/m, a/4 slips. score 'prod_agree' also scales the
@@ -884,12 +1040,9 @@ function recognize(src) {
   const tta = SPEC.tta && Array.isArray(SPEC.tta.shifts) && SPEC.tta.shifts.length > 1 ? SPEC.tta : null;
   let logProbs, T, nClasses, runs = null;
   if (!tta) {
-    ({logProbs, T, nClasses} = forwardCTC(MODEL, p.img, 105, p.W));
+    ({lp: logProbs, T, K: nClasses} = readAll(p, [[0, 0]])[0]);
   } else {
-    runs = tta.shifts.map(([dx, dy]) => {
-      const r = forwardCTC(MODEL, dx || dy ? shiftImg(p.img, 105, p.W, dx, dy) : p.img, 105, p.W);
-      return {lp: Float32Array.from(r.logProbs.subarray(0, r.T * r.nClasses)), T: r.T, K: r.nClasses};
-    });
+    runs = readAll(p, tta.shifts);
     T = runs[0].T; nClasses = runs[0].K;
     // the model reads 4 px wide columns: a sideways shift of dx moves its output by dx/4 columns,
     // so line each read back up before averaging (edge columns repeat)
@@ -904,7 +1057,7 @@ function recognize(src) {
     });
     for (let i = 0; i < logProbs.length; i++) logProbs[i] = Math.log(Math.max(logProbs[i] / runs.length, 1e-30));
   }
-  const dec = fixedLenDecode(logProbs, T, nClasses, p.N, MODEL.charset);
+  const dec = fixedLenDecode(logProbs, T, nClasses, p.N, SPEC.charset);
   let minP = 1.0, logSum = 0.0;
   for (const pr of dec.conf) {
     minP = Math.min(minP, pr);
@@ -912,7 +1065,7 @@ function recognize(src) {
   }
   let confidence = Math.exp(logSum);
   if (runs && tta.score === 'prod_agree') {
-    const agree = runs.filter(r => fixedLenDecode(r.lp, T, nClasses, p.N, MODEL.charset).text === dec.text).length;
+    const agree = runs.filter(r => fixedLenDecode(r.lp, T, nClasses, p.N, SPEC.charset).text === dec.text).length;
     confidence *= agree / runs.length;
   }
   return {
@@ -926,7 +1079,8 @@ function recognize(src) {
   };
 }
 
-global.CaptchaVision = {recognize, THRESH: SPEC.thresh || 0.85};
+startWasm();
+global.CaptchaVision = {recognize, THRESH: SPEC.thresh || 0.85, engine: () => (WASM ? 'wasm' : 'js')};
 })(typeof window === 'undefined' ? globalThis : window);
 
 
@@ -947,7 +1101,17 @@ const templates = RAW.map(([char, ratio, s]) => {
 
 // v1.24: area-averaged glyph grid (no aliasing), relative narrow-glyph threshold, splitting of
 // touching letters, runner-up letters for tap-to-swap, and a floor so non-Caesar images are rejected.
-const TF = templates.map(t => { const f = new Float32Array(TW * TH); for (let y = 0; y < TH; y++) for (let x = 0; x < TW; x++) f[y * TW + x] = (t.rows[y] >>> (23 - x)) & 1; return f; });
+// Each template as the list of its ink cells, indexed into a glyph grid padded by one empty cell on
+// every side (PW wide): a ±1 shift is then a fixed index offset, and cells pushed off the edge land
+// on zeros. Same sum, in the same cell order, as testing every template cell with bounds checks.
+const PW = TW + 2, PH = TH + 2;
+const TINK = templates.map(t => {
+  const idx = [];
+  for (let y = 0; y < TH; y++) for (let x = 0; x < TW; x++) if ((t.rows[y] >>> (23 - x)) & 1) idx.push((y + 1) * PW + x + 1);
+  return Int32Array.from(idx);
+});
+const SHIFTS = [];
+for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) SHIFTS.push(dy * PW + dx);
 const RMAX = Math.max(...templates.map(t => t.ratio));
 function grid(data, w, x0, y0, gw, gh) {
   const g = new Float32Array(TW * TH);
@@ -1012,15 +1176,15 @@ function recognize(s) {
       }
     }
     brInk /= (6 * 11);
+    const gp = new Float64Array(PW * PH);
+    for (let y = 0; y < TH; y++) for (let x = 0; x < TW; x++) gp[(y + 1) * PW + x + 1] = g[y * TW + x];
     const per = new Map();
     templates.forEach((t, ti) => {
-      const tf = TF[ti]; let maxInter = 0;
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const ink = TINK[ti], n = ink.length; let maxInter = 0;
+      for (let k = 0; k < 9; k++) {
+        const off = SHIFTS[k];
         let inter = 0;
-        for (let ty = 0; ty < TH; ty++) {
-          const gy = ty + dy; if (gy < 0 || gy >= TH) continue;
-          for (let tx = 0; tx < TW; tx++) { const gx = tx + dx; if (gx < 0 || gx >= TW) continue; if (tf[ty * TW + tx]) inter += g[gy * TW + gx]; }
-        }
+        for (let j = 0; j < n; j++) inter += gp[ink[j] + off];
         if (inter > maxInter) maxInter = inter;
       }
       let sc = (2 * maxInter) / (gSum + t.count) - 0.22 * Math.abs(ratio - t.ratio);
@@ -1440,18 +1604,28 @@ function glyph(s,b){
  }
  return {rows,count,ratio:b.w/b.h};
 }
+// Each template's rows for the three sideways shifts, with an empty row above and below, so a
+// ±1 vertical shift reads a 0 instead of needing a bounds check (same overlap counts as before).
+for(const t of templates){
+ t.shifted=[-1,0,1].map(dx=>{
+  const a=new Uint32Array(TH+2);
+  for(let y=0;y<TH;y++){let r=t.rows[y];if(dx<0)r=(r<<1)&MASK;else if(dx>0)r=r>>>1;a[y+1]=r;}
+  return a;
+ });
+}
 function match(g){
- const scores={};
+ const scores={}, gr=g.rows;
  for(const t of templates){
   const ratioPenalty=.16*Math.abs(Math.log(g.ratio/t.ratio));
   if(ratioPenalty>.26)continue;
   let best=0;
   for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+   const tr=t.shifted[dx+1], o=dy+1;
    let common=0;
    for(let y=0;y<TH;y++){
-    const ty=y+dy;if(ty<0 || ty>=TH)continue;
-    let r=t.rows[ty];if(dx<0)r=(r<<1)&MASK;else if(dx>0)r=r>>>1;
-    common+=pop(g.rows[y]&r);
+    let n=gr[y]&tr[y+o];
+    n=n-((n>>>1)&0x55555555);n=(n&0x33333333)+((n>>>2)&0x33333333);
+    common+=(((n+(n>>>4))&0x0F0F0F0F)*0x01010101)>>>24;
    }
    const score=2*common/(g.count+t.count)-ratioPenalty;
    if(score>best)best=score;

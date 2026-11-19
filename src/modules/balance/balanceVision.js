@@ -414,9 +414,13 @@ async function ocrGlyph(worker, g) {
  * upper/lower case is decided from the glyph's height (OCR alone often confuses c/C, o/O, s/S).
  */
 async function readSideByGlyphs(worker, glyphs) {
+  // every glyph is its own read: run them side by side, each with its own OCR handle (its own
+  // whitelist / page mode), then put the text together in order exactly as before
+  const reads = await Promise.all(glyphs.map(async g => ocrGlyph(await ensureOCRWorker(), g)));
   let out = '';
-  for (const g of glyphs) {
-    let t = await ocrGlyph(worker, g);
+  for (let i = 0; i < glyphs.length; i++) {
+    const g = glyphs[i];
+    let t = reads[i];
     if (!t) t = g.sub ? '' : '?';
     if (g.sub) {
       t = t.split('').map(ch => DIGIT_FIX[ch] || ch).join('').replace(/[^0-9]/g, '');
@@ -447,8 +451,8 @@ export async function readEquationImage(img, onStatus = () => {}) {
   const candidates = [];
   if (loc.hasArrow && loc.leftN && loc.rightN) {
     // Most reliable: glyph by glyph
-    const L = fixOcrFormulaSide(await readSideByGlyphs(worker, loc.leftN.glyphs));
-    const R = fixOcrFormulaSide(await readSideByGlyphs(worker, loc.rightN.glyphs));
+    const [l, r] = await Promise.all([readSideByGlyphs(worker, loc.leftN.glyphs), readSideByGlyphs(worker, loc.rightN.glyphs)]);
+    const L = fixOcrFormulaSide(l), R = fixOcrFormulaSide(r);
     if (L && R) candidates.push(`${L} → ${R}`);
   }
   if (loc.hasArrow && loc.leftN && loc.rightN && !candidates.some(c => balanceEquation(c).ok)) {

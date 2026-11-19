@@ -72,9 +72,14 @@ export async function wofReadImage(img, rules, onStatus = () => {}) {
   src.height = H;
   src.getContext('2d').drawImage(img, 0, 0);
 
-  onStatus('Reading display…');
+  // The display and the six buttons are independent reads: run them side by side, each with its
+  // own OCR handle (its own page mode), on as many workers as the pool has.
+  onStatus('Reading display and buttons…');
   const dv = rules.displayWords.filter(w => w !== BLANK);
-  const dr = await readRegion(worker, src, W, H, REG_DISP, dv);
+  const [dr, ...btnReads] = await Promise.all([
+    readRegion(worker, src, W, H, REG_DISP, dv),
+    ...REG_BTN.map(async reg => readRegion(await ensureOCRWorker(), src, W, H, reg, rules.buttonLabels))
+  ]);
   let disp, warnDisp;
   if (dr.ink < 0.012 && rules.displayWords.includes(BLANK)) {
     disp = BLANK;
@@ -88,8 +93,7 @@ export async function wofReadImage(img, rules, onStatus = () => {}) {
   const btns = [];
   const warnBtn = [];
   for (let i = 0; i < 6; i++) {
-    onStatus(`Reading buttons… ${i + 1}/6`);
-    const r = await readRegion(worker, src, W, H, REG_BTN[i], rules.buttonLabels);
+    const r = btnReads[i];
     const ok = isAcceptable(r.best);
     btns.push(ok ? r.best.w : '');
     warnBtn.push(!ok || r.best.d > 0 || r.best.amb);
