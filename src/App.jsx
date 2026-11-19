@@ -7,10 +7,13 @@ import { MissionSidebar } from './core/components/MissionSidebar.jsx';
 import { KNOWN_MODULE_NAMES } from './core/sectionsData.js';
 import { LevelGenerator } from './core/level/LevelGenerator.jsx';
 import { ModuleGroup } from './core/components/ModuleGroup.jsx';
+import { Chess63Module } from './modules/chess63/index.jsx';
 import { MODULE_REGISTRY } from './core/ModeRouter.jsx';
 
 const CUSTOM_LEVELS_KEY = 'bomb_custom_levels';
 // module ids whose copies all use the same manual (see sectionsData `shared`)
+// Levels whose 5 Chess modules use the batch solver (public/chess63.html, ported)
+const BATCH_CHESS_LEVELS = new Set(['6.4']);
 const SHARED_IDS = new Set(Object.values(KNOWN_MODULE_NAMES).filter(k => k.shared && k.isImplemented).map(k => k.id));
 
 // Import all puzzle modules
@@ -34,6 +37,7 @@ import { ComplexWiresModule, complexwiresModule } from './modules/complexwires/i
 import { SymbolsModule, symbolsModule } from './modules/symbols/index.jsx';
 import { ButtonModule, buttonModule } from './modules/button/index.jsx';
 import { BalanceModule, balanceModule } from './modules/balance/index.jsx';
+import { CircuitModule, circuitModule } from './modules/circuit/index.jsx';
 
 export function App() {
   const { appMode, setAppMode, prefixHash, setPrefixHash } = useAppState();
@@ -108,7 +112,8 @@ export function App() {
     complexwires: complexwiresModule,
     symbols: symbolsModule,
     button: buttonModule,
-    balance: balanceModule
+    balance: balanceModule,
+    circuit: circuitModule
   };
 
   const currentMeta = moduleMeta[appMode] || minesModule;
@@ -156,6 +161,8 @@ export function App() {
         return <ButtonModule isActive={isActive} />;
       case 'balance':
         return <BalanceModule isActive={isActive} />;
+      case 'circuit':
+        return <CircuitModule isActive={isActive} />;
       default:
         return <MinesModule isActive={isActive} />;
     }
@@ -241,6 +248,21 @@ export function App() {
                 // Which copy of this module this slot is (Symbols #1, #2 …) and how many copies the level has
                 const instance = activeMission.modules.slice(0, slotIdx).filter(n => n === modName).length;
                 const instanceCount = activeMission.modules.filter(n => n === modName).length;
+                // Level 6.4 from the sidebar (5 Chess): the batch solver from chess63.html in one window —
+                // one White 2×3 photo + one Black 1×5 strip solve all 5. Picking 5 Chess by hand
+                // (a custom level) keeps the normal Chess cards.
+                if (known.id === 'chess' && !activeMission.custom && BATCH_CHESS_LEVELS.has(activeMission.id)) {
+                  if (instance > 0) return null;
+                  return (
+                    <div
+                      key={`mission-${activeMission.id}-chess63`}
+                      className="mission-module-window"
+                      style={{ display: isSlotActive ? 'block' : 'none' }}
+                    >
+                      <Chess63Module />
+                    </div>
+                  );
+                }
                 // "Same manual" modules: all copies live in one grouped window on the first copy's slot
                 // (also a single copy, so the manual is always the hidden one-line bar)
                 if (known.shared) {

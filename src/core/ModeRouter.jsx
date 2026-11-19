@@ -22,7 +22,8 @@ export const MODULE_REGISTRY = [
   { id: 'complexwires', tabId: 'tabComplexWires', label: '⚡ COMPLEX WIRES', name: 'Complex Wires' },
   { id: 'symbols', tabId: 'tabSymbols', label: '🔣 SYMBOLS', name: 'Symbols' },
   { id: 'button', tabId: 'tabButton', label: '🔘 THE BUTTON', name: 'The Button' },
-  { id: 'balance', tabId: 'tabBalance', label: '⚖️ BALANCE', name: 'Balance' }
+  { id: 'balance', tabId: 'tabBalance', label: '⚖️ BALANCE', name: 'Balance' },
+  { id: 'circuit', tabId: 'tabCircuit', label: '⚡ CIRCUIT', name: 'Circuit' }
 ];
 
 export function ModeRouter({

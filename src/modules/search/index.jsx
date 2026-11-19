@@ -6,6 +6,7 @@ import {
   preprocessCellCanvas,
   recognizeCellConsensus
 } from './searchOCR.js';
+import { cellFeature, matchGlyph, combineGlyphOcr, SEARCH_GLYPHS } from './searchGlyphs.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
@@ -156,7 +157,34 @@ export function SearchModule({ isActive = true }) {
 
     const runId = ++ocrRunRef.current;
     const stale = () => runId !== ocrRunRef.current;
-    setOcrStatus('Starting OCR engine…');
+
+    // 1. Shape match against letters cut from real game screenshots (exact for the game's font).
+    //    Done on a copy scaled to the game's native 440px width.
+    const nW = 440, nH = Math.max(1, Math.round(440 * img.naturalHeight / img.naturalWidth));
+    const nCanvas = document.createElement('canvas');
+    nCanvas.width = nW; nCanvas.height = nH;
+    const nCtx = nCanvas.getContext('2d', { willReadFrequently: true });
+    nCtx.imageSmoothingQuality = 'high';
+    nCtx.drawImage(img, 0, 0, nW, nH);
+    const nData = nCtx.getImageData(0, 0, nW, nH).data;
+    const shape = Array.from({ length: 5 }, (_, r) => Array.from({ length: 5 }, (_, c) => {
+      const f = cellFeature(nData, nW, nH, r, c);
+      return { f, m: matchGlyph(f, SEARCH_GLYPHS) };
+    }));
+    const shapeGrid = shape.map(row => row.map(x => (x.m.sure ? x.m.letter : '')));
+    const unsureCells = shape.flat().filter(x => !x.m.sure).length;
+    setGridData(shapeGrid.map(row => row.map(l => l || '…')));
+    setConfidence(shape.map(row => row.map(x => (x.m.sure ? Math.round(x.m.score * 100) : 0))));
+    if (!unsureCells) {
+      setGridData(shapeGrid.map(row => [...row]));
+      setOcrStatus('✅ Read all 25 letters by shape');
+      setOcrProgress(null);
+      showToast('WORD SEARCH READ ✓');
+      return;
+    }
+
+    // 2. Tesseract for the cells the shape match isn't sure about (letters with no sample yet: B, I, Q …)
+    setOcrStatus(`Starting OCR engine for ${unsureCells} unclear cell${unsureCells > 1 ? 's' : ''}…`);
     setOcrProgress(5);
 
     let worker;
@@ -172,7 +200,9 @@ export function SearchModule({ isActive = true }) {
       });
     } catch (err) {
       if (stale()) return;
-      setOcrStatus(`⚠️ OCR unavailable: ${err.message}. You can type or paste letters manually.`);
+      // no OCR: keep the best shape guesses so only the unclear cells need checking
+      setGridData(shape.map(row => row.map(x => x.m.letter || '?')));
+      setOcrStatus(`⚠️ OCR unavailable: ${err.message}. Unclear cells use the closest shape — check them.`);
       setOcrProgress(null);
       showToast('OCR UNAVAILABLE — ENTER LETTERS MANUALLY');
       return;
@@ -212,6 +242,12 @@ export function SearchModule({ isActive = true }) {
 
     for (let r = 0; r < 5; r++) {
       for (let c = 0; c < 5; c++) {
+        if (shape[r][c].m.sure) {
+          newGrid[r][c] = shape[r][c].m.letter;
+          newConf[r][c] = Math.round(shape[r][c].m.score * 100);
+          done++;
+          continue;
+        }
         const cy = rowCenters[r];
         const cx = colCenters[c];
         const cW = Math.round(cellW * CROP);
@@ -251,8 +287,9 @@ export function SearchModule({ isActive = true }) {
           if (stale()) return;
           if (retry.confidence > rec.confidence) rec = retry;
         }
-        newGrid[r][c] = rec.letter;
-        newConf[r][c] = rec.confidence;
+        // the shape vetoes OCR letters it clearly disagrees with (W read as J …)
+        newGrid[r][c] = combineGlyphOcr(shape[r][c].f, shape[r][c].m, rec.letter, SEARCH_GLYPHS);
+        newConf[r][c] = newGrid[r][c] === rec.letter ? rec.confidence : Math.round(shape[r][c].m.score * 100);
         done++;
 
         // Live progressive update of grid cells so user sees results in real time
@@ -263,7 +300,9 @@ export function SearchModule({ isActive = true }) {
       }
     }
 
-    setOcrStatus('✅ OCR complete!');
+    setGridData(newGrid.map(row => [...row]));
+    setConfidence(newConf.map(row => [...row]));
+    setOcrStatus(`✅ OCR complete! (${25 - unsureCells} by shape, ${unsureCells} by OCR)`);
     setOcrProgress(null);
     showToast('WORD SEARCH OCR COMPLETE ✓');
   };

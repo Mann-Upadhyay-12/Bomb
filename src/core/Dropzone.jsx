@@ -6,7 +6,7 @@ import { useInstance } from './InstanceContext.jsx';
 // clipboard permission (a normal paste event). It takes a pasted image, or an image link (Discord
 // "Copy Link" works — cdn.discordapp.com allows other sites to read its images).
 const URL_RE = /https?:\/\/[^\s<>"']+/i;
-function PasteBox({ onSource, busy }) {
+export function PasteBox({ onSource, busy }) {
   const ref = useRef(null);
   const [msg, setMsg] = useState('');
   const clear = () => { if (ref.current) ref.current.innerHTML = ''; };

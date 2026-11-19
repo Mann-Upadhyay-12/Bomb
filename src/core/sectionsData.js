@@ -27,12 +27,12 @@ export const KNOWN_MODULE_NAMES = {
   'Queens': { id: 'queens', isImplemented: true },
   'The Button': { id: 'button', isImplemented: true, shared: true },
   'Balance': { id: 'balance', isImplemented: true },
+  'Circuit': { id: 'circuit', isImplemented: true, shared: true },
 
   // Modules not yet implemented or KTANE/GTA variants:
   // "Wires" is standard regular wires (or complex wires as fallback if desired, but as a distinct module it's missing)
   'Wires': { id: 'wires', isImplemented: false, shared: true },
   'Memory': { id: 'memory', isImplemented: false, shared: true },
-  'Circuit': { id: 'circuit', isImplemented: false },
   'Pressure': { id: 'pressure', isImplemented: false },
   'Breaker': { id: 'breaker', isImplemented: false }
 };

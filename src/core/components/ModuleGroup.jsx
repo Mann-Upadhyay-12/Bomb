@@ -10,6 +10,8 @@ import { PN_KEY } from '../../modules/piano/index.jsx';
 import { PN_DEFAULT_CODES } from '../../modules/piano/pianoSolver.js';
 import { KEY as WOF_KEY } from '../../modules/wof/index.jsx';
 import { DEFAULT_RULES as WOF_DEFAULT_RULES } from '../../modules/wof/wofSolver.js';
+import { CIRCUIT_MANUAL_KEY } from '../../modules/circuit/index.jsx';
+import { CIRCUIT_DEFAULT_MANUAL } from '../../modules/circuit/circuitSolver.js';
 
 // The one manual every copy of a "same manual" module uses (null = the module has none).
 // `looks` recognises that manual's text when it's pasted anywhere on the page.
@@ -37,6 +39,10 @@ const MANUALS = {
   button: {
     key: 'bombvision_button_checklist', fallback: '', label: 'HELPER CHECKLIST (+ SERIAL / MODULE COUNTS)', rows: 8,
     looks: t => /label says/i.test(t) || (/\bbutton\b/i.test(t) && /\d+\s*s\b/i.test(t))
+  },
+  circuit: {
+    key: CIRCUIT_MANUAL_KEY, fallback: CIRCUIT_DEFAULT_MANUAL, label: 'RESISTOR COLOUR → OHMS', rows: 8,
+    looks: t => (t.match(/\b(red|orange|yellow|green|blue|violet|purple|white|gr[ae]y)\s*[=:]\s*\d/gi) || []).length >= 3
   },
   morse: null
 };
