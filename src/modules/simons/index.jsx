@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   SINAMES,
   SIMON_DEFAULT_RULES,
   parseSimonRules,
-  analyzeSimonFrame
+  siAnalyzeFrames
 } from './simonsSolver.js';
+import { decodeGIFRGBA } from '../../utils/gif.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
@@ -13,14 +14,55 @@ import { useInstance } from '../../core/InstanceContext.jsx';
 import { Dropzone } from '../../core/Dropzone.jsx';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
-import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
-import { CopyLines } from '../../core/components/CopyLines.jsx';
 import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
-import { SimonsWorking } from './working.jsx';
+import { SimonsWorking, SimonChip } from './working.jsx';
+
+const THUMB = 56;
+
+function thumbFrom(data, W, H) {
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(data), W, H), 0, 0);
+  const t = document.createElement('canvas'); t.width = t.height = THUMB;
+  t.getContext('2d').drawImage(c, 0, 0, THUMB, THUMB);
+  return t.toDataURL();
+}
+
+const isGifBytes = (u8) => u8.length > 3 && u8[0] === 0x47 && u8[1] === 0x49 && u8[2] === 0x46;
+
+/** One screenshot / GIF → one stage entry { color, thumb, note, warn, name }. */
+async function readSimonFile(blob, img) {
+  const name = (blob && blob.name) || 'pasted image';
+  if (blob) {
+    const buf = await blob.arrayBuffer();
+    if (isGifBytes(new Uint8Array(buf, 0, Math.min(4, buf.byteLength)))) {
+      const g = decodeGIFRGBA(buf);
+      if (g.frames.length) {
+        const r = siAnalyzeFrames(g.frames, g.w, g.h);
+        const secs = (g.frames.reduce((a, x) => a + x.delay, 0) / 1000).toFixed(1);
+        let note = `GIF ${g.frames.length} fr, ${secs}s · ${r.flashes.length} flash${r.flashes.length === 1 ? '' : 'es'}: ${r.flashes.join(' ') || 'none'}`;
+        if (r.stage) note += ` · stage ${r.stage}`;
+        const warn = (r.stage && r.flashes.length !== r.stage) ? `expected ${r.stage} flashes` : (r.warn ? 'colours look unusual — different crop?' : '');
+        return { name, color: r.color, thumb: thumbFrom(g.frames[r.thumbIndex].data, g.w, g.h), note, warn };
+      }
+    }
+  }
+  // Still image (or a GIF the browser gave us as a decoded <img>): one frame
+  let src = img;
+  if (!src && blob) src = await createImageBitmap(blob);
+  if (!src) return { name, color: null, thumb: '', note: 'could not read file', warn: '' };
+  const W = src.naturalWidth || src.width, H = src.naturalHeight || src.height;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(src, 0, 0);
+  const data = ctx.getImageData(0, 0, W, H).data;
+  const r = siAnalyzeFrames([{ data }], W, H);
+  return { name, color: r.color, thumb: thumbFrom(data, W, H), note: 'still frame', warn: r.warn ? 'colours look unusual — different crop?' : '' };
+}
 
 export function SimonsModule({ isActive = true }) {
   const inst = useInstance();
   const grouped = Boolean(inst && inst.grouped);
+  const multi = Boolean(inst && inst.multi);
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
@@ -28,140 +70,93 @@ export function SimonsModule({ isActive = true }) {
   // The manual is the same for every copy of this module, so all windows share it
   const [rulesText, setRulesText] = useSharedSetting('bombvision_simon_rules', SIMON_DEFAULT_RULES);
   const rules = React.useMemo(() => parseSimonRules(rulesText) || parseSimonRules(SIMON_DEFAULT_RULES), [rulesText]);
-  const [stageParity, setStageParity] = useState('even'); // 'even' or 'odd'
+  // Which answer COPY ON DECODE puts on the clipboard (both are always shown)
+  const [autoCopy, setAutoCopy] = useSharedSetting('bombvision_simon_autocopy', 'odd');
   const [entries, setEntries] = useState([]);
-  const [previewUri, setPreviewUri] = useState('');
-  const [previewMeta, setPreviewMeta] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  // Map entries through rules
-  const map = rules[stageParity] || rules.even;
-  const pressedSeq = entries.map(c => map[c] || c);
-  const copyFormatted = pressedSeq.join(' ');
+  const counted = entries.filter(e => e.color);
+  const oddSeq = counted.map(e => rules.odd[e.color]);
+  const evenSeq = counted.map(e => rules.even[e.color]);
+  const oddStr = oddSeq.join(' ');
+  const evenStr = evenSeq.join(' ');
+  const copyFormatted = autoCopy === 'even' ? evenStr : oddStr;
+
+  // Tell the group box what this copy's answer is
+  const summary = counted.length ? `ODD ${oddStr} · EVEN ${evenStr}` : '';
+  React.useEffect(() => { if (inst && inst.report) inst.report(summary); }, [summary]);
 
   React.useEffect(() => {
     if (!isActive) return;
     setLastCopyString(copyFormatted);
-    if (copyOnDecode && copyFormatted) {
-      copy(copyFormatted);
-    }
+    if (copyOnDecode && copyFormatted) copy(copyFormatted);
   }, [copyFormatted, isActive]);
 
-  // Analyse one image/GIF blob → list of flashed colours (GIF frames are decoded
-  // one by one when the browser supports ImageDecoder, like the original app).
-  const analyzeBlob = async (blob, img) => {
-    const cv = document.createElement('canvas');
-    const ctx = cv.getContext('2d', { willReadFrequently: true });
-    const isGif = blob && (blob.type === 'image/gif' || /\.gif$/i.test(blob.name || ''));
-    if (isGif && typeof window !== 'undefined' && 'ImageDecoder' in window) {
-      try {
-        const dec = new window.ImageDecoder({ data: await blob.arrayBuffer(), type: 'image/gif' });
-        await dec.tracks.ready;
-        const n = dec.tracks.selectedTrack.frameCount;
-        const seq = [];
-        for (let i = 0; i < n; i++) {
-          const { image } = await dec.decode({ frameIndex: i });
-          cv.width = image.displayWidth; cv.height = image.displayHeight;
-          ctx.drawImage(image, 0, 0);
-          image.close();
-          const c = analyzeSimonFrame(ctx, cv.width, cv.height);
-          // consecutive frames of the same glow count once
-          if (c && seq[seq.length - 1] !== c) seq.push(c);
-        }
-        return { colors: seq, note: `GIF ${n} frames` };
-      } catch (e) {
-        console.warn('Simon GIF decode failed, falling back to first frame', e);
-      }
-    }
-    let source = img;
-    if (!source && blob) source = await createImageBitmap(blob);
-    if (!source) return { colors: [], note: '' };
-    const w = source.naturalWidth || source.width, h = source.naturalHeight || source.height;
-    cv.width = w; cv.height = h;
-    ctx.drawImage(source, 0, 0);
-    const c = analyzeSimonFrame(ctx, w, h);
-    return { colors: c ? [c] : [], note: isGif ? 'GIF: first frame only (ImageDecoder unsupported)' : '' };
-  };
-
   const ingest = async (items) => {
+    setBusy(true);
     const found = [];
     for (const { blob, img } of items) {
-      try {
-        const r = await analyzeBlob(blob, img);
-        found.push(...r.colors);
-      } catch (e) {}
+      try { found.push(await readSimonFile(blob, img)); }
+      catch (e) { found.push({ name: (blob && blob.name) || 'image', color: null, thumb: '', note: 'could not read file', warn: '' }); }
     }
-    if (found.length) {
-      setEntries(prev => [...prev, ...found]);
-      showToast(`FLASH${found.length > 1 ? 'ES' : ''} DETECTED: ${found.map(c => SINAMES[c] || c).join(' → ')} ✓`);
-    } else {
-      showToast('NO GLOW DETECTED — TAP BUTTONS TO ADD SEQUENCE');
-    }
+    setBusy(false);
+    if (!found.length) return;
+    setEntries(prev => [...prev, ...found]);
+    const got = found.filter(f => f.color);
+    showToast(got.length
+      ? `STAGE ${counted.length + got.length}: ${got.map(f => SINAMES[f.color]).join(' → ')} ✓`
+      : 'NO GLOW FOUND — PICK THE COLOUR ON THE ENTRY');
   };
 
   const handleImage = (img, dataUri, fileBlob) => {
-    setPreviewUri(dataUri);
-    setPreviewMeta(`${img.naturalWidth}×${img.naturalHeight} px source`);
     setLastImage(img, fileBlob);
     ingest([{ blob: fileBlob, img }]);
   };
 
-  // Several frames at once: process in file-name order (frame1, frame2, …)
+  // Several frames / GIFs at once: one stage each, in file-name order (frame1, frame2, …)
   const handleFiles = (files) => {
     const list = Array.from(files).filter(f => f && (!f.type || f.type.startsWith('image/')));
     list.sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { numeric: true }));
-    if (list[0]) {
-      const reader = new FileReader();
-      reader.onload = ev => { setPreviewUri(ev.target.result); setPreviewMeta(`${list.length} file(s)`); };
-      reader.readAsDataURL(list[0]);
-    }
     ingest(list.map(f => ({ blob: f, img: null })));
   };
 
-  const handleAddColor = (c) => {
-    setEntries(prev => [...prev, c]);
-  };
-
-  const handleRemoveEntry = (idx) => {
-    setEntries(prev => prev.filter((_, i) => i !== idx));
-  };
-
-  const handleSample = () => {
-    setEntries(['R', 'B', 'Y', 'G', 'R']);
-    showToast('SAMPLE SEQUENCE LOADED ✓');
-  };
-
-  const handleRulesChange = (text) => {
-    setRulesText(text);
-  };
-
-  const handleRestoreDefaultRules = () => {
-    setRulesText(SIMON_DEFAULT_RULES);
-    showToast('RESTORED DEFAULT SIMON RULES ✓');
-  };
+  const addManual = (c) => setEntries(prev => [...prev, { name: 'manual', color: c, thumb: '', note: 'added by hand', warn: '' }]);
+  const fixEntry = (i, c) => setEntries(prev => prev.map((e, j) => (j === i ? { ...e, color: c, note: e.note.includes('manual') ? e.note : `${e.note} · manual`, warn: '' } : e)));
+  const removeEntry = (i) => setEntries(prev => prev.filter((_, j) => j !== i));
+  const removeLast = () => setEntries(prev => prev.slice(0, -1));
 
   const handleClear = () => {
     setEntries([]);
-    setPreviewUri('');
-    setPreviewMeta('');
     setLastImage(null, null);
     setLastCopyString('');
     showToast('SIMON CLEARED ✓');
   };
 
-  const evenSeq = entries.map(c => (rules.even || {})[c] || c).join(' ');
-  const oddSeq = entries.map(c => (rules.odd || {})[c] || c).join(' ');
+  const copySeq = (label, s) => { if (s) copy(s, `${label} COPIED ✓`); };
 
-  const copyItems = [];
-  if (pressedSeq.length > 0) {
-    copyItems.push({ label: `COPY SEQUENCE (${copyFormatted})`, value: copyFormatted });
-    copyItems.push({ label: `EVEN: ${evenSeq}`, value: evenSeq });
-    copyItems.push({ label: `ODD: ${oddSeq}`, value: oddSeq });
-    pressedSeq.forEach((c, i) => {
-      copyItems.push({ label: `#${i + 1}: ${c}`, value: c });
-    });
-  }
-
-  const stampStats = `STAGE: ${stageParity.toUpperCase()} | FLASHED: ${entries.length} | PRESS: ${copyFormatted || 'NONE'}`;
+  const answers = (
+    <div className="simon-answer">
+      {[['odd', 'ODD', 'odd # of modules disarmed', oddSeq, oddStr], ['even', 'EVEN', 'even # of modules disarmed', evenSeq, evenStr]].map(([k, label, sub, seq, str]) => (
+        <div
+          key={k}
+          className={`simon-ans-col ${autoCopy === k ? 'auto' : ''}`}
+          role="button"
+          tabIndex={0}
+          title={`Click to copy the ${label} sequence`}
+          onClick={() => copySeq(label, str)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); copySeq(label, str); } }}
+        >
+          <div className="simon-ans-head">
+            <span className="simon-ans-label">{label}</span>
+            <span className="simon-ans-sub">{sub}</span>
+          </div>
+          <div className="simon-ans-row">
+            {seq.length ? seq.map((c, i) => <SimonChip key={i} c={c} />) : <span className="simon-status">—</span>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <ModuleLayout
@@ -172,108 +167,51 @@ export function SimonsModule({ isActive = true }) {
               onImage={handleImage}
               onFiles={handleFiles}
               multiple
-              icon="🔴 🔵 🟡 🟢"
-              title="Click here, then paste Simon Says frame or GIF"
+              icon={busy ? '⏳' : '🔴 🔵 🟡 🟢'}
+              title={multi ? 'Drop / paste this Simon’s GIF' : 'Click here, then paste the Simon Says GIF or frame'}
+              sub={<>one GIF per stage — its <b>last</b> flash is the new colour · several files are read in name order</>}
             />
-          }
-          preview={
-            previewUri ? (
-              <div className="preview-row show">
-                <img src={previewUri} alt="uploaded preview" />
-                <span>{previewMeta}</span>
-                <button type="button" className="preview-clear-btn" onClick={() => { setPreviewUri(''); setPreviewMeta(''); }}>✕</button>
-              </div>
-            ) : null
           }
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={handleClear}>
-                clear
-              </button>
-              <button
-                className="reset-btn"
-                type="button"
-                style={{ borderColor: 'var(--brass)', color: 'var(--brass)' }}
-                onClick={handleSample}
-              >
-                ⚡ SAMPLE
-              </button>
+              <button className="reset-btn" type="button" onClick={handleClear}>clear</button>
+              <button className="reset-btn" type="button" onClick={removeLast} disabled={!entries.length}>↶ remove last</button>
+              <span className="simon-autocopy">
+                <span className="simon-status">copies:</span>
+                <button type="button" className={`bg-btn ${autoCopy === 'odd' ? 'active' : ''}`} onClick={() => setAutoCopy('odd')}>ODD</button>
+                <button type="button" className={`bg-btn ${autoCopy === 'even' ? 'active' : ''}`} onClick={() => setAutoCopy('even')}>EVEN</button>
+              </span>
             </>
           }
         >
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap' }}>
-            <span className="search-config-label">STAGE PARITY:</span>
-            <button
-              type="button"
-              className={`bg-btn ${stageParity === 'even' ? 'active' : ''}`}
-              style={{ borderColor: stageParity === 'even' ? 'var(--brass)' : '' }}
-              onClick={() => setStageParity('even')}
-            >
-              EVEN STAGE
-            </button>
-            <button
-              type="button"
-              className={`bg-btn ${stageParity === 'odd' ? 'active' : ''}`}
-              style={{ borderColor: stageParity === 'odd' ? 'var(--brass)' : '' }}
-              onClick={() => setStageParity('odd')}
-            >
-              ODD STAGE
-            </button>
-          </div>
-
           {!grouped && (
-          <details className="simon-manual-details" style={{ marginTop: '8px' }}>
-            <summary style={{ cursor: 'pointer', fontFamily: 'monospace', fontWeight: 600, fontSize: '12px', letterSpacing: '0.08em', color: 'var(--ink-soft)', marginBottom: '8px' }}>
-              📖 MANUAL RULES — PASTE &amp; PARSE (EVEN / ODD DISARMED RULES)
-            </summary>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                <label className="search-config-label" style={{ margin: 0 }}>
-                  PASTE SIMON SAYS MANUAL RULES:
-                </label>
-              </div>
+            <details className="simon-manual-details" style={{ marginTop: '8px' }}>
+              <summary className="simon-manual-summary">📖 MANUAL RULES (EVEN / ODD)</summary>
               <textarea
                 className="search-words-field"
-                style={{ height: '140px', resize: 'vertical', fontSize: '12px', lineHeight: 1.45, fontFamily: 'monospace' }}
+                style={{ height: '140px', resize: 'vertical', fontSize: '12px', lineHeight: 1.45, fontFamily: 'monospace', width: '100%' }}
                 spellCheck={false}
-                placeholder="Paste Simon Says manual text here..."
                 value={rulesText}
-                onChange={e => handleRulesChange(e.target.value)}
+                onChange={e => setRulesText(e.target.value)}
               />
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button
-                  type="button"
-                  className="bg-btn"
-                  style={{ fontSize: '11px', padding: '4px 10px' }}
-                  onClick={handleRestoreDefaultRules}
-                >
-                  🔄 RESTORE DEFAULT RULES
-                </button>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <button type="button" className="bg-btn" onClick={() => setRulesText(SIMON_DEFAULT_RULES)}>🔄 RESTORE DEFAULT</button>
+                {!parseSimonRules(rulesText) && <span className="simon-status warn">Could not find all 8 rules — using the default table.</span>}
               </div>
-            </div>
-          </details>
+            </details>
           )}
         </ModuleInput>
       }
-      answers={
-        <AnswerPanel
-          label="SIMON SAYS BUTTON PRESS SEQUENCE"
-          stats={stampStats}
-          answers={pressedSeq.length ? pressedSeq : []}
-          copyValue={copyFormatted}
-          placeholder="ADD FLASHED COLORS"
-        />
-      }
-      copylines={<CopyLines items={copyItems} />}
+      answers={answers}
       working={
-        <WorkingPanel
-          title="SIMON SAYS CONSOLE — Flashed light inputs and mapped button sequence"
-        >
+        <WorkingPanel title={`STAGES (${counted.length}) — uploads, fixes & rule table`} defaultExpanded>
           <SimonsWorking
             entries={entries}
-            onAddColor={handleAddColor}
-            onRemoveEntry={handleRemoveEntry}
-            onClear={handleClear}
+            rules={rules}
+            compact={multi}
+            onAddColor={addManual}
+            onFixEntry={fixEntry}
+            onRemoveEntry={removeEntry}
           />
         </WorkingPanel>
       }
@@ -287,6 +225,6 @@ export const simonsModule = {
   tabLabel: '🔴 SIMON SAYS',
   eyebrow: 'SIMON SAYS SOLVER',
   title: 'Simon Says Vision',
-  sub: 'Upload frame images or click colored buttons to record flashed lights. Maps each light according to <b>Even or Odd stage rules</b> and copies the press sequence to your clipboard!',
+  sub: 'Paste one GIF per stage — the <b>last flash</b> in it is read and mapped through both tables. <b>ODD</b> is on the left, <b>EVEN</b> on the right; tap a colour on any stage to fix a misread.',
   Component: SimonsModule
 };

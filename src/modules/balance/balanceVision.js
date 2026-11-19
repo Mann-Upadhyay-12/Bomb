@@ -10,6 +10,17 @@ import { fixOcrFormulaSide, balanceEquation } from './balanceSolver.js';
 const isArrowPx = (r, g, b) => r > 190 && g > 140 && b < 175 && r - b > 55;
 const isTextPx = (r, g, b) => r > 150 && g > 150 && b > 150 && Math.max(r, g, b) - Math.min(r, g, b) < 45;
 
+/** Two rebuilt lines side by side (a wrapped equation read as one line), with a word gap between. */
+function joinCanvases(a, b) {
+  const gap = Math.round(a.height * 0.25);
+  const c = document.createElement('canvas');
+  c.width = a.width + gap + b.width; c.height = Math.max(a.height, b.height);
+  const x = c.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+  x.drawImage(a, 0, 0); x.drawImage(b, a.width + gap, 0);
+  return c;
+}
+
 export function locateEquation(img) {
   const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
   const sc = Math.min(1, 900 / Math.max(iw, ih));
@@ -28,13 +39,22 @@ export function locateEquation(img) {
     const i = (y * W + x) * 4;
     if (isTextPx(d[i], d[i + 1], d[i + 2]) || isArrowPx(d[i], d[i + 1], d[i + 2])) rowInk[y]++;
   }
-  let best = null, cur = null;
+  // Long equations wrap onto 2+ lines: keep every text line, the main one is the line with the arrow
+  const allBands = [];
+  let cur = null;
   for (let y = yA; y < yB; y++) {
-    if (rowInk[y] > 1) { if (!cur) cur = { y0: y, y1: y, ink: 0 }; cur.y1 = y; cur.ink += rowInk[y]; }
-    else if (cur) { if (!best || cur.ink > best.ink) best = cur; cur = null; }
+    if (rowInk[y] > 1) {
+      if (!cur) cur = { y0: y, y1: y, ink: 0, arrow: 0 };
+      cur.y1 = y; cur.ink += rowInk[y];
+      for (let x = xA; x < xB; x++) { const i = (y * W + x) * 4; if (isArrowPx(d[i], d[i + 1], d[i + 2])) cur.arrow++; }
+    } else if (cur) { allBands.push(cur); cur = null; }
   }
-  if (cur && (!best || cur.ink > best.ink)) best = cur;
+  if (cur) allBands.push(cur);
+  let best = null;
+  for (const b of allBands) if (!best || (b.arrow > 0) > (best.arrow > 0) || ((b.arrow > 0) === (best.arrow > 0) && b.ink > best.ink)) best = b;
   if (!best) return { ok: false, reason: 'No equation text found — crop the screenshot to the module.' };
+  const lineH = best.y1 - best.y0 + 1;
+  const extraBands = allBands.filter(b => b !== best && b.y1 - b.y0 + 1 >= lineH * 0.5 && b.ink >= best.ink * 0.05);
   const pad = Math.max(3, Math.round((best.y1 - best.y0) * 0.25));
   const ty0 = Math.max(0, best.y0 - pad), ty1 = Math.min(H - 1, best.y1 + pad);
 
@@ -83,11 +103,11 @@ export function locateEquation(img) {
    * Rebuild one side with subscripts enlarged onto the baseline ("KNO₃" → "KNO3" at full size),
    * because Tesseract tends to drop or misread small lowered digits.
    */
-  const normalized = (x0, x1) => {
-    const w = Math.max(1, x1 - x0 + 1), h = ty1 - ty0 + 1;
+  const normalized = (x0, x1, by0 = ty0, by1 = ty1, refCapH = 0) => {
+    const w = Math.max(1, x1 - x0 + 1), h = by1 - by0 + 1;
     const mask = new Uint8Array(w * h);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      const i = ((ty0 + y) * W + x0 + x) * 4;
+      const i = ((by0 + y) * W + x0 + x) * 4;
       const r = d[i], g = d[i + 1], b = d[i + 2];
       mask[y * w + x] = !isArrowPx(r, g, b) && 0.299 * r + 0.587 * g + 0.114 * b > 115 ? 1 : 0;
     }
@@ -107,7 +127,7 @@ export function locateEquation(img) {
           if (mask[r2] && !lab[r2]) { lab[r2] = id; st.push(r2); }
         }
       }
-      if (n >= 4) comps.push({ x0: cx0, x1: cx1, y0: cy0, y1: cy1 });
+      if (n >= 4) comps.push({ x0: cx0, x1: cx1, y0: cy0, y1: cy1, ids: new Set([id]) });
     }
     if (!comps.length) return null;
     // merge components that overlap horizontally (dots of i, etc.) into glyph clusters
@@ -116,23 +136,100 @@ export function locateEquation(img) {
     for (const c of comps) {
       const last = clusters[clusters.length - 1];
       const ov = last ? Math.min(last.x1, c.x1) - Math.max(last.x0, c.x0) : -1;
-      if (last && ov >= Math.min(c.x1 - c.x0, last.x1 - last.x0) * 0.5) {
+      const ovY = last ? Math.min(last.y1, c.y1) - Math.max(last.y0, c.y0) : 0;
+      if (last && ov >= Math.min(c.x1 - c.x0, last.x1 - last.x0) * 0.5 && ovY < 0) {
         last.x0 = Math.min(last.x0, c.x0); last.x1 = Math.max(last.x1, c.x1);
         last.y0 = Math.min(last.y0, c.y0); last.y1 = Math.max(last.y1, c.y1);
-      } else clusters.push({ ...c });
+        c.ids.forEach(i => last.ids.add(i));
+      } else clusters.push({ ...c, ids: new Set(c.ids) });
     }
-    const heights = clusters.map(c => c.y1 - c.y0 + 1);
-    const maxH = Math.max(...heights);
     const med = (arr) => arr.slice().sort((a, b) => a - b)[arr.length >> 1];
-    // cap line from the tallest glyphs only (x-height letters like "e" must not pull it down);
-    // baseline from everything letter-sized
-    const caps = clusters.filter(c => c.y1 - c.y0 + 1 >= maxH * 0.88);
-    const lettersized = clusters.filter(c => c.y1 - c.y0 + 1 >= maxH * 0.6);
-    const capTop = med(caps.map(c => c.y0)), base = med(lettersized.map(c => c.y1));
-    const capH = Math.max(4, base - capTop + 1);
+    const lines = () => {
+      const maxH = Math.max(...clusters.map(c => c.y1 - c.y0 + 1));
+      // cap line from the tallest glyphs only (x-height letters like "e" must not pull it down);
+      // baseline from everything letter-sized
+      const caps = clusters.filter(c => c.y1 - c.y0 + 1 >= maxH * 0.88);
+      const lettersized = clusters.filter(c => c.y1 - c.y0 + 1 >= maxH * 0.6);
+      const capTop = med(caps.map(c => c.y0));
+      // baseline: bottom of letters that start at the cap line — the highest such bottom, because a
+      // letter glued to its subscript ("l₂O") reaches below the baseline
+      // ("+" also starts high but is shorter, it must not count)
+      const capStart = clusters.filter(c => c.y1 - c.y0 + 1 >= maxH * 0.75 && c.y0 - capTop <= (c.y1 - c.y0 + 1) * 0.25);
+      let base = capStart.length ? Math.min(...capStart.map(c => c.y1)) : med(lettersized.map(c => c.y1));
+      // a wrapped line can be a single glued blob ("H₂O"): take the letter height from the arrow line
+      if (refCapH) base = Math.min(base, capTop + refCapH - 1);
+      return { capTop, base, capH: Math.max(4, base - capTop + 1) };
+    };
+    // The bold font is kerned tightly: a subscript often touches the letters beside it ("e₂O" is one
+    // blob). Cut such blobs at the columns where ink goes below the baseline — that's the subscript.
+    {
+      const { capTop, base, capH } = lines();
+      let own = null; // component ids of the blob being cut (neighbours' ink in the same columns is ignored)
+      const on = (p) => mask[p] && own.has(lab[p]);
+      const topInk = (x) => { for (let y = 0; y < h; y++) if (on(y * w + x)) return y; return h; };
+      const bbox = (x0, x1) => {
+        let y0 = h, y1 = -1, xa = w, xb = -1;
+        for (let y = 0; y < h; y++) for (let x = x0; x <= x1; x++) if (on(y * w + x)) {
+          if (y < y0) y0 = y; if (y > y1) y1 = y; if (x < xa) xa = x; if (x > xb) xb = x;
+        }
+        return y1 < 0 || (y1 - y0 + 1) * (xb - xa + 1) < 6 ? null : { x0: xa, x1: xb, y0, y1, ids: own };
+      };
+      for (let k = clusters.length - 1; k >= 0; k--) {
+        const c = clusters[k];
+        if (c.y1 < base + capH * 0.15 || c.x1 - c.x0 + 1 < capH * 0.75) continue;
+        own = c.ids;
+        // column runs with ink below the baseline = subscripts ("₇H₁₆" has two, one each side of the H)
+        const below = [];
+        for (let x = c.x0; x <= c.x1; x++) {
+          let any = false;
+          for (let y = base + 2; y <= c.y1 && !any; y++) any = on(y * w + x);
+          below.push(any);
+        }
+        let subRuns = [];
+        for (let i = 0; i < below.length; i++) {
+          if (!below[i]) continue;
+          const last = subRuns[subRuns.length - 1];
+          if (last && i - last[1] <= 2) last[1] = i; else subRuns.push([i, i]);
+        }
+        // a bracket also dips below the baseline but reaches the cap line: not a subscript
+        const high = capTop + capH * 0.15, low = capTop + capH * 0.4;
+        subRuns = subRuns.filter(([a, b]) => {
+          let n = 0; for (let i = a; i <= b; i++) if (topInk(c.x0 + i) <= high) n++;
+          return n / (b - a + 1) < 0.5;
+        });
+        // widen each run to the whole digit (the top bar of "₇" is wider than its foot): take
+        // neighbouring columns whose ink is all in the lower part of the line
+        for (const r of subRuns) {
+          while (r[0] > 0 && topInk(c.x0 + r[0] - 1) >= low && topInk(c.x0 + r[0] - 1) < h) r[0]--;
+          while (r[1] < below.length - 1 && topInk(c.x0 + r[1] + 1) >= low && topInk(c.x0 + r[1] + 1) < h) r[1]++;
+        }
+        const cuts = [];
+        let from = c.x0;
+        for (const [a, b] of subRuns) {
+          if (c.x0 + a > from) cuts.push([from, c.x0 + a - 1]);
+          cuts.push([c.x0 + a, c.x0 + b]);
+          from = c.x0 + b + 1;
+        }
+        if (from <= c.x1) cuts.push([from, c.x1]);
+        const parts = [];
+        for (const [a, b] of cuts) {
+          let s0 = -1;
+          for (let x = a; x <= b + 1; x++) {
+            const ink = x <= b && topInk(x) < h;
+            if (ink && s0 < 0) s0 = x;
+            if (!ink && s0 >= 0) { const bb = bbox(s0, x - 1); if (bb) parts.push(bb); s0 = -1; }
+          }
+        }
+        if (parts.length > 1) clusters.splice(k, 1, ...parts);
+      }
+    }
+    const { capTop, base, capH } = lines();
     clusters.forEach(c => {
       const ch = c.y1 - c.y0 + 1;
-      c.sub = (c.y0 - capTop) > capH * 0.42 && c.y1 >= base - capH * 0.08 && ch < capH * 0.85;
+      // lowered and short — or clearly hanging below the baseline (subscripts sit a bit higher on some lines)
+      c.sub = ch < capH * 0.85 && (
+        ((c.y0 - capTop) > capH * 0.42 && c.y1 >= base - capH * 0.08) ||
+        ((c.y0 - capTop) > capH * 0.25 && c.y1 > base + capH * 0.1));
     });
 
     // Per-glyph crops for single-character OCR (black on white, ~64px tall, padded)
@@ -146,7 +243,8 @@ export function locateEquation(img) {
       gctx.fillStyle = '#fff'; gctx.fillRect(0, 0, gc.width, gc.height);
       const tmp = gctx.createImageData(cw, chh);
       for (let y = 0; y < chh; y++) for (let x = 0; x < cw; x++) {
-        const v = mask[(c.y0 + y) * w + c.x0 + x] ? 0 : 255, o = (y * cw + x) * 4;
+        const q = (c.y0 + y) * w + c.x0 + x;
+        const v = mask[q] && c.ids.has(lab[q]) ? 0 : 255, o = (y * cw + x) * 4;
         tmp.data[o] = tmp.data[o + 1] = tmp.data[o + 2] = v; tmp.data[o + 3] = 255;
       }
       const t2 = document.createElement('canvas'); t2.width = cw; t2.height = chh;
@@ -156,8 +254,9 @@ export function locateEquation(img) {
       const gapBefore = k ? c.x0 - clusters[k - 1].x1 - 1 : 0;
       return {
         canvas: gc,
+        box: [x0 + c.x0, by0 + c.y0, x0 + c.x1, by0 + c.y1],
         sub: c.sub,
-        wide: cw > capH * 1.25,                 // probably two touching letters
+        wide: c.sub ? cw > chh * 0.85 : cw > capH * 1.25, // two touching letters / a 2-digit subscript ("₁₆")
         tall: (c.y0 - capTop) < capH * 0.18,    // reaches cap height (uppercase / ascender)
         small: chh < capH * 0.72,               // e.g. "+", x-height letters
         spaceBefore: gapBefore > capH * 0.3
@@ -195,19 +294,40 @@ export function locateEquation(img) {
       octx.drawImage(src, c.x0, c.y0, cw, chh, cx * f, dy * f, dw * f, dh * f);
       cx += dw;
     });
-    return { canvas: out, subs: clusters.filter(c => c.sub).length, glyphs };
+    return { canvas: out, subs: clusters.filter(c => c.sub).length, glyphs, capH };
   };
 
   const hasArrow = ax1 >= ax0;
   const leftX1 = Math.max(tx0, ax0 - 2), rightX0 = Math.min(tx1, ax1 + 2);
+  const sideHasText = (x0, x1) => { for (let x = x0; x <= x1; x++) if (colText[x] > 0) return true; return false; };
+  let leftN = hasArrow && ax0 - tx0 > 4 && sideHasText(tx0, leftX1) ? normalized(tx0, leftX1) : null;
+  let rightN = hasArrow && tx1 - ax1 > 4 && sideHasText(rightX0, tx1) ? normalized(rightX0, tx1) : null;
+  // wrapped lines: before the arrow line → left side, after it → right side
+  for (const b of extraBands) {
+    const p2 = Math.max(2, Math.round((b.y1 - b.y0) * 0.25));
+    const by0 = Math.max(0, b.y0 - p2), by1 = Math.min(H - 1, b.y1 + p2);
+    let bx0 = W, bx1 = -1;
+    for (let y = by0; y <= by1; y++) for (let x = xA; x < xB; x++) {
+      const i = (y * W + x) * 4;
+      if (isTextPx(d[i], d[i + 1], d[i + 2])) { if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; }
+    }
+    if (bx1 < 0) continue;
+    const ref = (leftN || rightN || {}).capH || 0;
+    const n = normalized(Math.max(0, bx0 - 2), Math.min(W - 1, bx1 + 2), by0, by1, ref);
+    if (!n || !n.glyphs.length) continue;
+    n.glyphs[0].spaceBefore = true;
+    // the arrow can end a line ("… + HCl →" / "CaCl₂ + …"): that side of the arrow line is empty
+    if (b.y0 < best.y0) leftN = leftN ? { ...leftN, canvas: joinCanvases(n.canvas, leftN.canvas), glyphs: [...n.glyphs, ...leftN.glyphs], wrapped: true } : n;
+    else rightN = rightN ? { ...rightN, canvas: joinCanvases(rightN.canvas, n.canvas), glyphs: [...rightN.glyphs, ...n.glyphs], wrapped: true } : n;
+  }
   return {
     ok: true,
     hasArrow,
     whole: crop(tx0, tx1),
     left: hasArrow ? crop(tx0, leftX1) : null,
     right: hasArrow ? crop(rightX0, tx1) : null,
-    leftN: hasArrow ? normalized(tx0, leftX1) : null,
-    rightN: hasArrow ? normalized(rightX0, tx1) : null
+    leftN,
+    rightN
   };
 }
 
@@ -218,13 +338,68 @@ const XHEIGHT = new Set('acemnorsuvwxz'.split(''));
 const DIGIT_FIX = { O: '0', o: '0', D: '0', Q: '0', I: '1', l: '1', i: '1', '|': '1', Z: '2', z: '2', S: '5', s: '5', B: '8', G: '6', b: '6', g: '9', q: '9', T: '7' };
 const LETTER_FIX = { 0: 'O', 1: 'l', 5: 'S', 8: 'B', 6: 'G', 2: 'Z' };
 
+function smallCopy(src, sc, pad) {
+  const c = document.createElement('canvas');
+  c.width = Math.round(src.width * sc) + 2 * pad; c.height = Math.round(src.height * sc) + 2 * pad;
+  const x = c.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+  x.imageSmoothingQuality = 'high';
+  x.drawImage(src, pad, pad, src.width * sc, src.height * sc);
+  return c;
+}
+
+/** Split a black-on-white glyph canvas in two at the column with the least ink (middle 30–70%). */
+function splitAtThinnest(src) {
+  const W = src.width, H = src.height, d = src.getContext('2d').getImageData(0, 0, W, H).data;
+  const col = new Array(W).fill(0);
+  let x0 = W, x1 = -1;
+  for (let x = 0; x < W; x++) {
+    for (let y = 0; y < H; y++) if (d[(y * W + x) * 4] < 128) col[x]++;
+    if (col[x]) { if (x < x0) x0 = x; x1 = x; }
+  }
+  if (x1 - x0 < 8) return null;
+  let cut = -1;
+  for (let x = Math.round(x0 + (x1 - x0) * 0.3); x <= Math.round(x0 + (x1 - x0) * 0.7); x++) if (cut < 0 || col[x] < col[cut]) cut = x;
+  const piece = (a, b) => {
+    const pad = 18, c = document.createElement('canvas');
+    c.width = b - a + 1 + 2 * pad; c.height = H;
+    const x = c.getContext('2d');
+    x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+    x.drawImage(src, a, 0, b - a + 1, H, pad, 0, b - a + 1, H);
+    return c;
+  };
+  return [piece(x0, cut), piece(cut + 1, x1)];
+}
+
 async function ocrGlyph(worker, g) {
+  if (g.wide && g.sub) {
+    // touching 2-digit subscript ("₁₆"): Tesseract reads one digit of the pair, so split it at the
+    // thinnest column near the middle and read each digit on its own
+    const halves = splitAtThinnest(g.canvas);
+    if (halves) {
+      let t = '';
+      for (const h of halves) t += (await ocrGlyph(worker, { ...g, canvas: h, wide: false })).replace(/[^0-9]/g, '');
+      if (t.length === 2) return t;
+    }
+    await worker.setParameters({ tessedit_char_whitelist: '0123456789', tessedit_pageseg_mode: '6', user_defined_dpi: '300' });
+    const { data } = await worker.recognize(g.canvas);
+    return String(data.text || '').replace(/[^0-9]/g, '');
+  }
   if (g.wide) {
     await worker.setParameters({ tessedit_char_whitelist: g.sub ? '0123456789' : MAIN_WL, tessedit_pageseg_mode: '8', user_defined_dpi: '300' });
     const { data } = await worker.recognize(g.canvas);
     return String(data.text || '').replace(/\s+/g, '');
   }
-  // Single-char mode sometimes returns nothing for small glyphs: fall back to other modes
+  // Tesseract reads a lone bold letter best near its natural size (big crops of "O"/"e" came back
+  // empty or as "[+]"), so try a small copy first, then the big one in several modes.
+  // Subscript digits read better big (small "3" came back as "8").
+  if (!g.sub) {
+    const c = smallCopy(g.canvas, 0.35, 20);
+    await worker.setParameters({ tessedit_char_whitelist: MAIN_WL + '0123456789', tessedit_pageseg_mode: '10', user_defined_dpi: '300' });
+    const { data } = await worker.recognize(c);
+    const t = String(data.text || '').replace(/\s+/g, '');
+    if (t.length === 1) return t;
+  }
   for (const psm of ['10', '8', '13', '7']) {
     await worker.setParameters({ tessedit_char_whitelist: g.sub ? '0123456789' : MAIN_WL + '0123456789', tessedit_pageseg_mode: psm, user_defined_dpi: '300' });
     const { data } = await worker.recognize(g.canvas);
@@ -239,9 +414,13 @@ async function ocrGlyph(worker, g) {
  * upper/lower case is decided from the glyph's height (OCR alone often confuses c/C, o/O, s/S).
  */
 async function readSideByGlyphs(worker, glyphs) {
+  // every glyph is its own read: run them side by side, each with its own OCR handle (its own
+  // whitelist / page mode), then put the text together in order exactly as before
+  const reads = await Promise.all(glyphs.map(async g => ocrGlyph(await ensureOCRWorker(), g)));
   let out = '';
-  for (const g of glyphs) {
-    let t = await ocrGlyph(worker, g);
+  for (let i = 0; i < glyphs.length; i++) {
+    const g = glyphs[i];
+    let t = reads[i];
     if (!t) t = g.sub ? '' : '?';
     if (g.sub) {
       t = t.split('').map(ch => DIGIT_FIX[ch] || ch).join('').replace(/[^0-9]/g, '');
@@ -272,8 +451,8 @@ export async function readEquationImage(img, onStatus = () => {}) {
   const candidates = [];
   if (loc.hasArrow && loc.leftN && loc.rightN) {
     // Most reliable: glyph by glyph
-    const L = fixOcrFormulaSide(await readSideByGlyphs(worker, loc.leftN.glyphs));
-    const R = fixOcrFormulaSide(await readSideByGlyphs(worker, loc.rightN.glyphs));
+    const [l, r] = await Promise.all([readSideByGlyphs(worker, loc.leftN.glyphs), readSideByGlyphs(worker, loc.rightN.glyphs)]);
+    const L = fixOcrFormulaSide(l), R = fixOcrFormulaSide(r);
     if (L && R) candidates.push(`${L} → ${R}`);
   }
   if (loc.hasArrow && loc.leftN && loc.rightN && !candidates.some(c => balanceEquation(c).ok)) {

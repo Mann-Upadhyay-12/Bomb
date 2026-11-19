@@ -41,3 +41,20 @@ dist-ssr/
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Python
+__pycache__/
+*.pyc
+
+# Captcha training: images (38 MB) and exported model copies — the model ships inside src/heist/heistCore.js;
+# train_captcha.py keeps every run's weights/spec/report in files(1)/runs/
+captcja/
+spec_ctc.json
+*.bak_*
+
+# Local reference copies of the original single-file solvers (ported into src/)
+test.html
+public/HiTestCTC.html
+public/chess63.html
+public/simons.html
+public/wireseq.html

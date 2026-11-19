@@ -107,14 +107,17 @@ export async function readPasswordRow(img, allowed = null, onStatus = () => {}) 
 
   const letters = line.length === 5 ? line.split('') : Array(5).fill('');
   const unsure = Array(5).fill(line.length === 5 && lineConf < 60);
-  for (let i = 0; i < 5; i++) {
-    if (letters[i] && !(allowed && allowed[i] && !allowed[i].has(letters[i]))) continue;
-    onStatus(`Reading letter ${i + 1}/5…`);
-    const rec = await recognizeCell(worker, glyphCanvas(mask, W, [boxes[i]]));
+  // letters the line read missed (or read outside the allowed set) are read on their own, side by
+  // side — each with its own OCR handle so their page modes don't mix
+  const redo = [0, 1, 2, 3, 4].filter(i => !(letters[i] && !(allowed && allowed[i] && !allowed[i].has(letters[i]))));
+  if (redo.length) onStatus(`Reading ${redo.length} letter${redo.length > 1 ? 's' : ''} on their own…`);
+  const recs = await Promise.all(redo.map(async i => recognizeCell(await ensureOCRWorker(), glyphCanvas(mask, W, [boxes[i]]))));
+  redo.forEach((i, k) => {
+    const rec = recs[k];
     const ch = rec.letter && rec.letter !== '?' ? rec.letter : (letters[i] || '?');
     letters[i] = ch;
     unsure[i] = ch === '?' || rec.confidence < 60;
-  }
+  });
   for (let i = 0; i < 5; i++) if (allowed && allowed[i] && !allowed[i].has(letters[i])) unsure[i] = true;
   return { ok: true, row: letters.join(''), unsure };
 }

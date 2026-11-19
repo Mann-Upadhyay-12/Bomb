@@ -148,3 +148,94 @@ export function framesToRLE(frames) {
   rle.push({ is_on: curOn, duration: curDur });
   return rle;
 }
+
+/**
+ * Full-colour GIF decoder (from the standalone simons.html): returns every composited frame as
+ * RGBA pixels, honouring transparency, interlacing and disposal. No browser APIs needed.
+ * @returns {{ w:number, h:number, frames: Array<{ data: Uint8ClampedArray, delay: number }> }}
+ */
+export function decodeGIFRGBA(buf) {
+  const d = new Uint8Array(buf); let p = 0;
+  if (String.fromCharCode(d[0], d[1], d[2]) !== 'GIF') throw new Error('not a GIF');
+  p = 6;
+  const W = d[p] | d[p + 1] << 8, H = d[p + 2] | d[p + 3] << 8; p += 4;
+  const fl = d[p++]; p += 2;
+  let gct = null;
+  if (fl & 0x80) { const n = 2 << (fl & 7); gct = d.subarray(p, p + n * 3); p += n * 3; }
+  let cv = new Uint8ClampedArray(W * H * 4);
+  const frames = [];
+  let gce = { delay: 0, trans: -1, disp: 0 };
+  const skipSub = () => { while (p < d.length && d[p] !== 0) p += d[p] + 1; p++; };
+  while (p < d.length) {
+    const b = d[p++];
+    if (b === 0x3B) break;
+    if (b === 0x21) {
+      const label = d[p++];
+      if (label === 0xF9) {
+        p++; const pf = d[p];
+        gce = { disp: (pf >> 2) & 7, delay: (d[p + 1] | d[p + 2] << 8) * 10, trans: (pf & 1) ? d[p + 3] : -1 };
+        p += 5;
+      } else skipSub();
+    } else if (b === 0x2C) {
+      const x0 = d[p] | d[p + 1] << 8, y0 = d[p + 2] | d[p + 3] << 8, w = d[p + 4] | d[p + 5] << 8, h = d[p + 6] | d[p + 7] << 8, f = d[p + 8]; p += 9;
+      let ct = gct;
+      if (f & 0x80) { const n = 2 << (f & 7); ct = d.subarray(p, p + n * 3); p += n * 3; }
+      const minCode = d[p++];
+      const chunks = []; let tot = 0;
+      while (p < d.length && d[p] !== 0) { chunks.push(d.subarray(p + 1, p + 1 + d[p])); tot += d[p]; p += d[p] + 1; }
+      p++;
+      const data = new Uint8Array(tot); let o = 0;
+      for (const c of chunks) { data.set(c, o); o += c.length; }
+      const idx = gifLzwFull(minCode, data, w * h);
+      const rows = new Array(h);
+      if (f & 0x40) { let r = 0; for (const [s, st] of [[0, 8], [4, 8], [2, 4], [1, 2]]) for (let y = s; y < h; y += st) rows[y] = r++; }
+      else for (let y = 0; y < h; y++) rows[y] = y;
+      const saved = gce.disp === 3 ? cv.slice() : null;
+      if (ct) {
+        for (let y = 0; y < h; y++) {
+          const sy = rows[y] * w, dy = y0 + y; if (dy >= H) continue;
+          for (let x = 0; x < w; x++) {
+            const dx = x0 + x; if (dx >= W) continue;
+            const ci = idx[sy + x]; if (ci === gce.trans) continue;
+            const o2 = (dy * W + dx) * 4;
+            cv[o2] = ct[ci * 3]; cv[o2 + 1] = ct[ci * 3 + 1]; cv[o2 + 2] = ct[ci * 3 + 2]; cv[o2 + 3] = 255;
+          }
+        }
+      }
+      frames.push({ data: cv.slice(), delay: gce.delay || 100 });
+      if (gce.disp === 2) {
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+          const dx = x0 + x, dy = y0 + y;
+          if (dx < W && dy < H) cv.fill(0, (dy * W + dx) * 4, (dy * W + dx) * 4 + 4);
+        }
+      } else if (gce.disp === 3 && saved) cv = saved;
+      gce = { delay: 0, trans: -1, disp: 0 };
+    } else break;
+  }
+  return { w: W, h: H, frames };
+}
+
+function gifLzwFull(minCode, data, npix) {
+  const clear = 1 << minCode, eoi = clear + 1;
+  let size = minCode + 1, next = eoi + 1, mask = (1 << size) - 1;
+  const prefix = new Uint16Array(4096), suffix = new Uint8Array(4096), stack = new Uint8Array(4097), out = new Uint8Array(npix);
+  for (let i = 0; i < clear; i++) suffix[i] = i;
+  let bits = 0, nb = 0, op = 0, old = -1, first = 0;
+  for (let i = 0; i < data.length; i++) {
+    bits |= data[i] << nb; nb += 8;
+    while (nb >= size) {
+      let code = bits & mask; bits >>= size; nb -= size;
+      if (code === clear) { size = minCode + 1; mask = (1 << size) - 1; next = eoi + 1; old = -1; continue; }
+      if (code === eoi) return out;
+      if (old === -1) { out[op++] = suffix[code]; old = code; first = code; continue; }
+      const inCode = code; let top = 0;
+      if (code >= next) { stack[top++] = first; code = old; }
+      while (code >= clear) { stack[top++] = suffix[code]; code = prefix[code]; }
+      first = suffix[code]; stack[top++] = first;
+      if (next < 4096) { prefix[next] = old; suffix[next] = first; next++; if ((next & mask) === 0 && next < 4096) { size++; mask = (1 << size) - 1; } }
+      old = inCode;
+      while (top > 0 && op < npix) out[op++] = stack[--top];
+    }
+  }
+  return out;
+}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useId } from 'react';
+import { preWarmOCR } from '../search/searchOCR.js';
 import { balanceEquation, SAMPLE_EQUATION } from './balanceSolver.js';
 import { readEquationImage } from './balanceVision.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
@@ -13,6 +14,8 @@ import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
 import { BalanceWorking } from './working.jsx';
 
 export function BalanceModule({ isActive = true }) {
+  // start the OCR engine while the screenshot is being taken, so the first read doesn't wait for it
+  React.useEffect(() => { preWarmOCR(); }, []);
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();

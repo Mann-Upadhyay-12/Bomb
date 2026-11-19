@@ -2,6 +2,102 @@ import React, { useRef, useState, useEffect } from 'react';
 import { extractImageSource, extractImageFromPaste, loadImageSource } from '../utils/image.js';
 import { useInstance } from './InstanceContext.jsx';
 
+// Phones can't Ctrl+V or drag & drop. This is a real text box: long-press it → Paste works with no
+// clipboard permission (a normal paste event). It takes a pasted image, or an image link (Discord
+// "Copy Link" works — cdn.discordapp.com allows other sites to read its images).
+const URL_RE = /https?:\/\/[^\s<>"']+/i;
+export function PasteBox({ onSource, busy }) {
+  const ref = useRef(null);
+  const [msg, setMsg] = useState('');
+  const clear = () => { if (ref.current) ref.current.innerHTML = ''; };
+  // the "Loading…" note goes away once the image has loaded
+  useEffect(() => { if (!busy) setMsg(m => (m.startsWith('Loading') ? '' : m)); }, [busy]);
+
+  const takeUrl = (text) => {
+    const m = String(text || '').match(URL_RE);
+    if (!m) return false;
+    let url = m[0].replace(/&amp;/g, '&');
+    if (/discord(app)?\.com\/channels\//i.test(url)) {
+      setMsg('That is a message link — long-press the image itself → Copy Link (or Copy Image)');
+      return true;
+    }
+    setMsg('Loading image link…');
+    onSource({ type: 'url', url });
+    return true;
+  };
+
+  const onPaste = (e) => {
+    e.stopPropagation(); // handled here, not by the page-wide Ctrl+V listener
+    const cd = e.clipboardData;
+    const src = cd ? extractImageFromPaste(cd) : null;
+    e.preventDefault();
+    clear();
+    if (src && src.type === 'file') { setMsg(''); onSource(src); return; }
+    const text = cd ? (cd.getData('text/plain') || cd.getData('text') || '') : '';
+    const html = cd ? cd.getData('text/html') || '' : '';
+    const img = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+    if (img && takeUrl(img[1])) return;
+    if (!takeUrl(text)) setMsg('No image or image link in the clipboard');
+  };
+
+  // keyboards' clipboard bars insert text / images without a paste event
+  const onInput = () => {
+    const el = ref.current;
+    if (!el) return;
+    const img = el.querySelector('img');
+    const text = img ? img.getAttribute('src') : el.textContent;
+    clear();
+    if (img && /^data:image\//.test(text || '')) {
+      fetch(text).then(r => r.blob()).then(blob => onSource({ type: 'file', file: blob }));
+      return;
+    }
+    takeUrl(text);
+  };
+
+  // The 📋 button: the clipboard API needs permission and is blocked on many phones —
+  // then the long-press box is the way.
+  const fromClipboard = async (e) => {
+    e.stopPropagation();
+    try {
+      if (navigator.clipboard && navigator.clipboard.read) {
+        const items = await navigator.clipboard.read();
+        for (const it of items) {
+          const type = it.types.find(t => t.startsWith('image/'));
+          if (type) { setMsg(''); onSource({ type: 'file', file: await it.getType(type) }); return; }
+        }
+      }
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        if (takeUrl(await navigator.clipboard.readText())) return;
+      }
+      setMsg('No image or image link in the clipboard');
+    } catch (err) {
+      setMsg('The browser blocked the clipboard — long-press the box → Paste instead');
+      if (ref.current) ref.current.focus();
+    }
+  };
+
+  return (
+    <div className="dz-paste" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
+      <div className="dz-paste-row">
+        <div
+          ref={ref}
+          className="dz-paste-box"
+          contentEditable
+          suppressContentEditableWarning
+          role="textbox"
+          aria-label="Paste an image or image link here"
+          data-placeholder={busy ? 'Loading…' : 'Long-press → Paste image / link'}
+          onPaste={onPaste}
+          onInput={onInput}
+          onFocus={() => setMsg('')}
+        />
+        <button type="button" className="dz-paste-btn" onClick={fromClipboard} title="Paste from clipboard">📋</button>
+      </div>
+      {msg && <div className="dz-paste-msg">{msg}</div>}
+    </div>
+  );
+}
+
 export function Dropzone({
   onImage,
   onFiles,
@@ -39,15 +135,22 @@ export function Dropzone({
     );
   };
 
+  const [loadError, setLoadError] = useState('');
   const loadFromSource = (srcObj) => {
+    // a pasted file goes through onFiles when the module takes several at once
+    if (srcObj.type === 'file' && multiple && onFiles) { setLoadError(''); onFiles([srcObj.file]); return; }
     setLoading(true);
+    setLoadError('');
     loadImageSource(
       srcObj,
       (img, dataUri, fileBlob) => {
         setLoading(false);
         if (onImage) onImage(img, dataUri, fileBlob);
       },
-      () => setLoading(false)
+      () => {
+        setLoading(false);
+        if (srcObj.type === 'url') setLoadError('Could not load that link — it may have expired. Copy the image again.');
+      }
     );
   };
 
@@ -259,6 +362,7 @@ export function Dropzone({
       >
         <div className="dz-icon">{loading ? '⏳' : icon}</div>
         <div className="dz-title">{loading ? 'Processing image…' : title}</div>
+        {loadError && <div className="dz-error">{loadError}</div>}
         <div className="dz-sub">
           {sub || (
             <>
@@ -266,6 +370,7 @@ export function Dropzone({
             </>
           )}
         </div>
+        <PasteBox onSource={loadFromSource} busy={loading} />
       </div>
     </>
   );

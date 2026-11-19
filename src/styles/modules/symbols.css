@@ -75,3 +75,15 @@
 .sy-mine-tag { background: var(--brass); color: #121419; border-radius: 5px; padding: 1px 6px; font-size: 10px; letter-spacing: .06em; }
 .sy-grid-header .sy-use-btn { border: 1px solid #5A5F6A; border-radius: 5px; padding: 1px 7px; font-size: 10px; color: #C9CDD6; }
 .sy-grid-header .sy-use-btn:hover { border-color: #F3C567; color: #F3C567; }
+
+/* screenshot each grid / the keypad was read from */
+.sy-applied { display: flex; align-items: center; gap: 10px; margin: 6px 0 8px; font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--ink-soft); }
+.sy-applied img { max-width: 170px; max-height: 130px; border: 1px solid var(--line); border-radius: 6px; background: #111; display: block; }
+.sy-applied.small img { max-width: 120px; max-height: 120px; }
+.sy-countfrom { display: inline-flex; align-items: center; gap: 4px; font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; color: var(--ink-soft); }
+.sy-countfrom .bg-btn { padding: 3px 8px; font-size: 10.5px; }
+.sy-countfrom .bg-btn.active { border-color: var(--brass); color: var(--brass); font-weight: 700; }
+.sy-group-pick { font: inherit; font-size: 11px; font-weight: 700; letter-spacing: .06em; background: transparent;
+  color: inherit; border: 1px solid var(--line); border-radius: 4px; padding: 1px 4px; cursor: pointer; }
+.sy-group-pick option { background: var(--paper-raised); color: var(--ink); }
+.sy-grid-n { font-size: 10px; opacity: .7; margin: 0 4px; }

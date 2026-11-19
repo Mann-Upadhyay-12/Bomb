@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useInstance } from '../InstanceContext.jsx';
 
 export function WorkingPanel({
   title = 'WORKING / SOLUTION LOGIC',
@@ -7,7 +8,9 @@ export function WorkingPanel({
   defaultExpanded = true,
   children
 }) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
+  // Several copies side by side: start collapsed so every card's answer fits on one screen
+  const inst = useInstance();
+  const [expanded, setExpanded] = useState(inst && inst.multi ? false : defaultExpanded);
 
   if (!children) return null;
 

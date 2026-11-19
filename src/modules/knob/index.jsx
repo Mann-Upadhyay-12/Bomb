@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { preWarmOCR } from '../search/searchOCR.js';
 import {
   DEFAULT_RULES,
   KEY,
@@ -18,6 +19,8 @@ import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
 import { KnobWorking } from './working.jsx';
 
 export function KnobModule({ isActive = true }) {
+  // start the OCR engine while the screenshot is being taken, so the first read doesn't wait for it
+  React.useEffect(() => { preWarmOCR(); }, []);
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();

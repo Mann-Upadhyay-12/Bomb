@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { preWarmOCR } from '../search/searchOCR.js';
 import {
   DEFAULT_RULES,
   POS_NAMES,
@@ -23,6 +24,8 @@ import { wofReadImage } from './wofOCR.js';
 export const KEY = 'bombvision_wof_rules_v2';
 
 export function WofModule({ isActive = true }) {
+  // start the OCR engine while the screenshot is being taken, so the first read doesn't wait for it
+  React.useEffect(() => { preWarmOCR(); }, []);
   const inst = useInstance();
   const grouped = Boolean(inst && inst.grouped);
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();

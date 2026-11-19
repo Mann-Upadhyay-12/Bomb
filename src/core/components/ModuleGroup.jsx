@@ -10,6 +10,8 @@ import { PN_KEY } from '../../modules/piano/index.jsx';
 import { PN_DEFAULT_CODES } from '../../modules/piano/pianoSolver.js';
 import { KEY as WOF_KEY } from '../../modules/wof/index.jsx';
 import { DEFAULT_RULES as WOF_DEFAULT_RULES } from '../../modules/wof/wofSolver.js';
+import { CIRCUIT_MANUAL_KEY } from '../../modules/circuit/index.jsx';
+import { CIRCUIT_DEFAULT_MANUAL } from '../../modules/circuit/circuitSolver.js';
 
 // The one manual every copy of a "same manual" module uses (null = the module has none).
 // `looks` recognises that manual's text when it's pasted anywhere on the page.
@@ -38,15 +40,23 @@ const MANUALS = {
     key: 'bombvision_button_checklist', fallback: '', label: 'HELPER CHECKLIST (+ SERIAL / MODULE COUNTS)', rows: 8,
     looks: t => /label says/i.test(t) || (/\bbutton\b/i.test(t) && /\d+\s*s\b/i.test(t))
   },
+  circuit: {
+    key: CIRCUIT_MANUAL_KEY, fallback: CIRCUIT_DEFAULT_MANUAL, label: 'RESISTOR COLOUR → OHMS', rows: 8,
+    looks: t => (t.match(/\b(red|orange|yellow|green|blue|violet|purple|white|gr[ae]y)\s*[=:]\s*\d/gi) || []).length >= 3
+  },
   morse: null
 };
 
 const isTextField = el => el && (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && el.type !== 'file' && el.type !== 'checkbox'));
 
+// The manual is pasted, not typed: paste its text anywhere on the page and it's used straight away.
+// So it's just a one-line status here; the text box is only for checking / debugging.
 function SharedManual({ cfg, count, visible }) {
   const [text, setText] = useSharedSetting(cfg.key, cfg.fallback);
   const { showToast } = useToast();
-  const [open, setOpen] = useState(!text.trim());
+  const [open, setOpen] = useState(false);
+  const isDefault = text.trim() === String(cfg.fallback || '').trim();
+  const status = !text.trim() ? 'NOT LOADED' : isDefault ? 'DEFAULT' : 'LOADED ✓';
 
   // Pasting the manual anywhere on the page (outside a text box) loads it straight away
   useEffect(() => {
@@ -60,29 +70,39 @@ function SharedManual({ cfg, count, visible }) {
         e.preventDefault();
         e.stopImmediatePropagation();
         setText(t.trim());
-        showToast('MANUAL LOADED FOR ALL ✓');
+        showToast(`MANUAL LOADED FOR ${count > 1 ? `ALL ${count}` : 'THIS MODULE'} ✓`);
       }
     };
     window.addEventListener('paste', onPaste, true);
     return () => window.removeEventListener('paste', onPaste, true);
-  }, [visible, cfg]);
+  }, [visible, cfg, count]);
 
   return (
-    <details className="mgroup-manual" open={open} onToggle={e => setOpen(e.currentTarget.open)}>
-      <summary>📖 {cfg.label} — SHARED BY ALL {count}</summary>
-      <textarea
-        className="search-words-field"
-        rows={cfg.rows}
-        spellCheck={false}
-        value={text}
-        placeholder="Paste the manual here — it's used straight away, no button needed."
-        onChange={e => setText(e.target.value)}
-      />
-      <div className="mgroup-manual-foot">
-        <span>Applied as you paste or type · you can also paste it anywhere on the page.</span>
-        {cfg.fallback && <button type="button" className="bg-btn" onClick={() => setText(cfg.fallback)}>🔄 Restore default</button>}
+    <div className={`mgroup-manual-bar ${open ? 'open' : ''}`}>
+      <div className="mgroup-manual-line">
+        <span className="mgroup-manual-name">📖 MANUAL</span>
+        <span className={`mgroup-manual-status ${status === 'NOT LOADED' ? 'off' : 'on'}`}>{status}</span>
+        <span className="mgroup-manual-tip">paste the manual text anywhere (Ctrl+V) to load it</span>
+        <button type="button" className="mgroup-manual-debug" onClick={() => setOpen(o => !o)}>{open ? 'hide' : 'debug'}</button>
       </div>
-    </details>
+      {open && (
+        <div className="mgroup-manual">
+          <div className="mgroup-manual-sub">{cfg.label}</div>
+          <textarea
+            className="search-words-field"
+            rows={cfg.rows}
+            spellCheck={false}
+            value={text}
+            placeholder="Paste the manual here — it's used straight away, no button needed."
+            onChange={e => setText(e.target.value)}
+          />
+          <div className="mgroup-manual-foot">
+            <span>Applied as you paste or type.</span>
+            {cfg.fallback && <button type="button" className="bg-btn" onClick={() => setText(cfg.fallback)}>🔄 Restore default</button>}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -107,8 +127,15 @@ export function ModuleGroup({ id, label, count, isActive, renderInstance, onCoun
     index: i,
     selected: i === sel,
     inject: injects[i] || null,
+    count,
+    // a strip with n modules in one screenshot (Diagram): add cards up to n when the count can change;
+    // returns how many cards there will be
+    grow: (n) => {
+      if (onCountChange && n > count) { onCountChange(Math.min(9, n)); return Math.min(9, n); }
+      return count;
+    },
     report: (a) => setAnswers(prev => (prev[i] === a ? prev : { ...prev, [i]: a }))
-  })), [count, injects, sel]);
+  })), [count, injects, sel, onCountChange]);
 
   const dropOn = (i, e) => {
     e.preventDefault();
@@ -122,13 +149,16 @@ export function ModuleGroup({ id, label, count, isActive, renderInstance, onCoun
   const solved = Array.from({ length: count }, (_, i) => answers[i]).filter(Boolean).length;
 
   return (
-    <div className="mgroup" ref={rootRef}>
+    <div className={`mgroup mgroup-${id} ${count > 1 ? 'multi' : ''}`} ref={rootRef}>
       {onCountChange && (
         <div className="mgroup-count">
           <span className="search-config-label">MODULES TO SOLVE:</span>
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
             <button key={n} type="button" className={`mgroup-count-btn ${n === count ? 'on' : ''}`} onClick={() => onCountChange(n)}>{n}</button>
           ))}
+          <select className="mgroup-count-select" aria-label="Modules to solve" value={count} onChange={e => onCountChange(Number(e.target.value))}>
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
         </div>
       )}
 
@@ -137,7 +167,7 @@ export function ModuleGroup({ id, label, count, isActive, renderInstance, onCoun
       {count > 1 && (
         <div className="mgroup-head">
           <span className="search-config-label">{label} — {count} MODULES · {solved} ANSWERED</span>
-          <span className="mgroup-hint">Drop a screenshot on a card, or click a card and press Ctrl+V</span>
+          <span className="mgroup-hint">{cfg ? '① paste the manual  ② click a card, paste the defuser\'s screenshot' : 'click a card, then Ctrl+V (or drop a screenshot on it)'}</span>
           <button type="button" className={`copy-btn ${copyOnDecode ? 'on' : ''}`} aria-pressed={copyOnDecode}
             onClick={() => setCopyOnDecode(!copyOnDecode)}>
             <span className="swatch"></span> COPY ON DECODE
@@ -145,6 +175,7 @@ export function ModuleGroup({ id, label, count, isActive, renderInstance, onCoun
         </div>
       )}
 
+      <div className={count > 1 ? `mgroup-cards cols-${count === 2 || count === 4 ? 2 : 3}` : 'mgroup-single'}>
       {Array.from({ length: count }, (_, i) => (
         <section
           key={i}
@@ -167,6 +198,7 @@ export function ModuleGroup({ id, label, count, isActive, renderInstance, onCoun
           </InstanceContext.Provider>
         </section>
       ))}
+      </div>
     </div>
   );
 }

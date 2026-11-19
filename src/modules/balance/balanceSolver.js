@@ -218,6 +218,8 @@ export function fixOcrFormulaSide(text) {
   s = s.replace(/([A-Z])[Il|]/g, (m, a) => (ELEMENTS.has(a + 'l') && !ELEMENTS.has(a + 'I'.toLowerCase()) ? a + 'l' : m));
   // Pipe characters are almost always a "1" or "l"
   s = s.replace(/\|/g, 'l');
+  // a lowercase "l" can only follow an uppercase letter (Cl, Al…); on its own it is iodine "I"
+  s = s.replace(/(^|[^A-Za-z])l/g, '$1I');
   // Wrong case on the 2nd letter: "FE" → "Fe", "NA" → "Na" (E/A aren't elements, Fe/Na are)
   s = s.replace(/([A-Z])([A-Z])(?![a-z])/g, (m, a, b) => (!ELEMENTS.has(b) && ELEMENTS.has(a + b.toLowerCase()) ? a + b.toLowerCase() : m));
   // spaces inside a formula: "KNO 3" → "KNO3"; keep " + " separators

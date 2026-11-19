@@ -4,8 +4,9 @@ import {
   ensureOCRWorker,
   getSearchGrid,
   preprocessCellCanvas,
-  recognizeCell
+  recognizeCellConsensus
 } from './searchOCR.js';
+import { cellFeature, matchGlyph, combineGlyphOcr, SEARCH_GLYPHS } from './searchGlyphs.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
@@ -156,7 +157,34 @@ export function SearchModule({ isActive = true }) {
 
     const runId = ++ocrRunRef.current;
     const stale = () => runId !== ocrRunRef.current;
-    setOcrStatus('Starting OCR engine…');
+
+    // 1. Shape match against letters cut from real game screenshots (exact for the game's font).
+    //    Done on a copy scaled to the game's native 440px width.
+    const nW = 440, nH = Math.max(1, Math.round(440 * img.naturalHeight / img.naturalWidth));
+    const nCanvas = document.createElement('canvas');
+    nCanvas.width = nW; nCanvas.height = nH;
+    const nCtx = nCanvas.getContext('2d', { willReadFrequently: true });
+    nCtx.imageSmoothingQuality = 'high';
+    nCtx.drawImage(img, 0, 0, nW, nH);
+    const nData = nCtx.getImageData(0, 0, nW, nH).data;
+    const shape = Array.from({ length: 5 }, (_, r) => Array.from({ length: 5 }, (_, c) => {
+      const f = cellFeature(nData, nW, nH, r, c);
+      return { f, m: matchGlyph(f, SEARCH_GLYPHS) };
+    }));
+    const shapeGrid = shape.map(row => row.map(x => (x.m.sure ? x.m.letter : '')));
+    const unsureCells = shape.flat().filter(x => !x.m.sure).length;
+    setGridData(shapeGrid.map(row => row.map(l => l || '…')));
+    setConfidence(shape.map(row => row.map(x => (x.m.sure ? Math.round(x.m.score * 100) : 0))));
+    if (!unsureCells) {
+      setGridData(shapeGrid.map(row => [...row]));
+      setOcrStatus('✅ Read all 25 letters by shape');
+      setOcrProgress(null);
+      showToast('WORD SEARCH READ ✓');
+      return;
+    }
+
+    // 2. Tesseract for the cells the shape match isn't sure about (letters with no sample yet: B, I, Q …)
+    setOcrStatus(`Starting OCR engine for ${unsureCells} unclear cell${unsureCells > 1 ? 's' : ''}…`);
     setOcrProgress(5);
 
     let worker;
@@ -172,7 +200,9 @@ export function SearchModule({ isActive = true }) {
       });
     } catch (err) {
       if (stale()) return;
-      setOcrStatus(`⚠️ OCR unavailable: ${err.message}. You can type or paste letters manually.`);
+      // no OCR: keep the best shape guesses so only the unclear cells need checking
+      setGridData(shape.map(row => row.map(x => x.m.letter || '?')));
+      setOcrStatus(`⚠️ OCR unavailable: ${err.message}. Unclear cells use the closest shape — check them.`);
       setOcrProgress(null);
       showToast('OCR UNAVAILABLE — ENTER LETTERS MANUALLY');
       return;
@@ -182,7 +212,7 @@ export function SearchModule({ isActive = true }) {
     setOcrStatus('Reading 25 letter cells…');
     setOcrProgress(15);
 
-    const MAXDIM = 880;
+    const MAXDIM = 1200;
     let iw = img.naturalWidth, ih = img.naturalHeight;
     const scl = Math.min(1, MAXDIM / Math.max(iw, ih));
     iw = Math.round(iw * scl);
@@ -195,66 +225,92 @@ export function SearchModule({ isActive = true }) {
     ctx.drawImage(img, 0, 0, iw, ih);
 
     const { rowCenters, colCenters, cellW, cellH } = getSearchGrid(iw, ih);
-    const UPSCALE = 2; // Optimal letter height ~60-80px for fast, accurate Tesseract recognition
-    const CROP = 0.88;
-    const PAD_PX = 12;
+    // Same settings as the original app, which read every letter (the faster 2× / no-dilation
+    // pass lost V, J, M, Z): 8× upscale, ~36px of the 40px cell, white margin for Tesseract
+    const UPSCALE = 8;
+    const CROP = 0.90;
+    const PAD_PX = 24;
 
     const newGrid = Array.from({ length: 5 }, () => Array(5).fill(''));
     const newConf = Array.from({ length: 5 }, () => Array(5).fill(100));
     let done = 0;
 
-    const cellCanvas = document.createElement('canvas');
-    const cellCtx = cellCanvas.getContext('2d');
-    const padCanvas = document.createElement('canvas');
-    const padCtx = padCanvas.getContext('2d');
+    // Unclear cells are read in parallel (the OCR pool runs them on as many workers as it has);
+    // each cell has its own canvases, so the pixels Tesseract sees are the same as one at a time.
+    const readOne = async (r, c) => {
+      const cy = rowCenters[r];
+      const cx = colCenters[c];
+      const cW = Math.round(cellW * CROP);
+      const cH = Math.round(cellH * CROP);
+      const sx2 = Math.max(0, Math.round(cx - cW / 2));
+      const sy2 = Math.max(0, Math.round(cy - cH / 2));
+      const sw2 = Math.min(iw - sx2, cW);
+      const sh2 = Math.min(ih - sy2, cH);
 
-    for (let r = 0; r < 5; r++) {
-      for (let c = 0; c < 5; c++) {
-        const cy = rowCenters[r];
-        const cx = colCenters[c];
-        const cW = Math.round(cellW * CROP);
-        const cH = Math.round(cellH * CROP);
-        const sx2 = Math.max(0, Math.round(cx - cW / 2));
-        const sy2 = Math.max(0, Math.round(cy - cH / 2));
-        const sw2 = Math.min(iw - sx2, cW);
-        const sh2 = Math.min(ih - sy2, cH);
+      if (sw2 < 4 || sh2 < 4) {
+        newGrid[r][c] = '?';
+        newConf[r][c] = 0;
+        done++;
+        return;
+      }
 
-        if (sw2 < 4 || sh2 < 4) {
-          newGrid[r][c] = '?';
-          newConf[r][c] = 0;
-          done++;
-          continue;
-        }
-
-        cellCanvas.width = sw2 * UPSCALE;
-        cellCanvas.height = sh2 * UPSCALE;
-        cellCtx.imageSmoothingEnabled = true;
-        cellCtx.imageSmoothingQuality = 'medium';
+      const cellCanvas = document.createElement('canvas');
+      const cellCtx = cellCanvas.getContext('2d');
+      const padCanvas = document.createElement('canvas');
+      const padCtx = padCanvas.getContext('2d');
+      cellCanvas.width = sw2 * UPSCALE;
+      cellCanvas.height = sh2 * UPSCALE;
+      cellCtx.imageSmoothingEnabled = true;
+      cellCtx.imageSmoothingQuality = 'high';
+      const readCell = async (mode) => {
         cellCtx.drawImage(workCanvas, sx2, sy2, sw2, sh2, 0, 0, cellCanvas.width, cellCanvas.height);
-
-        preprocessCellCanvas(cellCtx, cellCanvas.width, cellCanvas.height, 'otsu', 0);
-
+        preprocessCellCanvas(cellCtx, cellCanvas.width, cellCanvas.height, mode, 1);
         padCanvas.width = cellCanvas.width + PAD_PX * 2;
         padCanvas.height = cellCanvas.height + PAD_PX * 2;
         padCtx.fillStyle = '#FFFFFF';
         padCtx.fillRect(0, 0, padCanvas.width, padCanvas.height);
         padCtx.drawImage(cellCanvas, PAD_PX, PAD_PX);
+        return recognizeCellConsensus(worker, padCanvas);
+      };
 
-        const rec = await recognizeCell(worker, padCanvas);
+      let rec = await readCell('otsu');
+      if (stale()) return;
+      // unreadable or unsure: retry with the simple brightness threshold
+      if (rec.letter === '?' || rec.confidence < 30) {
+        const retry = await readCell('adaptive');
         if (stale()) return;
-        newGrid[r][c] = rec.letter;
-        newConf[r][c] = rec.confidence;
-        done++;
+        if (retry.confidence > rec.confidence) rec = retry;
+      }
+      // the shape vetoes OCR letters it clearly disagrees with (W read as J …)
+      newGrid[r][c] = combineGlyphOcr(shape[r][c].f, shape[r][c].m, rec.letter, SEARCH_GLYPHS);
+      newConf[r][c] = newGrid[r][c] === rec.letter ? rec.confidence : Math.round(shape[r][c].m.score * 100);
+      done++;
 
-        // Live progressive update of grid cells so user sees results in real time
-        setGridData(newGrid.map(row => [...row]));
-        setConfidence(newConf.map(row => [...row]));
-        setOcrProgress(Math.round(15 + (done / 25) * 85));
-        setOcrStatus(`Reading cell ${done}/25: [${rec.letter || '?'}]`);
+      // Live progressive update of grid cells so user sees results in real time
+      setGridData(newGrid.map(row => [...row]));
+      setConfidence(newConf.map(row => [...row]));
+      setOcrProgress(Math.round(15 + (done / 25) * 85));
+      setOcrStatus(`Reading cell ${done}/25: [${rec.letter || '?'}]`);
+    };
+
+    const jobs = [];
+    for (let r = 0; r < 5; r++) {
+      for (let c = 0; c < 5; c++) {
+        if (shape[r][c].m.sure) {
+          newGrid[r][c] = shape[r][c].m.letter;
+          newConf[r][c] = Math.round(shape[r][c].m.score * 100);
+          done++;
+        } else {
+          jobs.push(readOne(r, c));
+        }
       }
     }
+    await Promise.all(jobs);
+    if (stale()) return;
 
-    setOcrStatus('✅ OCR complete!');
+    setGridData(newGrid.map(row => [...row]));
+    setConfidence(newConf.map(row => [...row]));
+    setOcrStatus(`✅ OCR complete! (${25 - unsureCells} by shape, ${unsureCells} by OCR)`);
     setOcrProgress(null);
     showToast('WORD SEARCH OCR COMPLETE ✓');
   };

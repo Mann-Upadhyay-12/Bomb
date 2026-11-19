@@ -156,17 +156,24 @@ export function wsReadImage(img) {
     }
     stage.push(best.f >= 0.55 ? { c: best.c, d: best.d } : { c: null, d: null });
   }
-  let sx = 0, sn = 0;
-  for (let y = Math.floor(H * 0.74); y <= Math.floor(H * 0.88); y++) {
+  // Stage number from the 5 pager dots (the lit one is orange). Orange pixels are binned to the
+  // nearest dot position instead of averaged: one global centroid mixed stray wire / reflection
+  // pixels with the dot and pulled stage 1 towards stage 3 (fix from the standalone wireseq.html).
+  const dotXs = [0.40, 0.45, 0.50, 0.55, 0.60];
+  const bins = [0, 0, 0, 0, 0];
+  for (let y = Math.floor(H * 0.77); y <= Math.floor(H * 0.88); y++) {
     for (let x = Math.floor(W * 0.33); x <= Math.floor(W * 0.67); x++) {
       const [r, g, b] = px(x, y);
-      if (r > 200 && g > 140 && g < 215 && b < 150 && r - b > 70) { sx += x; sn++; }
+      if (r > 200 && g > 140 && g < 215 && b < 150 && r - b > 70) {
+        const xf = x / W;
+        let bd = Infinity, bi = -1;
+        for (let s = 0; s < 5; s++) { const dd = Math.abs(xf - dotXs[s]); if (dd < 0.024 && dd < bd) { bd = dd; bi = s; } }
+        if (bi >= 0) bins[bi]++;
+      }
     }
   }
-  let stageNo = null;
-  if (sn >= 6) {
-    const idx = Math.round((sx / sn / W - 0.4) / 0.05);
-    if (idx >= 0 && idx <= 4) stageNo = idx + 1;
-  }
+  let stageNo = null, maxCount = 0;
+  bins.forEach((n, s) => { if (n > maxCount) { maxCount = n; stageNo = s + 1; } });
+  if (maxCount < 6) stageNo = null;
   return { wires: stage, stageNo };
 }

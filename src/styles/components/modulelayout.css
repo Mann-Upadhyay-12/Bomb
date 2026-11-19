@@ -52,3 +52,57 @@
 .mgroup-card .dropzone.compact .dz-icon { font-size: 18px; margin-bottom: 4px; }
 .mgroup-card .dropzone.compact .dz-title { font-size: 15px; }
 .mgroup-card .dropzone.compact .dz-sub { display: none; }
+
+/* Several copies: break out of the 880px page column and lay the cards out side by side,
+   so 2–3 modules fit on one screen without zooming the browser out. */
+.mgroup.multi {
+  --mg-w: min(1760px, calc(100vw - 56px));
+  width: var(--mg-w);
+  position: relative;
+  left: 50%;
+  margin-left: calc(var(--mg-w) / -2);
+}
+.mgroup-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.mgroup-cards .mgroup-card { min-width: 0; padding: 12px; }
+.mgroup-cards .controls { gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.mgroup-cards .stamp { padding: 10px 12px; margin-bottom: 10px; }
+.mgroup-cards .stamp-word { font-size: 26px; min-height: 0; }
+.mgroup-cards .working-panel-header { padding: 8px 10px; }
+.mgroup-cards .working-panel-title { font-size: 11px; }
+
+/* columns follow the number of copies (2 → 2, 3 → 3, 4 → 2×2, 5+ → 3 per row), fewer on small screens */
+.mgroup-cards.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 1150px) { .mgroup-cards.cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 780px) { .mgroup-cards.cols-2, .mgroup-cards.cols-3 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 780px) { .mgroup.multi { --mg-w: calc(100vw - 24px); } }
+
+/* compact cards: smaller chrome so the answer is visible without zooming out */
+.mgroup-cards .mgroup-card { padding: 10px; border-radius: 12px; }
+.mgroup-cards .mgroup-card-head { margin-bottom: 6px; }
+.mgroup-cards .controls button, .mgroup-cards .controls .reset-btn { padding: 4px 10px; font-size: 11px; }
+.mgroup-cards .dropzone.compact { padding: 10px; }
+.mgroup-cards .dropzone.compact .dz-icon { font-size: 15px; margin-bottom: 2px; }
+.mgroup-cards .dropzone.compact .dz-title { font-size: 13.5px; }
+.mgroup-cards .stamp-label, .mgroup-cards .stamp-stats { font-size: 10px; }
+.mgroup-cards .working-panel-content { padding: 10px; }
+
+/* manual: one line; the text box only opens for debugging */
+.mgroup-manual-bar { border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; background: var(--paper-raised); }
+.mgroup-manual-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
+.mgroup-manual-name { font-weight: 800; letter-spacing: .08em; color: var(--brass); }
+.mgroup-manual-status { font-weight: 800; letter-spacing: .06em; padding: 1px 7px; border-radius: 5px; border: 1px solid currentColor; }
+.mgroup-manual-status.on { color: #4ADE80; }
+.mgroup-manual-status.off { color: #F87171; }
+.mgroup-manual-tip { color: var(--ink-soft); }
+.mgroup-manual-debug { margin-left: auto; background: transparent; border: 1px solid var(--line); border-radius: 6px; color: var(--ink-soft);
+  font: inherit; padding: 2px 8px; cursor: pointer; }
+.mgroup-manual-debug:hover { border-color: var(--brass); color: var(--brass); }
+.mgroup-manual-bar .mgroup-manual { border: 0; padding: 8px 0 2px; background: transparent; }
+.mgroup-manual-sub { font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; font-weight: 700; letter-spacing: .08em; color: var(--ink-soft); margin-bottom: 6px; }
+[data-theme="parchment"] .mgroup-manual-status.on { color: var(--select-green-deep); }
+[data-theme="parchment"] .mgroup-manual-status.off { color: #B04A3A; }
