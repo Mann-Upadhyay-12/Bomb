@@ -1,6 +1,18 @@
 # Changelog
 
-Newest first. Dates are when the work was committed.
+Newest first. Dates are when the work was committed. Heist also keeps its own changelog in the app
+(About → CHANGELOG, `src/heist/heistMarkup.html`); this session's Heist changes are its v1.27.
+
+## 2026-11-19 — Faster Discord image links
+
+- Dropping a Discord image (or pasting its link) has to connect to Discord's CDN before the download
+  starts. Measured on this connection: ~0.7 s median for a cold connection vs ~0.25 s when a
+  connection is already open. Both games now send a tiny warm-up request when a drag carrying a link
+  enters the page, when the page gets focus (just before a Ctrl+V), and when the phone paste box is
+  focused, at most once every 20 s. A `<link rel=preconnect>` did not help in the same test.
+- Bombs: a link download times out after 15 s instead of hanging, sends no cookies or referrer
+  (like Heist already did), and the drop box says "Downloading image…" while it downloads.
+- Decoding was checked and is not the bottleneck: under 60 ms even for a 2560×1440 screenshot.
 
 ## 2026-11-19 — Speed audit, phone fix
 

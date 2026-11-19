@@ -3,6 +3,7 @@
 // page load, so the window listeners it adds never need removing.
 /* eslint-disable */
 import { CAPTCHA_KERNEL_WASM } from './captcha/captchaKernelWasm.js';
+import { warmImageHosts, dragHasLink } from '../utils/image.js';
 let mounted = false;
 export function mountHeist() {
   if (mounted) return;
@@ -4254,7 +4255,9 @@ global.NumericVision={recognize,version:'1.1.0'};
   let internalDrag = false; // a drag that started inside this page (e.g. selected text) is not an image drop
   document.addEventListener('dragstart', () => { internalDrag = true; });
   const isDroppable = dt => !!dt && (Array.from(dt.types || []).includes('Files') || !internalDrag);
+  // a dragged Discord link: open the connection to Discord's CDN while the drag is still in the air
   window.addEventListener('dragenter', event => {
+    if (!internalDrag && dragHasLink(event.dataTransfer)) warmImageHosts();
     if (!isDroppable(event.dataTransfer)) return;
     event.preventDefault(); dragDepth++; dropzone.classList.add('drag');
   });
@@ -4542,7 +4545,10 @@ global.NumericVision={recognize,version:'1.1.0'};
       if (fileInput) fileInput.click();
     });
   }
+  // coming back to the page (from Discord) usually comes right before a paste of a link
+  window.addEventListener('focus', () => warmImageHosts());
   if (mobilePasteTarget){
+    mobilePasteTarget.addEventListener('focus', () => warmImageHosts());
     mobilePasteTarget.addEventListener('paste', async event => {
       event.preventDefault();
       event.stopPropagation();

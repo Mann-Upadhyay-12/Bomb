@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { extractImageSource, extractImageFromPaste, loadImageSource } from '../utils/image.js';
+import { extractImageSource, extractImageFromPaste, loadImageSource, warmImageHosts, dragHasLink } from '../utils/image.js';
 import { useInstance } from './InstanceContext.jsx';
 
 // Phones can't Ctrl+V or drag & drop. This is a real text box: long-press it → Paste works with no
@@ -89,7 +89,7 @@ export function PasteBox({ onSource, busy }) {
           data-placeholder={busy ? 'Loading…' : 'Long-press → Paste image / link'}
           onPaste={onPaste}
           onInput={onInput}
-          onFocus={() => setMsg('')}
+          onFocus={() => { setMsg(''); warmImageHosts(); }}
         />
         <button type="button" className="dz-paste-btn" onClick={fromClipboard} title="Paste from clipboard">📋</button>
       </div>
@@ -139,7 +139,7 @@ export function Dropzone({
   const loadFromSource = (srcObj) => {
     // a pasted file goes through onFiles when the module takes several at once
     if (srcObj.type === 'file' && multiple && onFiles) { setLoadError(''); onFiles([srcObj.file]); return; }
-    setLoading(true);
+    setLoading(srcObj.type === 'url' ? 'url' : true);
     setLoadError('');
     loadImageSource(
       srcObj,
@@ -242,6 +242,7 @@ export function Dropzone({
 
     const inGroup = () => Boolean(latest.current.inst && latest.current.inst.multi);
     const handleWindowDragEnter = (e) => {
+      if (dragHasLink(e.dataTransfer) && !internalDrag) warmImageHosts();
       if (!isVisible() || inGroup()) return;
       if (!isDroppable(e.dataTransfer)) return;
       e.preventDefault();
@@ -314,7 +315,11 @@ export function Dropzone({
       }
     };
 
+    // coming back to the page (from Discord) usually comes right before a Ctrl+V of a link
+    const handleWindowFocus = () => { if (isVisible()) warmImageHosts(); };
+
     document.addEventListener('dragstart', handleDragStart);
+    window.addEventListener('focus', handleWindowFocus);
     window.addEventListener('dragenter', handleWindowDragEnter);
     window.addEventListener('dragover', handleWindowDragOver);
     window.addEventListener('dragleave', handleWindowDragLeave);
@@ -324,6 +329,7 @@ export function Dropzone({
 
     return () => {
       document.removeEventListener('dragstart', handleDragStart);
+      window.removeEventListener('focus', handleWindowFocus);
       window.removeEventListener('dragenter', handleWindowDragEnter);
       window.removeEventListener('dragover', handleWindowDragOver);
       window.removeEventListener('dragleave', handleWindowDragLeave);
@@ -361,7 +367,7 @@ export function Dropzone({
         onDrop={handleDrop}
       >
         <div className="dz-icon">{loading ? '⏳' : icon}</div>
-        <div className="dz-title">{loading ? 'Processing image…' : title}</div>
+        <div className="dz-title">{loading === 'url' ? 'Downloading image…' : loading ? 'Processing image…' : title}</div>
         {loadError && <div className="dz-error">{loadError}</div>}
         <div className="dz-sub">
           {sub || (
