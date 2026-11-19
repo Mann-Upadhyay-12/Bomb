@@ -3,6 +3,7 @@
 // the paste listener / timers / Stockfish worker are removed on destroy(), and pasted
 // links / the phone paste box go through the app's image loader.
 import { extractImageFromPaste, loadImageSource } from '../../utils/image.js';
+import { INLINE_ENGINE, loadStockfishSource } from '../chess/stockfishSource.js';
 
 /**
  * @param {HTMLElement} root  element holding the Chess63 markup
@@ -19,6 +20,7 @@ export function mountChess63(root, { onSolved } = {}) {
   };
   const CYCLE = ['', 'P', 'N', 'B', 'R', 'Q', 'K', 'p', 'n', 'b', 'r', 'q', 'k'];
   const ENGINE_URLS = [
+    INLINE_ENGINE,
     '/stockfish.js',
     'stockfish.js',
     'https://cdn.jsdelivr.net/npm/stockfish.js@10.0.2/stockfish.js',
@@ -656,7 +658,7 @@ gxh3, r4rk1/p1p2ppp/2pp4/2b3B1/3Nq3/2P4b/PP3PP1/R2Q1RK1,w`;
       $('engineStatus').textContent = 'Loading Stockfish engine…';
       for (const url of ENGINE_URLS) {
         try {
-          const source = await (await fetch(url)).text();
+          const source = url === INLINE_ENGINE ? await loadStockfishSource() : await (await fetch(url)).text();
           const blobUrl = URL.createObjectURL(new Blob([source], { type: 'application/javascript' }));
           worker = new Worker(blobUrl);
           await new Promise(resolve => {
