@@ -5,6 +5,7 @@ import { readEquationImage } from './balanceVision.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
+import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { Dropzone } from '../../core/Dropzone.jsx';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
@@ -19,6 +20,7 @@ export function BalanceModule({ isActive = true }) {
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
+  const answerChanged = useAnswerGate();
   const uid = useId();
 
   const [equation, setEquation] = useState('');
@@ -30,9 +32,10 @@ export function BalanceModule({ isActive = true }) {
   const answer = result && result.ok ? result.answer : '';
 
   useEffect(() => {
+    const fresh = answerChanged(answer); // false when only isActive changed
     if (!isActive) return;
     setLastCopyString(answer);
-    if (copyOnDecode && answer) copy(answer);
+    if (copyOnDecode && fresh && answer) copy(answer);
   }, [answer, isActive]);
 
   const handleImage = async (img, dataUri, fileBlob) => {

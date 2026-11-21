@@ -68,7 +68,7 @@ export function MazeWorking({
                 {isStart && <span>🔴 S</span>}
                 {isGoal && <span>🟡 G</span>}
                 {!isStart && !isGoal && pathInfo && (
-                  <span>{arrow} {pathInfo.move}</span>
+                  <span>{arrow} {({ U: 'W', L: 'A', D: 'S', R: 'D' })[pathInfo.move]}</span>
                 )}
               </div>
             );

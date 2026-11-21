@@ -10,6 +10,7 @@ import {
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
+import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { useSharedSetting } from '../../core/sharedSetting.js';
 import { useInstance } from '../../core/InstanceContext.jsx';
 import { Dropzone } from '../../core/Dropzone.jsx';
@@ -31,6 +32,7 @@ export function WofModule({ isActive = true }) {
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
+  const answerChanged = useAnswerGate();
 
   // The manual is the same for every copy of this module, so all windows share it
   const [rulesText, setRulesText] = useSharedSetting(KEY, DEFAULT_RULES);
@@ -49,10 +51,11 @@ export function WofModule({ isActive = true }) {
   const hitIdx = res.ok ? res.hit : -1;
 
   React.useEffect(() => {
+    const fresh = answerChanged(res.ok ? res.ans : ""); // false when only isActive changed
     if (!isActive) return;
     if (res.ok && res.ans) {
       setLastCopyString(res.ans);
-      if (copyOnDecode) {
+      if (copyOnDecode && fresh) {
         copy(res.ans);
       }
     } else {

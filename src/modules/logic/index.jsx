@@ -3,6 +3,7 @@ import React, { useState, useEffect, useId } from 'react';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
+import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { Dropzone } from '../../core/Dropzone.jsx';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
@@ -28,6 +29,7 @@ export function LogicModule({ isActive = true }) {
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
+  const answerChanged = useAnswerGate();
   const uid = useId(); // per-instance ids: missions can show the same module several times
 
   const [vars, setVars] = useState(DEFAULT_VARS);
@@ -88,9 +90,10 @@ const results = (() => {
   const copyFormatted = validResults.join(' ');
 
   useEffect(() => {
+    const fresh = answerChanged(copyFormatted); // false when only isActive changed
     if (!isActive) return;
     setLastCopyString(copyFormatted);
-    if (copyOnDecode && copyFormatted) {
+    if (copyOnDecode && fresh && copyFormatted) {
       copy(copyFormatted);
     }
   }, [copyFormatted, isActive]);

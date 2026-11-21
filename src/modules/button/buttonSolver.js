@@ -56,6 +56,25 @@ const serialConsonants = (s) => (s.toUpperCase().match(/[B-DF-HJ-NP-TV-Z]/g) || 
 const serialLetters = (s) => (s.toUpperCase().match(/[A-Z]/g) || []).length;
 const hasRepeat = (s) => { const c = s.toUpperCase().replace(/[^A-Z0-9]/g, ''); return new Set(c).size !== c.length; };
 
+// What a single serial character must be: "a digit", "an even digit", "a letter", "a vowel", "a consonant", "A", "7"
+function charTest(what) {
+  const w = what.toLowerCase().replace(/^(?:a|an|the)\s+/, '').trim();
+  let m;
+  if (/^(?:digit|number|numeral)$/.test(w)) return { desc: 'a digit', test: ch => /[0-9]/.test(ch) };
+  if (/^letter$/.test(w)) return { desc: 'a letter', test: ch => /[A-Z]/.test(ch) };
+  if (/^vowel$/.test(w)) return { desc: 'a vowel', test: ch => /[AEIOU]/.test(ch) };
+  if (/^consonant$/.test(w)) return { desc: 'a consonant', test: ch => /[B-DF-HJ-NP-TV-Z]/.test(ch) };
+  if ((m = w.match(/^(odd|even)\s+(?:digit|number)$/))) {
+    const odd = m[1] === 'odd';
+    return { desc: `an ${m[1]} digit`, test: ch => /[0-9]/.test(ch) && (Number(ch) % 2 === 1) === odd };
+  }
+  if ((m = w.match(/^(?:the\s+)?(?:letter|digit|character|number)?\s*([a-z0-9])$/))) {
+    const want = m[1].toUpperCase();
+    return { desc: want, test: ch => ch === want };
+  }
+  return null;
+}
+
 // Which bomb fact a "count" subject refers to (order matters: non-needy before needy)
 function countSubject(t) {
   if (/non[-\s]?needy/.test(t)) return 'nonNeedy';
@@ -83,10 +102,37 @@ export function compileClause(raw) {
     return { kind: 'always', desc: 'otherwise', eval: () => true };
   }
 
-  // Physical colour: "button is white", "button is not red", "button colour is blue", "the button is a green one"
-  if ((m = t.match(/^button(?:'s)?\s+(?:colou?r\s+)?(?:is|=)\s+(not\s+)?(?:a\s+)?(\w+)(?:\s+button)?$/)) && (BUTTON_COLORS.includes(m[2]) || /^(?:colou?red\s+)?\w+$/.test(m[2]))) {
-    const neg = !!m[1], col = m[2];
-    return { kind: 'color', desc: `button ${neg ? '≠' : '='} ${col}`, eval: c => (c.color ? (c.color === col) !== neg : null) };
+  // Label vs colour: "label is a color word matching the button color", "… different from the button color",
+  // "label is (not) a color word", "label matches the button color"
+  const colorWord = (c) => BUTTON_COLORS.includes(String(c.label || '').toLowerCase());
+  if (/^(?:button\s+)?label\b/.test(t) && /colou?r/.test(t)) {
+    const differs = /\b(?:different|differs?|not\s+(?:the\s+)?(?:same|match)|doesn'?t\s+match|does\s+not\s+match|other\s+than|mismatch)/.test(t);
+    const matches = /\b(?:match(?:es|ing)?|same|equals?|names?\s+the\s+button)/.test(t) && /button/.test(t);
+    if (/button/.test(t) && (differs || matches)) {
+      // "different from the button color" still needs a colour word (a non-colour label isn't a different colour)
+      const needWord = /colou?r\s+word|is\s+a\s+colou?r/.test(t) || differs;
+      return {
+        kind: 'labelColor', desc: differs ? 'label is a colour ≠ button colour' : 'label = button colour',
+        eval: c => {
+          if (!c.label || !c.color) return null;
+          const same = String(c.label).toLowerCase() === c.color;
+          return differs ? (!needWord || colorWord(c)) && !same : same;
+        }
+      };
+    }
+    if ((m = t.match(/^(?:button\s+)?label\s+(?:is|says|reads)\s+(not\s+)?(?:a|an|any)\s+colou?r(?:\s+word|\s+name)?$/)) || (m = t.match(/^(?:button\s+)?label\s+(does\s+not|doesn'?t)\s+(?:name|say)\s+a\s+colou?r$/))) {
+      const neg = !!m[1];
+      return { kind: 'labelColor', desc: neg ? 'label is not a colour word' : 'label is a colour word', eval: c => (c.label ? colorWord(c) !== neg : null) };
+    }
+  }
+
+  // Physical colour: "button is white", "button is not red", "button colour is blue", "the button is a green one",
+  // "button is red or blue"
+  if ((m = t.match(/^button(?:'s)?\s+(?:colou?r\s+)?(?:is|=)\s+(not\s+)?(?:a\s+)?(\w+(?:(?:\s*,\s*|\s+or\s+|\s*,\s*or\s+)\w+)*)(?:\s+button)?$/))) {
+    const neg = !!m[1], cols = m[2].split(/\s*,\s*(?:or\s+)?|\s+or\s+/).filter(Boolean);
+    if (cols.every(col => BUTTON_COLORS.includes(col) || /^\w+$/.test(col))) {
+      return { kind: 'color', desc: `button ${neg ? '≠' : '='} ${cols.join(' / ')}`, eval: c => (c.color ? cols.includes(c.color) !== neg : null) };
+    }
   }
   if ((m = t.match(/^(\w+)\s+button$/)) && BUTTON_COLORS.includes(m[1])) {
     const col = m[1];
@@ -95,8 +141,10 @@ export function compileClause(raw) {
 
   // Label: "label says Hold", "label reads Abort", "label is not Press", "label does not say Blue"
   if ((m = t.match(/^(?:button\s+)?(?:label|text|word)\s+(?:(does\s+not|doesnt|doesn't)\s+(?:say|read)|says|reads|is|=)\s+(not\s+)?(.+)$/))) {
-    const neg = !!(m[1] || m[2]), word = m[3].trim().toUpperCase();
-    return { kind: 'label', word, desc: `label ${neg ? '≠' : '='} ${word}`, eval: c => (c.label ? (c.label.toUpperCase() === word) !== neg : null) };
+    const neg = !!(m[1] || m[2]);
+    const words = m[3].trim().toUpperCase().split(/\s*,\s*(?:OR\s+)?|\s+OR\s+/).filter(Boolean);
+    const word = words[0];
+    return { kind: 'label', word, words, desc: `label ${neg ? '≠' : '='} ${words.join(' / ')}`, eval: c => (c.label ? words.includes(c.label.toUpperCase()) !== neg : null) };
   }
 
   // Serial digit position: "rightmost serial digit is odd", "last digit of the serial is even", "first serial digit is 5"
@@ -110,6 +158,25 @@ export function compileClause(raw) {
   if ((m = t.match(/^serial(?:\s+number)?\s+ends\s+(?:with|in)\s+(?:an?\s+)?(odd|even)(?:\s+(?:digit|number))?$/))) {
     const q = parseQuantity(m[1]);
     return { kind: 'serial', desc: `last serial digit ${q.desc}`, eval: c => { if (!c.serial) return null; const d = serialDigits(c.serial); return d.length ? q.test(d[d.length - 1]) : false; } };
+  }
+
+  // First / last character: "serial starts with a digit", "serial ends with a letter",
+  // "serial starts with a vowel", "serial begins with an even digit", "first character of the serial is a letter",
+  // "serial starts with A"
+  if ((m = t.match(/^serial(?:\s+number)?\s+(?:(starts|begins)|(ends))\s+(?:with|in)\s+(.+)$/))
+    || (m = t.match(/^(?:(first|leading)|(last|final))\s+(?:character|char|symbol)\s+(?:of|in)\s+(?:the\s+)?serial(?:\s+number)?\s+is\s+(.+)$/))) {
+    const first = !!m[1], what = m[3].trim();
+    const kindTest = charTest(what);
+    if (kindTest) {
+      return {
+        kind: 'serial', desc: `serial ${first ? 'starts' : 'ends'} with ${kindTest.desc}`,
+        eval: c => {
+          const s = (c.serial || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+          if (!s) return null;
+          return kindTest.test(first ? s[0] : s[s.length - 1]);
+        }
+      };
+    }
   }
 
   // Digit sum: "serial digit sum is odd", "sum of the serial digits is at least 10"
@@ -143,6 +210,30 @@ export function compileClause(raw) {
     return { kind: 'serial', desc: `serial contains ${ch}`, eval: c => (c.serial ? c.serial.toUpperCase().includes(ch) : null) };
   }
 
+  // Which button of the module this is (the dots in the screenshot: button 1 of 3 …):
+  // "this is button 1 or 3", "this is button 2", "this is not button 1", "this is the first / last button",
+  // "button number is odd", "this is an even-numbered button"
+  if ((m = t.match(/^(?:this|it)\s+is\s+(not\s+)?(?:the\s+)?(?:button|stage)\s*(?:number\s+|no\.?\s*|#)?(\d+(?:(?:\s*,\s*(?:or\s+)?|\s+or\s+)\d+)*)$/))
+    || (m = t.match(/^(?:current\s+)?(?:button|stage)\s*(?:number|#)\s*(?:is\s+)?(not\s+)?(\d+(?:(?:\s*,\s*(?:or\s+)?|\s+or\s+)\d+)*)$/))) {
+    const neg = !!m[1], ns = m[2].split(/\s*,\s*(?:or\s+)?|\s+or\s+/).map(Number);
+    return { kind: 'stage', desc: `button # ${neg ? '≠' : '='} ${ns.join(' / ')}`, eval: c => (Number.isFinite(c.buttonNum) ? ns.includes(c.buttonNum) !== neg : null) };
+  }
+  if ((m = t.match(/^(?:this|it)\s+is\s+(not\s+)?(?:the\s+)?(first|second|third|fourth|fifth|last|final)\s+(?:button|stage)$/))) {
+    const neg = !!m[1], w = m[2], ORD = { first: 1, second: 2, third: 3, fourth: 4, fifth: 5 };
+    return {
+      kind: 'stage', desc: `button # ${neg ? '≠' : '='} ${w}`,
+      eval: c => {
+        if (!Number.isFinite(c.buttonNum)) return null;
+        if (w in ORD) return (c.buttonNum === ORD[w]) !== neg;
+        return Number.isFinite(c.buttonTotal) ? (c.buttonNum === c.buttonTotal) !== neg : null;
+      }
+    };
+  }
+  if ((m = t.match(/^(?:(?:this|it)\s+is\s+(?:an?\s+)?(odd|even)[-\s]numbered\s+(?:button|stage)|(?:the\s+)?(?:button|stage)\s+number\s+is\s+(odd|even))$/))) {
+    const q = parseQuantity(m[1] || m[2]);
+    return { kind: 'stage', desc: `button # ${q.desc}`, eval: c => (Number.isFinite(c.buttonNum) ? q.test(c.buttonNum) : null) };
+  }
+
   // Module counts: "there is exactly 1 needy module", "there are at least 2 needy modules",
   // "total module count is even", "number of Button modules is 3", "no needy modules"
   if ((m = t.match(/^there\s+(?:is|are)\s+(.+?)\s+((?:non[-\s]?needy|needy|button|total|batter\w*)?\s*(?:modules?|batteries|battery)(?:\s+(?:on the bomb|in total))?)$/))
@@ -160,10 +251,19 @@ export function compileClause(raw) {
 
 // Split "A, B, and C" / "A and B" into clauses
 function splitClauses(cond) {
-  return cond
+  const parts = cond
     .split(/\s*,\s*(?:and\s+)?|\s+and\s+/i)
     .map(s => s.trim())
     .filter(Boolean);
+  // a list split by its commas ("this is button 1, 2, or 3", "button is red, blue or green") belongs to the clause before
+  const out = [];
+  for (const p of parts) {
+    if (out.length && /^(?:or\s+)?(?:\d+|[a-z]+)$/i.test(p) && /(?:\d|\b(?:is|says|reads)\s+(?:not\s+)?(?:a\s+)?\w+)$/i.test(out[out.length - 1])
+      && (/^(?:or\s+)?\d+$/i.test(p) ? /\d$/.test(out[out.length - 1]) : BUTTON_COLORS.includes(p.replace(/^or\s+/i, '').toLowerCase()) || /^or\s+/i.test(p))) {
+      out[out.length - 1] += `, ${p}`;
+    } else out.push(p);
+  }
+  return out;
 }
 
 const RULE_RE = /^\s*(?:[-*•]\s*)?(?:\(?\d+[.)]\s*)?\**\s*(.+?)\s*\**\s*[:=–—-]+\s*\**\s*(\d+(?:\.\d+)?)\s*\**\s*(?:s|sec|secs|seconds?)\b\**\.?\s*$/i;
@@ -224,6 +324,6 @@ export function evaluateRules(rules, ctx) {
 /** Words the label could be: every "label says X" in the checklist + common defaults. */
 export function labelVocab(rules) {
   const set = new Set(DEFAULT_LABELS);
-  rules.forEach(r => r.clauses.forEach(c => { if (c.kind === 'label' && c.word) set.add(c.word); }));
+  rules.forEach(r => r.clauses.forEach(c => { if (c.kind === 'label') (c.words || [c.word]).forEach(w => w && set.add(w)); }));
   return Array.from(set);
 }

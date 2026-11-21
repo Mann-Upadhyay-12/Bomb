@@ -103,7 +103,7 @@ export function SymbolsWorking({
 
         {grids.length === 0 ? (
           <div className="sy-empty">
-            Paste the grid screenshot. One grid is read as-is. In a strip, every grid in the top section (under the
+            Paste each helper's grid screenshot (1–3 of them) — they are added up. In a strip, every grid in the top section (under the
             first header, or the top row) is added up for Symbols #1, the next section for #2, and so on.
             Click any cell afterwards to fix a misread.
           </div>

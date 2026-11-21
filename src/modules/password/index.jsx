@@ -1,10 +1,18 @@
 import React, { useState, useEffect, useId, useRef } from 'react';
 import { preWarmOCR } from '../search/searchOCR.js';
-import { MASTER_PASSWORDS, filterPasswordCandidates } from './passwordSolver.js';
+import { MASTER_PASSWORDS, filterPasswordCandidates, splitPasswordRows } from './passwordSolver.js';
+
+// The rows box shown tidy: one 5-letter row per line, an unfinished row (still being typed) last
+function tidyRows(text) {
+  const letters = String(text || '').toUpperCase().replace(/[^A-Z]/g, '');
+  const full = splitPasswordRows(letters), rest = letters.slice(full.length * 5);
+  return [...full, ...(rest ? [rest] : [])].join('\n');
+}
 import { readPasswordRow } from './passwordVision.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
+import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { useSharedSetting } from '../../core/sharedSetting.js';
 import { useInstance } from '../../core/InstanceContext.jsx';
 import { Dropzone } from '../../core/Dropzone.jsx';
@@ -26,6 +34,7 @@ export function PasswordModule({ isActive = true }) {
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
+  const answerChanged = useAnswerGate();
   const uid = useId(); // per-instance ids: missions can show the same module several times
   const inst = useInstance();
   const grouped = Boolean(inst && inst.grouped);
@@ -39,15 +48,16 @@ export function PasswordModule({ isActive = true }) {
   const activeRef = useRef(isActive);
   activeRef.current = isActive;
 
-  // Accept one row per line, or rows separated by spaces / commas
-  const rawRows = rowsText.split(/[\s,;]+/);
+  // Every 5 letters is a row — separators (space / Enter / comma) are optional and ignored
+  const rawRows = splitPasswordRows(rowsText);
   const { rows, masterSet, matches, cols } = filterPasswordCandidates(rawRows, masterText);
 
   useEffect(() => {
+    const fresh = answerChanged(matches.join(' ')); // false when only isActive changed
     if (!isActive) return;
     if (matches.length === 1) {
       setLastCopyString(matches[0]);
-      if (copyOnDecode) copy(matches[0]);
+      if (copyOnDecode && fresh) copy(matches[0]);
     } else {
       setLastCopyString(matches.length > 1 ? matches.join(' ') : '');
     }
@@ -65,7 +75,7 @@ export function PasswordModule({ isActive = true }) {
       const allowed = Array.from({ length: 5 }, (_, i) => new Set(masterSet.map(w => w[i])));
       const r = await readPasswordRow(img, allowed, t => setStatus({ text: t, ok: null }));
       if (!r.ok) { setStatus({ text: r.reason, ok: false }); return; }
-      const existing = rowsText.split(/[\s,;]+/).map(x => x.trim().toUpperCase()).filter(Boolean);
+      const existing = splitPasswordRows(rowsText);
       if (existing.includes(r.row)) {
         setStatus({ text: `Row ${r.row} is already in the list.`, ok: true });
         return;
@@ -147,14 +157,16 @@ export function PasswordModule({ isActive = true }) {
             )}
             <div className="search-config-row">
               <label className="search-config-label" htmlFor={`${uid}-rows`}>
-                LETTER ROWS ({rows.length}) — ONE PER SCREENSHOT, OR TYPE 1 ROW PER LINE:
+                LETTER ROWS ({rows.length}) — ONE PER SCREENSHOT, OR TYPE THE LETTERS (EVERY 5 = A ROW):
               </label>
               <textarea
                 id={`${uid}-rows`}
                 className="password-rows-field"
-                rows={4}
+                rows={6}
                 value={rowsText}
                 onChange={(e) => setRowsText(e.target.value)}
+                // tidy to one row per line when leaving the box, so the split into rows is visible
+                onBlur={() => setRowsText(t => tidyRows(t))}
                 placeholder={'LHLOD\nLBANE\nTHAIR'}
                 spellCheck="false"
               />

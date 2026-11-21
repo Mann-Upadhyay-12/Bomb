@@ -121,3 +121,7 @@
   letter-spacing: .06em; color: var(--ink-soft); }
 [data-theme="parchment"] .wsq-chip.skip, [data-theme="parchment"] .wsq-note.bad { color: #B04A3A; }
 [data-theme="parchment"] .wsq-note, [data-theme="parchment"] .wsq-cut, [data-theme="parchment"] .wsq-chip.cut { color: var(--select-green-deep); }
+
+/* Several copies are stacked full width, so keep each card's picture | answer two-column body */
+.mgroup .wsq.compact .wsq-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 760px) { .mgroup .wsq.compact .wsq-body { grid-template-columns: minmax(0, 1fr); } }

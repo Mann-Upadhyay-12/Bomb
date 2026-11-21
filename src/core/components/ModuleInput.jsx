@@ -1,7 +1,9 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { useAppState } from '../AppStateContext.jsx';
 import { useTheme } from '../ThemeContext.jsx';
 import { useInstance } from '../InstanceContext.jsx';
+import { useControlsSlot } from './ModuleLayout.jsx';
 
 export function ModuleInput({
   dropzone = null,
@@ -14,6 +16,18 @@ export function ModuleInput({
   // in a group of several cards these app-wide toggles are shown once, at the top of the group
   const inst = useInstance();
   const inGroup = Boolean(inst && inst.multi);
+  // one of several stacked copies: the buttons sit on the answer side (see ModuleLayout)
+  const slot = useControlsSlot();
+  if (inGroup) {
+    return (
+      <div className="module-input-wrap">
+        {controls && slot && createPortal(<div className="controls">{controls}</div>, slot)}
+        {dropzone}
+        {preview}
+        {children}
+      </div>
+    );
+  }
 
   return (
     <div className="module-input-wrap">

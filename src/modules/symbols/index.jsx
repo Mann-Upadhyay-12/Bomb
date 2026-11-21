@@ -4,6 +4,7 @@ import { syReadPanels, syReadModule } from './symbolsVision.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
+import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { Dropzone } from '../../core/Dropzone.jsx';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
@@ -11,9 +12,9 @@ import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
 import { CopyLines } from '../../core/components/CopyLines.jsx';
 import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
 import { SymbolsWorking } from './working.jsx';
-import { stripStore, useStrip } from './stripStore.js';
+import { stripStore, useStrip, addGrids } from './stripStore.js';
 
-const MAX_GRIDS = 6;
+const MAX_GRIDS = 18; // 1–3 helper images, each a single grid or a strip with one grid per Symbols module
 const EMPTY_BUTTONS = [null, null, null, null];
 let gridSeq = 0;
 
@@ -41,6 +42,7 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
+  const answerChanged = useAnswerGate();
 
   // The strip is shared by every Symbols window. Its grids are split into puzzles: the grids in the
   // top section (under the first header / in the top row) are puzzle #1, the next section #2 …
@@ -52,6 +54,10 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
   const [keypadThumb, setKeypadThumb] = useState('');
   // 'mine' = only this puzzle's grids; 'all' = add up every grid in the strip (old app)
   const [countFrom, setCountFrom] = useState('mine');
+
+  // Grids are added up across pastes, so a level change must start from an empty strip
+  // (each mission remounts its modules; window #1 owns the reset)
+  React.useEffect(() => { if (instance === 0) stripStore.setGrids([]); }, []);
 
   // A new strip resets this window's ± corrections and goes back to its own grid number
   React.useEffect(() => { setAdj({}); setGridIdx(instance); }, [version, instance]);
@@ -97,9 +103,10 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
   }
 
   React.useEffect(() => {
+    const fresh = answerChanged(copyFormatted); // false when only isActive changed
     if (!isActive) return;
     setLastCopyString(copyFormatted);
-    if (copyOnDecode && copyFormatted) copy(copyFormatted);
+    if (copyOnDecode && fresh && copyFormatted) copy(copyFormatted);
   }, [copyFormatted, isActive]);
 
   const handleImage = (img, dataUri, fileBlob) => {
@@ -128,18 +135,27 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
     const panels = fullGrids.length ? fullGrids : pr.panels;
     if (!panels.length) { showToast('COULD NOT DETECT SYMBOLS'); return; }
 
-    const kept = panels.slice(0, MAX_GRIDS);
-    const usedGroups = [...new Set(kept.map(p => p.group || 0))].sort((a, b) => a - b);
-    stripStore.setGrids(kept.map(p => ({
+    const usedGroups = [...new Set(panels.map(p => p.group || 0))].sort((a, b) => a - b);
+    const incoming = panels.map(p => ({
       id: ++gridSeq,
       cells: p.cells,
       group: usedGroups.indexOf(p.group || 0),
       thumb: cropThumb(cv, p.x, p.y, p.w, p.h)
-    })));
-    const cells = kept.reduce((s, p) => s + p.cells.filter(Boolean).length, 0);
-    showToast(kept.length > 1
-      ? `STRIP READ: ${kept.length} GRIDS IN ${usedGroups.length} PUZZLE${usedGroups.length > 1 ? 'S' : ''} · ${cells} CELLS ✓`
-      : `GRID READ: ${cells}/25 CELLS ✓`);
+    }));
+
+    // Each helper player sends their own image (a single grid, or a strip with one section per
+    // Symbols module), so a puzzle's grids arrive over 1–3 pastes: add them up instead of replacing.
+    // Section #n of every image belongs to puzzle #n. The same image pasted twice is skipped.
+    // Nothing tells us a new bomb has started, so the grids are kept until "clear" or a level change.
+    const { grids: next, added: fresh } = addGrids(stripStore.get().grids, incoming, MAX_GRIDS);
+    if (!fresh.length) { showToast('GRID ALREADY ADDED — NOTHING CHANGED'); return; }
+    stripStore.setGrids(next);
+
+    const perPuzzle = usedGroups.map((_, gi) => next.filter(g => groupOf(g) === gi).length);
+    const cells = fresh.reduce((s, g) => s + g.cells.filter(Boolean).length, 0);
+    showToast(perPuzzle.length > 1
+      ? `STRIP ADDED · GRIDS PER PUZZLE: ${perPuzzle.join(' / ')} · ${cells} CELLS ✓`
+      : `GRID ADDED · COUNTING ${perPuzzle[0]} GRID${perPuzzle[0] > 1 ? 'S' : ''} · ${cells} CELLS ✓`, false, 2600);
   };
 
   const handleAddBlankGrid = () => {
@@ -186,7 +202,7 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
     : myGrid
     ? (groups > 1 || myGrids.length > 1
       ? `PUZZLE #${gridIdx + 1} OF ${groups} · ${myGrids.length} GRID${myGrids.length > 1 ? 'S' : ''}`
-      : '1 GRID')
+      : `${myGrids.length} GRID${myGrids.length > 1 ? 'S' : ''} ADDED UP`)
     : 'NO GRID';
   const stampStats = order.length === 4
     ? `${gridInfo} | PRESS ORDER: ${copyFormatted}${warnings.length ? ' | ⚠ CHECK' : ''}`
@@ -200,10 +216,10 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
             <Dropzone
               onImage={handleImage}
               icon="🔣 Ω Ѣ © Ψ"
-              title="Click here, then paste the grid strip or the 2×2 keypad"
+              title="Click here, then paste each helper's grid (or strip) and the 2×2 keypad"
               sub={
                 <>
-                  press <kbd>Ctrl</kbd>+<kbd>V</kbd> anywhere — a strip is split by section: all grids in section #n are added for Symbols #n
+                  press <kbd>Ctrl</kbd>+<kbd>V</kbd> anywhere — every pasted grid is added up (one per helper); in a strip, section #n goes to Symbols #n. Clear before the next bomb
                 </>
               }
             />
@@ -278,6 +294,6 @@ export const symbolsModule = {
   tabLabel: '🔣 SYMBOLS',
   eyebrow: 'SYMBOLS PUZZLE SOLVER',
   title: 'Symbols Vision',
-  sub: 'Paste the reference grid screenshot — a single 5×5 grid, or a <b>strip</b>: every grid in the top section is added up for Symbols #1, the next section for #2 … — plus the 2×2 keypad. Buttons are pressed from <b>highest count to lowest</b>.',
+  sub: 'Paste <b>every helper\'s</b> reference grid (1–3 images) — they are <b>added up</b>. A <b>strip</b> image gives section #1 to Symbols #1, section #2 to #2 … — plus the 2×2 keypad. Press <b>clear</b> before the next bomb. Buttons are pressed from <b>highest count to lowest</b>.',
   Component: SymbolsModule
 };

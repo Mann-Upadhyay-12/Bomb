@@ -12,6 +12,11 @@ import { KEY as WOF_KEY } from '../../modules/wof/index.jsx';
 import { DEFAULT_RULES as WOF_DEFAULT_RULES } from '../../modules/wof/wofSolver.js';
 import { CIRCUIT_MANUAL_KEY } from '../../modules/circuit/index.jsx';
 import { CIRCUIT_DEFAULT_MANUAL } from '../../modules/circuit/circuitSolver.js';
+import { MazeManualBar } from '../../modules/maze/manualBar.jsx';
+import { extractImageSource, warmImageHosts, dragHasLink } from '../../utils/image.js';
+
+// Modules whose manual is an image strip shared by every copy (pasted / dropped anywhere on the page)
+const IMAGE_MANUALS = { maze: MazeManualBar };
 
 // The one manual every copy of a "same manual" module uses (null = the module has none).
 // `looks` recognises that manual's text when it's pasted anywhere on the page.
@@ -137,13 +142,52 @@ export function ModuleGroup({ id, label, count, isActive, renderInstance, onCoun
     report: (a) => setAnswers(prev => (prev[i] === a ? prev : { ...prev, [i]: a }))
   })), [count, injects, sel, onCountChange]);
 
+  // a dropped file or image link (a Discord image dragged in) goes to card i
+  const injectInto = (i, dt) => {
+    const src = extractImageSource(dt);
+    if (src) setInjects(prev => ({ ...prev, [i]: { src, nonce: Date.now() } }));
+  };
   const dropOn = (i, e) => {
     e.preventDefault();
     setDragOver(-1);
     setSelected(i);
-    const file = Array.from((e.dataTransfer && e.dataTransfer.files) || []).find(f => !f.type || f.type.startsWith('image/'));
-    if (file) setInjects(prev => ({ ...prev, [i]: { file, nonce: Date.now() } }));
+    injectInto(i, e.dataTransfer);
   };
+
+  // A drop anywhere else on the page (header, manual bar, gaps between cards) goes to the selected
+  // card, so a shared manual strip can be dropped anywhere. One card is shown alone: its own
+  // Dropzone already takes drops anywhere.
+  const latest = useRef({});
+  latest.current = { sel, injectInto };
+  useEffect(() => {
+    if (!isActive || count < 2) return undefined;
+    const visible = () => rootRef.current && rootRef.current.offsetParent !== null;
+    const onOver = (e) => {
+      if (!visible()) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    };
+    // cancelling dragenter too (as the single-copy Dropzone does) keeps the card under the pointer the drop target
+    const onEnter = (e) => {
+      if (!visible()) return;
+      e.preventDefault();
+      if (dragHasLink(e.dataTransfer)) warmImageHosts();
+    };
+    const onDrop = (e) => {
+      if (!visible() || e.defaultPrevented) return; // a card already took it
+      e.preventDefault();
+      setDragOver(-1);
+      latest.current.injectInto(latest.current.sel, e.dataTransfer);
+    };
+    window.addEventListener('dragenter', onEnter);
+    window.addEventListener('dragover', onOver);
+    window.addEventListener('drop', onDrop);
+    return () => {
+      window.removeEventListener('dragenter', onEnter);
+      window.removeEventListener('dragover', onOver);
+      window.removeEventListener('drop', onDrop);
+    };
+  }, [isActive, count]);
 
   const { copyOnDecode, setCopyOnDecode } = useAppState();
   const solved = Array.from({ length: count }, (_, i) => answers[i]).filter(Boolean).length;
@@ -163,11 +207,12 @@ export function ModuleGroup({ id, label, count, isActive, renderInstance, onCoun
       )}
 
       {cfg && <SharedManual cfg={cfg} count={count} visible={isActive} />}
+      {IMAGE_MANUALS[id] && React.createElement(IMAGE_MANUALS[id], { count })}
 
       {count > 1 && (
         <div className="mgroup-head">
           <span className="search-config-label">{label} — {count} MODULES · {solved} ANSWERED</span>
-          <span className="mgroup-hint">{cfg ? '① paste the manual  ② click a card, paste the defuser\'s screenshot' : 'click a card, then Ctrl+V (or drop a screenshot on it)'}</span>
+          <span className="mgroup-hint">{cfg || IMAGE_MANUALS[id] ? '① paste the manual  ② click a card, paste the defuser\'s screenshot' : 'click a card, then Ctrl+V (or drop a screenshot on it)'}</span>
           <button type="button" className={`copy-btn ${copyOnDecode ? 'on' : ''}`} aria-pressed={copyOnDecode}
             onClick={() => setCopyOnDecode(!copyOnDecode)}>
             <span className="swatch"></span> COPY ON DECODE
@@ -175,13 +220,14 @@ export function ModuleGroup({ id, label, count, isActive, renderInstance, onCoun
         </div>
       )}
 
-      <div className={count > 1 ? `mgroup-cards cols-${count === 2 || count === 4 ? 2 : 3}` : 'mgroup-single'}>
+      <div className={count > 1 ? 'mgroup-cards' : 'mgroup-single'}>
       {Array.from({ length: count }, (_, i) => (
         <section
           key={i}
           className={`mgroup-card ${count > 1 && i === sel ? 'selected' : ''} ${dragOver === i ? 'drag' : ''}`}
           onMouseDownCapture={() => setSelected(i)}
           onFocusCapture={() => setSelected(i)}
+          onDragEnter={e => e.preventDefault()}
           onDragOver={e => { e.preventDefault(); if (dragOver !== i) setDragOver(i); if (sel !== i) setSelected(i); }}
           onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOver(d => (d === i ? -1 : d)); }}
           onDrop={e => dropOn(i, e)}

@@ -12,6 +12,7 @@ import { readButtonImage } from './buttonVision.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
+import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { useSharedSetting, useSharedState } from '../../core/sharedSetting.js';
 import { useInstance } from '../../core/InstanceContext.jsx';
 import { Dropzone } from '../../core/Dropzone.jsx';
@@ -32,6 +33,7 @@ export function ButtonModule({ isActive = true }) {
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
+  const answerChanged = useAnswerGate();
   const uid = useId(); // per-instance ids: missions show several Button windows
 
   // The checklist and the bomb facts (serial, module counts) are the same for every Button
@@ -69,7 +71,16 @@ export function ButtonModule({ isActive = true }) {
     color, label,
     serial: facts.serial.trim().toUpperCase(),
     total, nonNeedy, needy,
-    buttonMods: num(facts.buttonMods)
+    buttonMods: num(facts.buttonMods),
+    // which button of the module this is (dots in the screenshot, or typed) — "this is button 1 or 3"
+    buttonNum: stage ? num(stage.current) : NaN,
+    buttonTotal: stage ? num(stage.total) : NaN
+  };
+  const usesStage = rules.some(r => r.clauses.some(c => c.kind === 'stage'));
+  const stageText = stage && Number.isFinite(ctx.buttonNum) ? `${stage.current}/${Number.isFinite(ctx.buttonTotal) ? stage.total : '?'}` : '';
+  const setButtonNum = (v) => {
+    const n = parseInt(v, 10);
+    setStage(s => (Number.isFinite(n) && n > 0 ? { total: s ? s.total : NaN, done: n - 1, current: n } : null));
   };
   const { rows, match, blocked } = evaluateRules(rules, ctx);
 
@@ -81,6 +92,8 @@ export function ButtonModule({ isActive = true }) {
       if (c.unknown) missing.push(`rule ${blocked.n} wording ("${c.desc}")`);
       else if (c.kind === 'color') missing.push('button colour');
       else if (c.kind === 'label') missing.push('label');
+      else if (c.kind === 'labelColor') missing.push(!ctx.label ? 'label' : 'button colour');
+      else if (c.kind === 'stage') missing.push('which button (#)');
       else if (c.kind === 'serial') missing.push('serial');
       else if (c.kind === 'count') missing.push(FACT_LABELS[c.fact]);
     });
@@ -90,9 +103,10 @@ export function ButtonModule({ isActive = true }) {
   const answer = match ? `${match.seconds}s` : '';
 
   useEffect(() => {
+    const fresh = answerChanged(`${answer}|${match && match.n}|${color}|${label}`); // false when only isActive changed
     if (!isActive) return;
     setLastCopyString(answer);
-    if (copyOnDecode && answer && color && label) copy(answer);
+    if (copyOnDecode && fresh && answer && color && label) copy(answer);
   }, [answer, match && match.n, color, label, isActive]);
 
   // Keep a per-stage log of solved buttons
@@ -117,6 +131,14 @@ export function ButtonModule({ isActive = true }) {
       return next;
     });
   };
+
+  // The manual is usually pasted on the page (one bar for every Button card), not typed here:
+  // whenever it changes, take its "Serial: …" / module count lines into the bomb facts
+  const firstRun = useRef(true);
+  useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; return; } // the facts were read from it on load
+    applyPastedFacts(checklist);
+  }, [checklist]);
 
   const setChecklist = (text) => setChecklistShared(text);
   const handleChecklistChange = (text) => {
@@ -195,8 +217,8 @@ export function ButtonModule({ isActive = true }) {
   }
 
   const stampStats = match
-    ? `RULE ${match.n}${stage ? ` · BUTTON ${stage.current}/${stage.total}` : ''} · ${color.toUpperCase() || '?'} / "${label || '?'}"`
-    : `${rules.length} RULES${stage ? ` · BUTTON ${stage.current}/${stage.total}` : ''}`;
+    ? `RULE ${match.n}${stageText ? ` · BUTTON ${stageText}` : ''} · ${color.toUpperCase() || '?'} / "${label || '?'}"`
+    : `${rules.length} RULES${stageText ? ` · BUTTON ${stageText}` : ''}`;
 
   const placeholder = !rules.length
     ? 'PASTE THE CHECKLIST'
@@ -220,7 +242,7 @@ export function ButtonModule({ isActive = true }) {
             previewUri ? (
               <div className="preview-row show">
                 <img src={previewUri} alt="button screenshot" />
-                <span>{stage ? `Button ${stage.current} of ${stage.total}` : 'Button screenshot'}</span>
+                <span>{stageText ? `Button ${stageText.replace('/', ' of ')}` : 'Button screenshot'}</span>
                 <button type="button" className="preview-clear-btn" onClick={() => setPreviewUri('')}>✕</button>
               </div>
             ) : null
@@ -332,14 +354,28 @@ export function ButtonModule({ isActive = true }) {
               <datalist id={`${uid}-vocab`}>
                 {vocab.map(w => <option key={w} value={w} />)}
               </datalist>
-              {stage && <span className="maze-status-tag">BUTTON {stage.current} / {stage.total}</span>}
+              {(usesStage || stageText) && (
+                <label className="btn-fact btn-fact-num" title="Which button of the module this is (the dots in the screenshot)">
+                  <span>BUTTON #</span>
+                  <input
+                    type="number"
+                    min="1"
+                    inputMode="numeric"
+                    className={`search-words-field ${usesStage && !stageText ? 'warn' : ''}`}
+                    value={stageText ? stage.current : ''}
+                    placeholder="?"
+                    onChange={(e) => setButtonNum(e.target.value)}
+                  />
+                  {stageText && Number.isFinite(ctx.buttonTotal) && <span>of {stage.total}</span>}
+                </label>
+              )}
             </div>
           </div>
         </ModuleInput>
       }
       answers={
         <AnswerPanel
-          label={`HOLD TIME${stage ? ` — BUTTON ${stage.current}/${stage.total}` : ''}`}
+          label={`HOLD TIME${stageText ? ` — BUTTON ${stageText}` : ''}`}
           stats={stampStats}
           answers={answer ? [`⏱️ ${answer}`] : []}
           copyValue={answer}

@@ -1,9 +1,12 @@
-import React, { useState, useEffect, useId } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MAZE_SIZE, solveMazeBFS } from './mazeSolver.js';
-import { detectMazeWalls, detectMazeDots, isDotsImage } from './mazeVision.js';
+import { detectMazeDots, isDotsImage } from './mazeVision.js';
+import { loadMazeManual, mazeManualStore, useMazeManual } from './mazeStrip.js';
+import { useInstance } from '../../core/InstanceContext.jsx';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
+import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { Dropzone } from '../../core/Dropzone.jsx';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
@@ -23,20 +26,25 @@ export const SAMPLE_MAZE_WALLS = [
   [{u:false,d:true,l:true,r:true},{u:false,d:true,l:false,r:false},{u:false,d:true,l:false,r:true},{u:false,d:true,l:false,r:false},{u:false,d:true,l:false,r:false},{u:false,d:true,l:false,r:false},{u:false,d:true,l:false,r:false},{u:false,d:true,l:false,r:true}]
 ];
 
+const BLANK_WALLS = Array.from({ length: 8 }, () =>
+  Array.from({ length: 8 }, () => ({ u: false, d: false, l: false, r: false }))
+);
+
 export function MazeModule({ isActive = true }) {
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
-  const uid = useId(); // per-instance ids: missions can show the same module several times
+  const answerChanged = useAnswerGate();
+  // Several Maze cards share one manual strip: card #n solves on maze #n of it
+  const inst = useInstance();
+  const myIndex = inst ? inst.index : 0;
+  const { mazes } = useMazeManual();
+  const myMaze = mazes[myIndex] || null;
+  const wallsGrid = myMaze ? myMaze.grid : BLANK_WALLS;
+  const wallsLoaded = Boolean(myMaze);
 
-  const [wallsGrid, setWallsGrid] = useState(() =>
-    Array.from({ length: 8 }, () =>
-      Array.from({ length: 8 }, () => ({ u: false, d: false, l: false, r: false }))
-    )
-  );
   const [startPos, setStartPos] = useState({ r: 0, c: 0 });
   const [goalPos, setGoalPos] = useState({ r: 7, c: 7 });
-  const [wallsLoaded, setWallsLoaded] = useState(false);
   const [dotsLoaded, setDotsLoaded] = useState(false);
   const [previewUri, setPreviewUri] = useState('');
   const [previewMeta, setPreviewMeta] = useState('');
@@ -51,104 +59,76 @@ export function MazeModule({ isActive = true }) {
   const WASD = { U: 'W', L: 'A', D: 'S', R: 'D' };
   const wasd = moves.split('').map(m => WASD[m] || m).join('');
   const placeholder = !wallsLoaded && !dotsLoaded
-    ? 'UPLOAD WALLS & DOTS'
+    ? 'PASTE MANUAL STRIP & SCREENSHOT'
     : !wallsLoaded
-    ? 'NEED WALLS IMAGE'
+    ? `NEED MANUAL (MAZE #${myIndex + 1})`
     : !dotsLoaded
-    ? 'NEED DOTS IMAGE'
+    ? 'NEED DEFUSER SCREENSHOT'
     : (startPos.r === goalPos.r && startPos.c === goalPos.c)
     ? 'START = GOAL'
     : 'NO PATH FOUND — CHECK WALLS';
 
   useEffect(() => {
+    const fresh = answerChanged(wasd); // false when only isActive changed
     if (!isActive) return;
-    setLastCopyString(moves);
-    if (copyOnDecode && moves) {
-      copy(moves);
+    setLastCopyString(wasd);
+    if (copyOnDecode && fresh && wasd) {
+      copy(wasd);
     }
-  }, [moves, isActive]);
+  }, [wasd, isActive]);
 
+  const readDots = (img) => {
+    const dots = detectMazeDots(img);
+    if (dots.startPos) setStartPos(dots.startPos);
+    if (dots.goalPos) setGoalPos(dots.goalPos);
+    setDotsLoaded(true);
+  };
+
+  // The defuser's screenshot (red/yellow dots) is this card's; anything else is the manual —
+  // a strip fills every card (maze #n → card #n), a single maze fills this card.
   const handleImage = (img, dataUri, fileBlob) => {
-    setPreviewUri(dataUri);
-    setPreviewMeta(`${img.naturalWidth}×${img.naturalHeight} px source`);
     setLastImage(img, fileBlob);
-
-    const isDots = isDotsImage(img);
-    if (isDots) {
-      const dots = detectMazeDots(img);
-      if (dots.startPos) setStartPos(dots.startPos);
-      if (dots.goalPos) setGoalPos(dots.goalPos);
-      setDotsLoaded(true);
-      showToast('MAZE DOTS DETECTED ✓');
-    } else {
-      const walls = detectMazeWalls(img);
-      setWallsGrid(walls);
-      setWallsLoaded(true);
-      showToast('MAZE WALLS DETECTED ✓');
+    if (isDotsImage(img)) {
+      setPreviewUri(dataUri);
+      setPreviewMeta(`${img.naturalWidth}×${img.naturalHeight} px source`);
+      readDots(img);
+      showToast(`MAZE #${myIndex + 1}: DOTS DETECTED ✓`);
+      return;
     }
-  };
-
-  const handleWallsUpload = (e) => {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = '';
-    if (!file) return;
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const walls = detectMazeWalls(img);
-      setWallsGrid(walls);
-      setWallsLoaded(true);
-      showToast('MAZE WALLS DETECTED ✓');
-    };
-    img.src = url;
-  };
-
-  const handleDotsUpload = (e) => {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = '';
-    if (!file) return;
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const dots = detectMazeDots(img);
-      if (dots.startPos) setStartPos(dots.startPos);
-      if (dots.goalPos) setGoalPos(dots.goalPos);
-      setDotsLoaded(true);
-      showToast('MAZE DOTS DETECTED ✓');
-    };
-    img.src = url;
+    let n = 0;
+    try { n = loadMazeManual(img, myIndex); } catch (e) { n = 0; }
+    if (!n) { showToast('COULD NOT READ THAT MAZE IMAGE'); return; }
+    if (n === 1) { showToast(`MAZE #${myIndex + 1}: WALLS LOADED ✓`); return; }
+    const room = inst && inst.grow ? inst.grow(n) : (inst ? inst.count : 1);
+    showToast(n > room
+      ? `MANUAL: ${n} MAZES — ONLY ${room} CARD${room > 1 ? 'S' : ''} HERE`
+      : `MANUAL: ${n} MAZES — ONE PER CARD ✓`);
   };
 
   const handleSample = () => {
-    setWallsGrid(SAMPLE_MAZE_WALLS);
+    mazeManualStore.setOne(myIndex, { grid: SAMPLE_MAZE_WALLS, count: 0, fallback: false, thumb: null });
     setStartPos({ r: 0, c: 0 });
     setGoalPos({ r: 7, c: 7 });
-    setWallsLoaded(true);
     setDotsLoaded(true);
     showToast('SAMPLE MAZE LOADED ✓');
   };
 
+  // Clears this card's screenshot; the manual strip is shared (cleared from the bar on top)
   const handleClear = () => {
-    setWallsGrid(Array.from({ length: 8 }, () =>
-      Array.from({ length: 8 }, () => ({ u: false, d: false, l: false, r: false }))
-    ));
     setStartPos({ r: 0, c: 0 });
     setGoalPos({ r: 7, c: 7 });
-    setWallsLoaded(false);
     setDotsLoaded(false);
     setPreviewUri('');
     setPreviewMeta('');
     setLastImage(null, null);
     setLastCopyString('');
-    showToast('MAZE CLEARED ✓');
+    showToast('MAZE SCREENSHOT CLEARED ✓');
   };
 
   const copyItems = [];
   if (moves) {
-    copyItems.push({ label: `COPY FULL PATH (${moves})`, value: moves });
     copyItems.push({ label: `WASD (${wasd})`, value: wasd });
+    copyItems.push({ label: `U/D/L/R (${moves})`, value: moves });
     const arrowMoves = moves.split('').map(m => (m === 'U' ? '↑' : m === 'D' ? '↓' : m === 'L' ? '←' : '→')).join(' ');
     copyItems.push({ label: `ARROWS (${arrowMoves})`, value: arrowMoves });
   }
@@ -162,9 +142,9 @@ export function MazeModule({ isActive = true }) {
           dropzone={
             <Dropzone
               onImage={handleImage}
-              icon="🧩 ⬆ ➡ ⬇ ⬅"
-              title="Click here, then paste Walls or Dots image"
-              sub="Drag & drop or paste maze walls screenshot, then dots screenshot"
+              icon="🧩 🔴 🟡"
+              title="Click here, then paste the defuser's screenshot"
+              sub={<>red dot = start, yellow dot = goal · the manual strip can be pasted or dropped <b>anywhere</b> — maze #n goes to card #n</>}
             />
           }
           preview={
@@ -192,34 +172,22 @@ export function MazeModule({ isActive = true }) {
             </>
           }
         >
-          <div className="maze-config" style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '16px' }}>
-            <div className="maze-upload-row" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <div className="maze-upload-card" style={{ flex: 1, minWidth: '220px' }}>
-                <span className="maze-upload-card-title">1. MAZE WALLS IMAGE:</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' }}>
-                  <label className="upload-btn" htmlFor={`${uid}-walls`}>UPLOAD WALLS</label>
-                  <input type="file" id={`${uid}-walls`} accept="image/*" style={{ display: 'none' }} onChange={handleWallsUpload} />
-                  <span className="maze-status-tag">{wallsLoaded ? 'Walls Loaded ✓' : 'No walls image'}</span>
-                </div>
-              </div>
-              <div className="maze-upload-card" style={{ flex: 1, minWidth: '220px' }}>
-                <span className="maze-upload-card-title">2. DOTS / POSITIONS IMAGE:</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' }}>
-                  <label className="upload-btn" htmlFor={`${uid}-dots`}>UPLOAD DOTS</label>
-                  <input type="file" id={`${uid}-dots`} accept="image/*" style={{ display: 'none' }} onChange={handleDotsUpload} />
-                  <span className="maze-status-tag">{dotsLoaded ? 'Dots Loaded ✓' : 'No dots image'}</span>
-                </div>
-              </div>
-            </div>
+          <div className="maze-status-row">
+            <span className={`maze-status-tag ${wallsLoaded ? 'ok' : ''}`}>
+              {wallsLoaded ? `WALLS: MANUAL MAZE #${myIndex + 1} ✓` : `WALLS: waiting for the manual (maze #${myIndex + 1})`}
+            </span>
+            <span className={`maze-status-tag ${dotsLoaded ? 'ok' : ''}`}>
+              {dotsLoaded ? 'DOTS ✓' : 'DOTS: waiting for the defuser screenshot'}
+            </span>
           </div>
         </ModuleInput>
       }
       answers={
         <AnswerPanel
-          label="SOLVED MAZE DIRECTIONS"
+          label="SOLVED MAZE (WASD)"
           stats={stampStats}
-          answers={moves ? moves.split('') : []}
-          copyValue={moves}
+          answers={wasd ? wasd.split('') : []}
+          copyValue={wasd}
           placeholder={placeholder}
         />
       }
@@ -248,6 +216,6 @@ export const mazeModule = {
   tabLabel: '🧩 MAZE (8×8)',
   eyebrow: 'MAZE SOLVER',
   title: 'Maze Vision',
-  sub: 'Upload 1 or 2 screenshots: the <b>Maze walls</b> image and the <b>Dots / positions</b> image. Solves shortest path via BFS and automatically copies directions (e.g. <code>R D D R U</code>) to your clipboard!',
+  sub: 'Paste or drop the <b>manual strip</b> anywhere — one image for every maze, any number stacked; maze #n is solved on card #n. Then paste the <b>defuser\'s screenshot</b> (red dot = start, yellow = goal) on each card. Shortest path by BFS, copied as directions (e.g. <code>DSSDW</code>).',
   Component: MazeModule
 };

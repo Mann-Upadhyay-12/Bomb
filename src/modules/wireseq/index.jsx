@@ -13,6 +13,7 @@ import { Dropzone } from '../../core/Dropzone.jsx';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
+import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { useSharedSetting } from '../../core/sharedSetting.js';
 import { useInstance } from '../../core/InstanceContext.jsx';
 import { WireseqWorking } from './working.jsx';
@@ -23,6 +24,7 @@ export function WireseqModule({ isActive = true }) {
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
+  const answerChanged = useAnswerGate();
   const uid = useId(); // per-instance ids: missions can show the same module several times
 
   // All 5 stages are kept; counts are recomputed from earlier stages every render,
@@ -47,9 +49,10 @@ export function WireseqModule({ isActive = true }) {
   const copyFormatted = cuts.length ? cuts.map(n => `Wire ${n}`).join(' ') : (filled ? 'NONE' : '');
 
   React.useEffect(() => {
+    const fresh = answerChanged(`${active}|${copyFormatted}`); // false when only isActive changed
     if (!isActive) return;
     setLastCopyString(copyFormatted);
-    if (copyOnDecode && cuts.length > 0) {
+    if (copyOnDecode && fresh && cuts.length > 0) {
       copy(copyFormatted);
     }
   }, [copyFormatted, active, isActive]);

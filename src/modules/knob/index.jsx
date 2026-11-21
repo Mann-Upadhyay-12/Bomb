@@ -10,6 +10,7 @@ import { detectKnobStateFromImage } from './knobVision.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
+import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { Dropzone } from '../../core/Dropzone.jsx';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
@@ -24,6 +25,7 @@ export function KnobModule({ isActive = true }) {
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
+  const answerChanged = useAnswerGate();
 
   const [rulesText, setRulesText] = useState(() => {
     try {
@@ -51,9 +53,10 @@ export function KnobModule({ isActive = true }) {
   const knobMsg = `ODD : ${oddDir} EVEN : ${evenDir}`;
 
   useEffect(() => {
+    const fresh = answerChanged(knobMsg); // false when only isActive changed
     if (!isActive) return;
     setLastCopyString(knobMsg);
-    if (copyOnDecode && (resOdd.ok || resEven.ok)) {
+    if (copyOnDecode && fresh && (resOdd.ok || resEven.ok)) {
       copy(knobMsg);
     }
   }, [knobMsg, resOdd.ok, resEven.ok, isActive]);

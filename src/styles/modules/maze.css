@@ -27,3 +27,16 @@
   [data-theme="parchment"] .maze-cell.goal-cell { background: rgba(173,122,46,0.22) !important; color: var(--brass-deep) !important; box-shadow: inset 0 0 10px rgba(173,122,46,0.3); }
   [data-theme="parchment"] .maze-cell.path-cell { background: rgba(62,124,74,0.22) !important; color: var(--select-green-deep) !important; box-shadow: inset 0 0 8px rgba(62,124,74,0.3); }
 
+  /* Maze manual strip: thumbnails of every maze with the detected walls (pink) on top */
+  .mz-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; padding: 10px 0 4px; }
+  .mz-thumb { display: flex; flex-direction: column; align-items: center; gap: 4px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 6px; }
+  .mz-thumb.spare { opacity: .5; }
+  .mz-thumb img, .mz-thumb-empty { width: 100%; max-width: 120px; aspect-ratio: 1; border-radius: 6px; background: #101216; }
+  .mz-thumb-empty { display: flex; align-items: center; justify-content: center; color: var(--ink-soft); }
+  .mz-thumb-n, .mz-thumb-s { font-family: ui-monospace, Consolas, monospace; font-size: 10px; font-weight: 700; color: var(--brass); }
+  .mz-thumb-s { color: var(--ink-soft); }
+  .mz-thumbs-tip { grid-column: 1 / -1; font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; color: var(--ink-soft); }
+  .maze-status-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .maze-status-row .maze-status-tag { border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; }
+  .maze-status-row .maze-status-tag.ok { color: #4ADE80; border-color: currentColor; }
+  [data-theme="parchment"] .maze-status-row .maze-status-tag.ok { color: var(--select-green-deep); }

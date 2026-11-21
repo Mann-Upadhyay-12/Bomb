@@ -3,7 +3,7 @@
 // Missing/placeholder modules are flagged with isImplemented: false.
 // shared: true = every copy on a bomb uses the same manual (Password, Piano …) or the same manual-side
 // image strip (Maze, Symbols, Diagram, Chess): repeated copies are shown as ONE page with a card per copy,
-// side by side. Others get a window per copy.
+// stacked one over the other. Others get a window per copy.
 
 export const KNOWN_MODULE_NAMES = {
   // Implemented modules in bomb_boomed:

@@ -199,13 +199,15 @@ export function Dropzone({
     }
   };
 
-  // A screenshot dropped on this copy's box in a module group is loaded here
+  // A screenshot (file or image link) dropped on this copy's box in a module group is loaded here
   const inst = useInstance();
   const injectNonce = inst && inst.inject ? inst.inject.nonce : 0;
   useEffect(() => {
-    if (!injectNonce || !inst.inject.file) return;
-    if (multiple && onFiles) onFiles([inst.inject.file]);
-    else loadFromSource({ type: 'file', file: inst.inject.file });
+    if (!injectNonce) return;
+    const src = inst.inject.src || (inst.inject.file ? { type: 'file', file: inst.inject.file } : null);
+    if (!src) return;
+    if (src.type === 'file' && multiple && onFiles) onFiles([src.file]);
+    else loadFromSource(src);
   }, [injectNonce]);
 
   // The window listeners are registered once; they call the latest handlers through this ref

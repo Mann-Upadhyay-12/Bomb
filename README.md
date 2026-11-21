@@ -34,7 +34,7 @@ How the pieces work:
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm run build      # dist/index.html with all app code inlined
+npm run build      # dist/yuza.html (autocopy off by default) + dist/dixie.html (autocopy on), all code inlined
 npm test
 npm run build:captcha-wasm   # only after editing src/heist/captcha/captchaKernel.c (needs clang)
 ```

@@ -10,6 +10,7 @@ import { cellFeature, matchGlyph, combineGlyphOcr, SEARCH_GLYPHS } from './searc
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
+import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { Dropzone } from '../../core/Dropzone.jsx';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
@@ -33,6 +34,7 @@ export function SearchModule({ isActive = true }) {
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
+  const answerChanged = useAnswerGate();
   const uid = useId(); // per-instance ids: missions can show the same module several times
 
   const [gridData, setGridData] = useState(() => Array.from({ length: 5 }, () => Array(5).fill('')));
@@ -57,13 +59,14 @@ export function SearchModule({ isActive = true }) {
   const { foundMatches, uniqueWords, hitCells, totalWords } = solveWordSearch(gridData, wordsText);
 
   useEffect(() => {
+    const fresh = answerChanged(`${gridData.every(row => row.every(ch => ch && ch !== '?'))}|${uniqueWords.join(' ')}`); // false when only isActive changed
     if (!isActive) return;
     const copyString = uniqueWords.join(' ');
     setLastCopyString(copyString);
     // Only auto-copy once the board is fully filled, so partial typing / live OCR
     // progress doesn't spam the clipboard.
     const isFull = gridData.every(row => row.every(ch => ch && ch !== '?'));
-    if (copyOnDecode && isFull && uniqueWords.length > 0) {
+    if (copyOnDecode && fresh && isFull && uniqueWords.length > 0) {
       copy(copyString);
     }
   }, [gridData, isActive]);

@@ -7,6 +7,7 @@ import {
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
+import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
 import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
@@ -23,6 +24,7 @@ export function ComplexWiresModule({ isActive = true }) {
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
+  const answerChanged = useAnswerGate();
 
   const [rules, setRules] = useState(() => ({ ...CW_PRESETS.preset1 }));
   const [edge, setEdge] = useState({ even: false, needy: false, gte5: true });
@@ -98,9 +100,10 @@ export function ComplexWiresModule({ isActive = true }) {
   const copyFormatted = cuts.length ? cuts.map(n => `Wire ${n}`).join(' ') : 'NONE';
 
   React.useEffect(() => {
+    const fresh = answerChanged(copyFormatted); // false when only isActive changed
     if (!isActive) return;
     setLastCopyString(copyFormatted);
-    if (copyOnDecode && cuts.length > 0) {
+    if (copyOnDecode && fresh && cuts.length > 0) {
       copy(copyFormatted);
     }
   }, [copyFormatted, isActive]);

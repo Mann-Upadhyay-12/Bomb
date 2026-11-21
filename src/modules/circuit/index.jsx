@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
+import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { useInstance } from '../../core/InstanceContext.jsx';
 import { useSharedSetting } from '../../core/sharedSetting.js';
 import { Dropzone } from '../../core/Dropzone.jsx';
@@ -22,6 +23,7 @@ export function CircuitModule({ isActive = true }) {
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
+  const answerChanged = useAnswerGate();
 
   // every Circuit on the bomb uses the same colour → ohms table
   const [manualText, setManualText] = useSharedSetting(CIRCUIT_MANUAL_KEY, CIRCUIT_DEFAULT_MANUAL);
@@ -39,9 +41,10 @@ export function CircuitModule({ isActive = true }) {
   const answer = solved && solved.ok ? solved.ohms.decimal : '';
 
   useEffect(() => {
+    const fresh = answerChanged(answer); // false when only isActive changed
     if (!isActive) return;
     setLastCopyString(answer);
-    if (copyOnDecode && answer) copy(answer);
+    if (copyOnDecode && fresh && answer) copy(answer);
     if (inst && inst.report) inst.report(answer ? `${answer} Ω` : '');
   }, [answer, isActive]);
 

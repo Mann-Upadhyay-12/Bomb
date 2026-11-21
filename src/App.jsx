@@ -4,6 +4,7 @@ import { useTheme } from './core/ThemeContext.jsx';
 import { useToast } from './core/ToastContext.jsx';
 import { ModeRouter } from './core/ModeRouter.jsx';
 import { MissionSidebar } from './core/components/MissionSidebar.jsx';
+import { NeedyTimer } from './core/components/NeedyTimer.jsx';
 import { KNOWN_MODULE_NAMES } from './core/sectionsData.js';
 import { LevelGenerator } from './core/level/LevelGenerator.jsx';
 import { ModuleGroup } from './core/components/ModuleGroup.jsx';
@@ -208,6 +209,7 @@ export function App() {
       <div className="view" id="mainView" style={{ display: view === 'main' ? undefined : 'none' }}>
           {/* Top Controls Bar */}
           <div className="top-bar-controls">
+            <div className="top-bar-left">
             <button
               type="button"
               className={`sidebar-toggle-btn ${activeMission ? 'has-mission' : ''}`}
@@ -217,6 +219,9 @@ export function App() {
               <span className="toggle-icon">☰</span>
               <span>{activeMission ? (activeMission.custom ? `LEVEL: ${activeMission.label}` : `MISSION: ${activeMission.id}`) : 'MISSIONS / SECTIONS'}</span>
             </button>
+            {/* Needy reminder: on every level and in "all modules"; keyed by level so switching stops it */}
+            <NeedyTimer key={activeMission ? activeMission.id : 'all-modules'} />
+            </div>
           </div>
 
           {/* Top navigation router */}

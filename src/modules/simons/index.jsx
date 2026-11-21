@@ -9,6 +9,7 @@ import { decodeGIFRGBA } from '../../utils/gif.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
+import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { useSharedSetting } from '../../core/sharedSetting.js';
 import { useInstance } from '../../core/InstanceContext.jsx';
 import { Dropzone } from '../../core/Dropzone.jsx';
@@ -66,6 +67,7 @@ export function SimonsModule({ isActive = true }) {
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
+  const answerChanged = useAnswerGate();
 
   // The manual is the same for every copy of this module, so all windows share it
   const [rulesText, setRulesText] = useSharedSetting('bombvision_simon_rules', SIMON_DEFAULT_RULES);
@@ -87,9 +89,10 @@ export function SimonsModule({ isActive = true }) {
   React.useEffect(() => { if (inst && inst.report) inst.report(summary); }, [summary]);
 
   React.useEffect(() => {
+    const fresh = answerChanged(copyFormatted); // false when only isActive changed
     if (!isActive) return;
     setLastCopyString(copyFormatted);
-    if (copyOnDecode && copyFormatted) copy(copyFormatted);
+    if (copyOnDecode && fresh && copyFormatted) copy(copyFormatted);
   }, [copyFormatted, isActive]);
 
   const ingest = async (items) => {

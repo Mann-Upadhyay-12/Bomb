@@ -1,5 +1,14 @@
 // Pure Password solver filtering master dictionary against column candidates
 
+/**
+ * Letter rows from the rows box: every row is exactly 5 letters, so the rows are simply every 5
+ * letters in order — spaces, new lines, commas and anything else that isn't a letter are ignored
+ * ("LHLODLBANE" = "LHLOD LBANE" = "LHLOD\nLBANE"). An unfinished last row (< 5 letters) is left out.
+ */
+export function splitPasswordRows(text) {
+  return String(text || '').toUpperCase().replace(/[^A-Z]/g, '').match(/[A-Z]{5}/g) || [];
+}
+
 export const MASTER_PASSWORDS = [
   "BELOW", "AGAIN", "STUDY", "LEARN", "HEART", "MUSIC", "WRITE", "WOULD", "START", "FIRST",
   "THERE", "SMALL", "SOUND", "WHERE", "PLACE", "STILL", "THINK", "GREEN", "COULD", "CHAIR",

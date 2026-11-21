@@ -4,6 +4,7 @@ import { pnAnalyze } from './pianoVision.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
+import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { useSharedSetting } from '../../core/sharedSetting.js';
 import { useInstance } from '../../core/InstanceContext.jsx';
 import { Dropzone } from '../../core/Dropzone.jsx';
@@ -20,6 +21,7 @@ export function PianoModule({ isActive = true }) {
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
+  const answerChanged = useAnswerGate();
   const uid = useId(); // per-instance ids: missions can show the same module several times
 
   const [clefSel, setClefSel] = useState('auto');
@@ -45,10 +47,11 @@ export function PianoModule({ isActive = true }) {
   const code = (st >= 1 && st <= 12) ? parsedCodes[intervalName.toLowerCase()] : null;
 
   useEffect(() => {
+    const fresh = answerChanged(`${code}|${intervalName}|${st}`); // false when only isActive changed
     if (!isActive) return;
     const copyVal = code || intervalName;
     setLastCopyString(copyVal);
-    if (copyOnDecode && copyVal && st > 0) {
+    if (copyOnDecode && fresh && copyVal && st > 0) {
       copy(copyVal);
     }
   }, [code, intervalName, st, isActive]);

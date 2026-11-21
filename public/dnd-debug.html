@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drop Debug</title>
+<style>
+:root { --bg: #f4efe3; --ink: #2b2417; --line: #c9b98f; --accent: #7d6325; }
+@media (prefers-color-scheme: dark) { :root { --bg: #1b1915; --ink: #ece4d2; --line: #4a4230; --accent: #d6b25e; } }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.45 ui-monospace, Consolas, monospace; padding: 16px; }
+#zone { border: 2px dashed var(--accent); border-radius: 8px; padding: 40px 16px; text-align: center; font-size: 15px; }
+#zone.over { background: rgba(176,141,60,.2); }
+pre { white-space: pre-wrap; word-break: break-all; border: 1px solid var(--line); border-radius: 6px; padding: 10px; min-height: 120px; }
+button { font: inherit; padding: 4px 10px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div id="zone">Drag the Discord image here, then press “Copy log” and paste it in chat</div>
+<button id="copy">Copy log</button> <button id="clear">Clear</button>
+<pre id="out"></pre>
+<script>
+const out = document.getElementById('out'), zone = document.getElementById('zone');
+let lines = [], overLogged = false;
+const log = s => { lines.push(s); out.textContent = lines.join('\n'); };
+const desc = el => el ? (el.id ? '#' + el.id : el.tagName.toLowerCase()) : '?';
+log('UA: ' + navigator.userAgent);
+for (const t of ['dragenter', 'dragover', 'dragleave', 'drop']) {
+  window.addEventListener(t, e => {
+    e.preventDefault();
+    const dt = e.dataTransfer;
+    if (t === 'dragover') { if (overLogged) return; overLogged = true; }
+    zone.classList.toggle('over', t === 'dragenter' || t === 'dragover');
+    log(`${t} on ${desc(e.target)} types=${JSON.stringify(Array.from(dt ? dt.types : []))} files=${dt ? dt.files.length : 0} items=${dt ? Array.from(dt.items).map(i => i.kind + ':' + i.type).join(',') : ''}`);
+    if (t !== 'drop' || !dt) return;
+    overLogged = false;
+    for (const f of dt.files) log(`  file: name=${f.name} type=${f.type} size=${f.size}`);
+    for (const ty of dt.types) if (ty !== 'Files') log(`  getData(${ty}) = ${JSON.stringify(dt.getData(ty)).slice(0, 600)}`);
+    log('---');
+  });
+}
+document.getElementById('copy').onclick = () => navigator.clipboard.writeText(lines.join('\n'));
+document.getElementById('clear').onclick = () => { lines = []; overLogged = false; log('UA: ' + navigator.userAgent); };
+</script>
+</body>
+</html>

@@ -6,7 +6,8 @@ export const PREFIX_HASH_KEY = 'bomb_prefix_hash';
 
 export function AppStateProvider({ children }) {
   const [appMode, setAppMode] = useState('mines');
-  const [copyOnDecode, setCopyOnDecode] = useState(true);
+  // Default set per build (npm run build: yuza.html → off, dixie.html → on); on in dev
+  const [copyOnDecode, setCopyOnDecode] = useState(typeof __AUTOCOPY_DEFAULT__ === 'boolean' ? __AUTOCOPY_DEFAULT__ : true);
   const [prefixHash, setPrefixHashState] = useState(() => {
     try {
       const saved = localStorage.getItem(PREFIX_HASH_KEY);

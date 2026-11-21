@@ -77,3 +77,7 @@
   .btn-rule { grid-template-columns: 22px 1fr auto; }
   .btn-rule-status { display: none; }
 }
+/* "BUTTON #" (which button of the module) next to the label — for rules like "this is button 1 or 3" */
+.btn-fact-num { flex-direction: row; align-items: center; gap: 8px; }
+.btn-fact-num input { width: 64px; }
+.btn-fact-num input.warn { border-color: #F59E0B; }

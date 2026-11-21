@@ -70,6 +70,24 @@ export function locateEquation(img) {
     }
     if (arrow >= 1) { if (x < ax0) ax0 = x; if (x > ax1) ax1 = x; }
   }
+  // JPEG colour subsampling turns the arrow's tail end and tip grey: a few columns just past the
+  // orange whose bright pixels all sit in the arrow's own rows are still arrow, not a letter ("O₂ L →")
+  if (ax1 >= ax0) {
+    const lumAt = (x, y) => { const i = (y * W + x) * 4; return 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; };
+    const arrowRows = (x) => {
+      let r0 = H, r1 = -1;
+      for (let y = ty0; y <= ty1; y++) { const i = (y * W + x) * 4; if (isArrowPx(d[i], d[i + 1], d[i + 2])) { if (y < r0) r0 = y; r1 = y; } }
+      return [r0, r1];
+    };
+    const onlyIn = (x, [r0, r1]) => {
+      let n = 0;
+      for (let y = ty0; y <= ty1; y++) if (lumAt(x, y) > 115) { if (y < r0 - 1 || y > r1 + 1) return false; n++; }
+      return n > 0;
+    };
+    const left = arrowRows(ax0), right = arrowRows(ax1), reach = Math.max(2, Math.round((ty1 - ty0) * 0.12));
+    for (let k = 0; k < reach && ax0 - 1 >= xA && onlyIn(ax0 - 1, left); k++) ax0--;
+    for (let k = 0; k < reach && ax1 + 1 < xB && onlyIn(ax1 + 1, right); k++) ax1++;
+  }
   let tx0 = W, tx1 = -1;
   for (let x = xA; x < xB; x++) if (colText[x] > 0 || (x >= ax0 && x <= ax1)) { if (x < tx0) tx0 = x; if (x > tx1) tx1 = x; }
   if (tx1 < 0) return { ok: false, reason: 'No equation text found.' };
@@ -165,14 +183,15 @@ export function locateEquation(img) {
     {
       const { capTop, base, capH } = lines();
       let own = null; // component ids of the blob being cut (neighbours' ink in the same columns is ignored)
-      const on = (p) => mask[p] && own.has(lab[p]);
-      const topInk = (x) => { for (let y = 0; y < h; y++) if (on(y * w + x)) return y; return h; };
-      const bbox = (x0, x1) => {
+      // keep(x, y): which pixels of a shared column belong to this piece (see the split below)
+      const on = (p, keep) => mask[p] && own.has(lab[p]) && (!keep || keep(p % w, (p / w) | 0));
+      const topInk = (x, keep) => { for (let y = 0; y < h; y++) if (on(y * w + x, keep)) return y; return h; };
+      const bbox = (x0, x1, keep) => {
         let y0 = h, y1 = -1, xa = w, xb = -1;
-        for (let y = 0; y < h; y++) for (let x = x0; x <= x1; x++) if (on(y * w + x)) {
+        for (let y = 0; y < h; y++) for (let x = x0; x <= x1; x++) if (on(y * w + x, keep)) {
           if (y < y0) y0 = y; if (y > y1) y1 = y; if (x < xa) xa = x; if (x > xb) xb = x;
         }
-        return y1 < 0 || (y1 - y0 + 1) * (xb - xa + 1) < 6 ? null : { x0: xa, x1: xb, y0, y1, ids: own };
+        return y1 < 0 || (y1 - y0 + 1) * (xb - xa + 1) < 6 ? null : { x0: xa, x1: xb, y0, y1, ids: own, keep };
       };
       for (let k = clusters.length - 1; k >= 0; k--) {
         const c = clusters[k];
@@ -203,21 +222,46 @@ export function locateEquation(img) {
           while (r[0] > 0 && topInk(c.x0 + r[0] - 1) >= low && topInk(c.x0 + r[0] - 1) < h) r[0]--;
           while (r[1] < below.length - 1 && topInk(c.x0 + r[1] + 1) >= low && topInk(c.x0 + r[1] + 1) < h) r[1]++;
         }
+        // widening can make neighbouring runs overlap — both digits of "O₁₁" grow over each other —
+        // and an overlap would cut the same subscript out twice ("1111"): merge them into one
+        subRuns = subRuns.reduce((acc, r) => {
+          const last = acc[acc.length - 1];
+          if (last && r[0] <= last[1] + 1) last[1] = Math.max(last[1], r[1]); else acc.push([r[0], r[1]]);
+          return acc;
+        }, []);
+        // A subscript glued to the next letter shares its edge column with it: the bottom bar of "₂"
+        // in "H₂O" runs into the left edge of the "O". Such a column's ink starts far above the
+        // subscript's own top, so it's split by rows — below the baseline → subscript, the rest →
+        // the letter. Otherwise the subscript's box reaches letter height and it isn't seen as one.
+        const shared = new Map(); // column → first row that belongs to the subscript
+        const pure = subRuns.map(([a, b]) => {
+          const tops = [];
+          for (let i = a; i <= b; i++) { const t = topInk(c.x0 + i); if (t < h) tops.push(t); }
+          const top = tops.length ? med(tops) : h;
+          const tallCol = (i) => topInk(c.x0 + i) < top - capH * 0.15;
+          let sa = a, sb = b;
+          while (sa < sb && tallCol(sa)) shared.set(c.x0 + sa++, base + 1);
+          while (sb > sa && tallCol(sb)) shared.set(c.x0 + sb--, base + 1);
+          return [sa, sb];
+        });
+        const subKeep = (x, y) => !shared.has(x) || y >= shared.get(x);
+        const letterKeep = (x, y) => !shared.has(x) || y < shared.get(x);
         const cuts = [];
         let from = c.x0;
-        for (const [a, b] of subRuns) {
-          if (c.x0 + a > from) cuts.push([from, c.x0 + a - 1]);
-          cuts.push([c.x0 + a, c.x0 + b]);
-          from = c.x0 + b + 1;
-        }
-        if (from <= c.x1) cuts.push([from, c.x1]);
+        subRuns.forEach(([a, b], n) => {
+          const [sa, sb] = pure[n];
+          if (c.x0 + sa > from) cuts.push([from, c.x0 + sa - 1, letterKeep]);
+          cuts.push([c.x0 + a, c.x0 + b, subKeep]);
+          from = c.x0 + sb + 1;
+        });
+        if (from <= c.x1) cuts.push([from, c.x1, letterKeep]);
         const parts = [];
-        for (const [a, b] of cuts) {
+        for (const [a, b, keep] of cuts) {
           let s0 = -1;
           for (let x = a; x <= b + 1; x++) {
-            const ink = x <= b && topInk(x) < h;
+            const ink = x <= b && topInk(x, keep) < h;
             if (ink && s0 < 0) s0 = x;
-            if (!ink && s0 >= 0) { const bb = bbox(s0, x - 1); if (bb) parts.push(bb); s0 = -1; }
+            if (!ink && s0 >= 0) { const bb = bbox(s0, x - 1, keep); if (bb) parts.push(bb); s0 = -1; }
           }
         }
         if (parts.length > 1) clusters.splice(k, 1, ...parts);
@@ -242,9 +286,13 @@ export function locateEquation(img) {
       const gctx = gc.getContext('2d');
       gctx.fillStyle = '#fff'; gctx.fillRect(0, 0, gc.width, gc.height);
       const tmp = gctx.createImageData(cw, chh);
-      for (let y = 0; y < chh; y++) for (let x = 0; x < cw; x++) {
+      // this glyph's own ink (a piece cut from a blob only keeps its side of a shared column)
+      const mine = (x, y) => {
         const q = (c.y0 + y) * w + c.x0 + x;
-        const v = mask[q] && c.ids.has(lab[q]) ? 0 : 255, o = (y * cw + x) * 4;
+        return mask[q] && c.ids.has(lab[q]) && (!c.keep || c.keep(c.x0 + x, c.y0 + y));
+      };
+      for (let y = 0; y < chh; y++) for (let x = 0; x < cw; x++) {
+        const v = mine(x, y) ? 0 : 255, o = (y * cw + x) * 4;
         tmp.data[o] = tmp.data[o + 1] = tmp.data[o + 2] = v; tmp.data[o + 3] = 255;
       }
       const t2 = document.createElement('canvas'); t2.width = cw; t2.height = chh;
@@ -252,7 +300,41 @@ export function locateEquation(img) {
       gctx.imageSmoothingQuality = 'high';
       gctx.drawImage(t2, PAD, PAD, cw * scale, chh * scale);
       const gapBefore = k ? c.x0 - clusters[k - 1].x1 - 1 : 0;
+      // closed loops (background enclosed by the glyph): O has one, C none — OCR mixes up C / O / [ / (
+      const countHoles = (isInk) => {
+        const W2 = cw + 2, H2 = chh + 2, bg = new Uint8Array(W2 * H2);
+        for (let y = 0; y < H2; y++) for (let x = 0; x < W2; x++) {
+          const inside = x > 0 && y > 0 && x <= cw && y <= chh;
+          bg[y * W2 + x] = inside && isInk(x - 1, y - 1) ? 0 : 1;
+        }
+        let holes = 0;
+        const seen = new Uint8Array(W2 * H2);
+        for (let s0 = 0; s0 < W2 * H2; s0++) {
+          if (!bg[s0] || seen[s0]) continue;
+          let n = 0, edge = false; const st = [s0]; seen[s0] = 1;
+          while (st.length) {
+            const q = st.pop(), qx = q % W2, qy = (q / W2) | 0; n++;
+            if (qx === 0 || qy === 0 || qx === W2 - 1 || qy === H2 - 1) edge = true;
+            for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+              const nx = qx + dx, ny = qy + dy;
+              if (nx < 0 || ny < 0 || nx >= W2 || ny >= H2) continue;
+              const r2 = ny * W2 + nx;
+              if (bg[r2] && !seen[r2]) { seen[r2] = 1; st.push(r2); }
+            }
+          }
+          if (!edge && n >= Math.max(2, cw * chh * 0.02)) holes++;
+        }
+        return holes;
+      };
+      const holes = countHoles(mine);
+      // the same with only solid ink: a small bold "3" has its arm tips almost touching the middle,
+      // and the faint anti-aliased pixels between close both bays into "loops" — an "8" stays closed
+      const lumAt = (x, y) => { const i = ((by0 + c.y0 + y) * W + x0 + c.x0 + x) * 4; return 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; };
+      const solidHoles = countHoles((x, y) => mine(x, y) && lumAt(x, y) > 170);
       return {
+        holes,
+        solidHoles,
+        bracketTall: chh > capH * 1.08, // brackets reach above the capitals and below the baseline
         canvas: gc,
         box: [x0 + c.x0, by0 + c.y0, x0 + c.x1, by0 + c.y1],
         sub: c.sub,
@@ -371,6 +453,57 @@ function splitAtThinnest(src) {
   return [piece(x0, cut), piece(cut + 1, x1)];
 }
 
+/** Closed loops of a black-on-white glyph canvas: [{ cy }] (cy = loop centre, 0 top … 1 bottom of the ink) */
+export function loopsOf(canvas) {
+  const W = canvas.width, H = canvas.height, d = canvas.getContext('2d').getImageData(0, 0, W, H).data;
+  const ink = new Uint8Array(W * H);
+  let y0 = H, y1 = -1, x0 = W, x1 = -1;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (d[(y * W + x) * 4] < 128) {
+    ink[y * W + x] = 1; if (y < y0) y0 = y; if (y > y1) y1 = y; if (x < x0) x0 = x; if (x > x1) x1 = x;
+  }
+  if (y1 < 0) return [];
+  const seen = new Uint8Array(W * H), loops = [], minA = Math.max(4, (x1 - x0 + 1) * (y1 - y0 + 1) * 0.015);
+  for (let s0 = 0; s0 < W * H; s0++) {
+    if (ink[s0] || seen[s0]) continue;
+    const st = [s0]; seen[s0] = 1; let n = 0, sy = 0, edge = false;
+    while (st.length) {
+      const q = st.pop(), qx = q % W, qy = (q / W) | 0; n++; sy += qy;
+      if (qx === 0 || qy === 0 || qx === W - 1 || qy === H - 1) edge = true;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = qx + dx, ny = qy + dy;
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+        const r = ny * W + nx;
+        if (!ink[r] && !seen[r]) { seen[r] = 1; st.push(r); }
+      }
+    }
+    if (!edge && n >= minA) loops.push({ cy: (sy / n - y0) / Math.max(1, y1 - y0), area: n });
+  }
+  // a pinhole where a tiny digit's hook touches its body ("6" at 7 px) isn't a loop: 8's two loops are
+  // about the same size, so drop loops much smaller than the biggest
+  const big = Math.max(0, ...loops.map(l => l.area));
+  return loops.filter(l => l.area >= big * 0.35);
+}
+
+// Loops each digit has: OCR of small bold subscripts swaps 6 → 3 / 8, 9 → 3 … the loops can't lie.
+const DIGIT_LOOPS = { 0: 1, 1: 0, 2: 0, 3: 0, 4: 1, 5: 0, 6: 1, 7: 0, 8: 2, 9: 1 };
+// solidLoops (optional): loops counted with only solid ink. Loops that open up there are the bays
+// of a "3" closed by anti-aliasing, not the counters of an "8" / "9" — then OCR's digit stands.
+export function fixDigitByLoops(t, loops, solidLoops = null) {
+  if (!/^[0-9]$/.test(t)) return t;
+  const n = loops.length;
+  if (n >= 2) return solidLoops === null || solidLoops >= 2 ? '8' : t;
+  if (n === 1 && solidLoops === 0) return t; // the one "loop" is a bay closed by anti-aliasing
+  if (n === 1) {
+    const cy = loops[0].cy;
+    if (t === '4' && cy < 0.62) return '4'; // 4's closed triangle (some fonts leave it open)
+    if (cy > 0.55) return '6';
+    if (cy < 0.42) return '9';
+    return DIGIT_LOOPS[t] === 1 ? t : '0';
+  }
+  // no loop found: keep what OCR said (a blurry loop can close up, so this proves nothing)
+  return t;
+}
+
 async function ocrGlyph(worker, g) {
   if (g.wide && g.sub) {
     // touching 2-digit subscript ("₁₆"): Tesseract reads one digit of the pair, so split it at the
@@ -378,7 +511,8 @@ async function ocrGlyph(worker, g) {
     const halves = splitAtThinnest(g.canvas);
     if (halves) {
       let t = '';
-      for (const h of halves) t += (await ocrGlyph(worker, { ...g, canvas: h, wide: false })).replace(/[^0-9]/g, '');
+      // (the pair's solid-loop count isn't either digit's own)
+      for (const h of halves) t += (await ocrGlyph(worker, { ...g, canvas: h, wide: false, solidHoles: null })).replace(/[^0-9]/g, '');
       if (t.length === 2) return t;
     }
     await worker.setParameters({ tessedit_char_whitelist: '0123456789', tessedit_pageseg_mode: '6', user_defined_dpi: '300' });
@@ -404,7 +538,7 @@ async function ocrGlyph(worker, g) {
     await worker.setParameters({ tessedit_char_whitelist: g.sub ? '0123456789' : MAIN_WL + '0123456789', tessedit_pageseg_mode: psm, user_defined_dpi: '300' });
     const { data } = await worker.recognize(g.canvas);
     const t = String(data.text || '').replace(/\s+/g, '');
-    if (t) return t.slice(0, 1);
+    if (t) return g.sub ? fixDigitByLoops(t.slice(0, 1), loopsOf(g.canvas), g.solidHoles ?? null) : t.slice(0, 1);
   }
   return '';
 }
@@ -425,6 +559,8 @@ async function readSideByGlyphs(worker, glyphs) {
     if (g.sub) {
       t = t.split('').map(ch => DIGIT_FIX[ch] || ch).join('').replace(/[^0-9]/g, '');
     } else if (!g.wide) {
+      // a round glyph no taller than a capital: the loop decides C or O (never a bracket)
+      if (/^[\[(COco0QD]$/.test(t) && !g.bracketTall && (t !== 'D' || !g.holes)) t = g.holes ? 'O' : 'C';
       if (/[0-9]/.test(t)) t = LETTER_FIX[t] || t;
       if (/[A-Za-z]/.test(t) && XHEIGHT.has(t.toLowerCase())) t = g.tall ? t.toUpperCase() : t.toLowerCase();
       if (t === '+' || (g.small && !g.tall && /[tTxX]/.test(t))) t = ' + ';

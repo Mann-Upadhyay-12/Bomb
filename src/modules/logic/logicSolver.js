@@ -166,7 +166,8 @@ export function groupRows(tiles) {
   return rows.map(r => r.t);
 }
 
-export function extractGlyph(L, w, tile, thr) {
+// range = { level, gmax }: tile background and brightest ink, to measure how bright this glyph is
+export function extractGlyph(L, w, tile, thr, range = null) {
   const ix = Math.round(tile.w * 0.06), iy = Math.round(tile.h * 0.06);
   const x0 = tile.x + ix, y0 = tile.y + iy, tw = tile.w - 2 * ix, th = tile.h - 2 * iy;
   const m = new Uint8Array(tw * th);
@@ -182,7 +183,17 @@ export function extractGlyph(L, w, tile, thr) {
   if (area < 0.005 * tw * th) return null;
   const bw = bx1 - bx0 + 1, bh = by1 - by0 + 1, g = new Uint8Array(bw * bh);
   for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) if (keep.has(labels[(by0 + y) * tw + bx0 + x])) g[y * bw + x] = 1;
-  return { mask: g, w: bw, h: bh, area, tileW: tile.w, tileH: tile.h };
+  // Brightness of the glyph's core (90th percentile), 0 = tile background … 1 = brightest ink in the grid.
+  // The game draws P Q R S T and brackets in bold white, α β γ δ and the operators in thin grey.
+  let bright = NaN;
+  if (range && range.gmax > range.level) {
+    const hist = new Uint32Array(256); let n = 0;
+    for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) if (g[y * bw + x]) { hist[L[(y0 + by0 + y) * w + x0 + bx0 + x]]++; n++; }
+    let acc = 0, p90 = 255;
+    for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= 0.9 * n) { p90 = v; break; } }
+    bright = (p90 - range.level) / (range.gmax - range.level);
+  }
+  return { mask: g, w: bw, h: bh, area, tileW: tile.w, tileH: tile.h, bright };
 }
 
 export function measure(g) {
@@ -216,8 +227,15 @@ export function measure(g) {
   for (let x = 0; x < Math.max(1, Math.ceil(0.4 * w)); x++) {
     let c = 0; for (let y = 0; y < h; y++) c += m[y * w + x]; if (c / h > stem) stem = c / h;
   }
+  // Stroke thickness: median length of the horizontal and vertical ink runs, per tile height
+  // (bold P Q R S T ≈ 0.15, thin italic α β γ δ ≈ 0.08)
+  const runs = [];
+  for (let y = 0; y < h; y++) { let r = 0; for (let x = 0; x <= w; x++) { if (x < w && m[y * w + x]) r++; else if (r) { runs.push(r); r = 0; } } }
+  for (let x = 0; x < w; x++) { let r = 0; for (let y = 0; y <= h; y++) { if (y < h && m[y * w + x]) r++; else if (r) { runs.push(r); r = 0; } } }
+  runs.sort((a, b) => a - b);
+  const stroke = runs.length ? runs[runs.length >> 1] / g.tileH : NaN;
   return {
-    stem, w, h, aspect: w / h, hRel: h / g.tileH, holes: holes.length, holeCy: big ? (big.cy - 1) / h : -1,
+    stem, stroke, bright: g.bright, w, h, aspect: w / h, hRel: h / g.tileH, holes: holes.length, holeCy: big ? (big.cy - 1) / h : -1,
     TL: reg(0, .3, 0, .3), TC: reg(.3, .7, 0, .3), TR: reg(.7, 1, 0, .3),
     BL: reg(0, .3, .7, 1), BC: reg(.3, .7, .7, 1), BR: reg(.7, 1, .7, 1),
     ML: reg(0, .3, .3, .7), BRq: reg(.55, 1, .6, 1),
@@ -229,12 +247,39 @@ export function measure(g) {
 
 const TALL = 0.71;
 const SHORT = 0.5;
+const BRACKET = 0.68; // brackets are ≈ 0.8 of the tile tall, letters ≈ 0.57
+
+// α β γ δ are thin grey italics, P Q R S T bold white capitals. Known from brightness (most reliable,
+// survives rescaling) and stroke thickness; null when the features weren't measured.
+export function isGreekGlyph(f) {
+  if (!Number.isFinite(f.bright)) return null;
+  const thin = Number.isFinite(f.stroke) && f.stroke < 0.125;
+  if (f.bright < 0.88) return true;
+  if (f.bright > 0.97) return false;
+  return thin;
+}
 
 export function classify(f) {
+  const greek = isGreekGlyph(f);
+  if (greek !== null && !(f.holes === 0 && f.hRel < SHORT) && !(f.holes === 0 && f.aspect < 0.62 && f.hRel > BRACKET)) {
+    // a letter (not an operator or a bracket): first Greek or Latin, then which one
+    const twoArms = f.TL > 0.07 && f.TR > 0.05 && f.TC < 0.08;
+    if (greek) {
+      // no loop: γ has two arms; a narrow one is β whose small eye was blurred shut
+      if (f.holes === 0) return twoArms ? 'γ' : f.aspect < 0.72 ? 'β' : '?';
+      if (f.holes >= 2) return 'β';
+      if (f.holeCy > 0.6) return twoArms ? 'γ' : 'δ'; // γ's little bottom loop vs δ's round belly
+      return f.aspect >= 0.8 ? 'α' : 'β';             // α is a wide loop, β a narrow upright one
+    }
+    // T is mirror-symmetric, S is the same turned upside down
+    if (f.holes === 0) return f.lr > f.rot + 0.1 ? 'T' : 'S';
+    if (f.stem < 0.85) return 'Q'; // round: no straight stem on the left (P and R have one)
+    return f.BRq > 0.09 ? 'R' : 'P';
+  }
   const vPat = f.TL > 0.08 && f.TR > 0.08 && f.TC < 0.07 && f.BC > 0.12 && f.BL < 0.07 && f.BR < 0.07;
   const aPat = f.BL > 0.08 && f.BR > 0.08 && f.BC < 0.07 && f.TC > 0.12 && f.TL < 0.07 && f.TR < 0.07;
   if (f.holes === 0) {
-    if (f.aspect < 0.62 && f.hRel > 0.45) return f.midX < f.endsX ? '(' : ')';
+    if (f.aspect < 0.62 && f.hRel > (greek === null ? 0.45 : BRACKET)) return f.midX < f.endsX ? '(' : ')';
     if (f.hRel < SHORT) {
       if (vPat) return 'V';
       if (aPat) return '^';
@@ -268,10 +313,24 @@ export function readLogicGrid(data, w, h) {
   if (gmax - level < 50) return { rows: [], text: '', tilesFound: !!found };
   const thr = level + 0.4 * (gmax - level);
   const rows = groupRows(tiles).map(r => r.map(t => {
-    const g = extractGlyph(L, w, t, thr);
+    const g = extractGlyph(L, w, t, thr, { level, gmax });
     if (!g) return null;
     const f = measure(g);
-    return { sym: classify(f), f };
+    let sym = classify(f);
+    // Not recognised: a blurry screenshot can fill in a thin letter's loop (β's eye). Read the tile
+    // again keeping only the glyph's brighter core, which opens the loop back up.
+    if (sym === '?' && Number.isFinite(g.bright)) {
+      const peak = level + g.bright * (gmax - level);
+      for (const k of [0.6, 0.75]) {
+        const g2 = extractGlyph(L, w, t, level + k * (peak - level), { level, gmax });
+        if (!g2) continue;
+        const f2 = measure(g2);
+        f2.bright = f.bright; // brightness belongs to the glyph, not to the cut-off
+        const s2 = classify(f2);
+        if (s2 !== '?') return { sym: s2, f: f2 };
+      }
+    }
+    return { sym, f };
   }));
   const text = rows.map(r => r.filter(Boolean).map(c => c.sym).join('')).join('');
   return { rows, text, tilesFound: !!found };

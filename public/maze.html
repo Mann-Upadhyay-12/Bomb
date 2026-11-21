@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Maze Solver (8-Bomb Batch) — Heist Solver</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#1A1D24;--raised:#232732;--ink:#F1F3F7;--soft:#A0A7B5;--brass:#E5B84B;--brass-deep:#C4952B;--line:#323846;--out:0 4px 14px rgba(0,0,0,.35);}
+*{box-sizing:border-box;}html,body{margin:0;padding:0;}
+body{background:radial-gradient(circle at 1px 1px,rgba(255,255,255,.04) 1px,transparent 1.6px) 0 0/16px 16px,var(--paper);color:var(--ink);font-family:'IBM Plex Sans',sans-serif;min-height:100vh;display:flex;justify-content:center;padding:24px 16px 60px;}
+.page{width:100%;max-width:1100px;}
+.header-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;}
+.toggle{display:inline-flex;background:var(--raised);border:1px solid var(--line);border-radius:999px;padding:5px;box-shadow:var(--out);gap:4px;}
+.tbtn{font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:700;padding:8px 18px;border-radius:999px;color:var(--soft);text-decoration:none;}
+.tbtn.active{background:var(--brass);color:#12141A;}
+.eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;color:var(--brass);font-weight:600;}
+h1{font-family:'Fraunces',serif;font-weight:700;font-size:34px;margin:8px 0 6px;}
+.sub{color:var(--soft);font-size:14px;line-height:1.5;max-width:80ch;margin-bottom:22px;}.sub b{color:var(--ink);}
+.card{background:var(--raised);border:1px solid var(--line);border-radius:18px;padding:20px;margin-bottom:24px;box-shadow:var(--out);}
+.ctitle{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;color:var(--brass);margin-bottom:14px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+.stat{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--soft);font-weight:500;}
+.drop{border:2px dashed var(--brass);border-radius:14px;padding:16px;text-align:center;cursor:pointer;transition:all .15s;user-select:none;}
+.drop *{pointer-events:none;}
+.drop:hover,.drop.drag{background:rgba(229,184,75,.12);border-color:#ffd778;}
+.drop b{font-family:'Fraunces',serif;font-size:17px;display:block;margin-bottom:4px;}
+.drop span{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--soft);}
+.row{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;align-items:center;}
+.btn{font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:700;background:var(--brass);color:#12141A;border:none;border-radius:999px;padding:9px 18px;cursor:pointer;display:inline-flex;align-items:center;text-decoration:none;}
+.btn:hover{background:var(--brass-deep);color:#fff;}
+.ghost{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--soft);background:transparent;border:1px solid var(--line);border-radius:999px;padding:8px 14px;cursor:pointer;display:inline-flex;align-items:center;}
+.ghost:hover{border-color:var(--brass);color:var(--ink);}
+input[type=file]{display:none;}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:16px;}
+.mcard{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:8px;display:flex;flex-direction:column;align-items:center;gap:6px;}
+.mcard canvas{max-width:100%;border-radius:6px;background:#101216;}
+.mt{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;color:var(--brass);}
+.bgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;}
+.bomb{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px;}
+.bomb.active{border-color:var(--brass);box-shadow:0 0 0 1px var(--brass);}
+.bhead{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.bt{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--brass);}
+.bz{border:1px dashed var(--line);border-radius:10px;padding:8px;display:flex;align-items:center;gap:10px;cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--soft);transition:all .15s;}
+.bz canvas{width:44px;height:44px;border-radius:6px;background:#101216;flex:none;pointer-events:none;}
+.bz .zt{pointer-events:none;}
+.bz u{pointer-events:auto;}
+.bz:hover,.bz.drag{border-color:var(--brass);background:rgba(229,184,75,.08);}
+.mini{display:grid;grid-template-columns:repeat(8,24px);gap:1px;margin:0 auto;user-select:none;}
+.mc{width:24px;height:24px;background:#14171E;border:.5px solid rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:700;color:var(--soft);cursor:pointer;}
+.mc.u{border-top:2px solid var(--brass);}.mc.d{border-bottom:2px solid var(--brass);}.mc.l{border-left:2px solid var(--brass);}.mc.r{border-right:2px solid var(--brass);}
+.mc.s{background:rgba(239,83,80,.4);color:#EF5350;}.mc.g{background:rgba(255,215,0,.4);color:#FFD700;}.mc.p{background:rgba(76,175,80,.3);color:#81C784;}
+.pill{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;background:var(--raised);border:1px solid var(--line);border-radius:8px;padding:6px 10px;color:#81C784;word-break:break-all;}
+.pill.bad{color:#EF9A9A;}
+.ans{background:var(--raised);border:1.5px solid var(--brass);border-radius:20px;padding:24px;}
+.arow{display:flex;align-items:center;justify-content:space-between;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:10px 16px;margin-top:10px;font-family:'IBM Plex Mono',monospace;}
+.alab{font-size:15px;font-weight:700;color:var(--brass);min-width:80px;}
+.atxt{font-size:18px;font-weight:700;letter-spacing:.05em;word-break:break-all;flex:1;margin:0 14px;}
+.atxt.none{color:var(--soft);font-size:13px;}
+.toast{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--brass);opacity:0;transition:opacity .2s;margin-left:12px;}.toast.show{opacity:1;}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header-nav">
+    <div class="eyebrow">HEIST BOMB SOLVER — MAZE MODULE</div>
+    <div class="toggle"><a href="bombs.html" class="tbtn">← ALL SOLVERS</a><span class="tbtn active">🧩 MAZE BATCH (8-IN-1)</span></div>
+  </div>
+  <h1>Maze Solver (8-Bomb Batch)</h1>
+  <div class="sub"><b>Step 1:</b> load the manual strip (8 mazes stacked top to bottom; it is cut into 8 equal parts). <b>Step 2:</b> paste or upload the normal 440×440 screenshot for each bomb — red dot = start, yellow dot = goal. Bomb N is solved on Maze N.</div>
+
+  <div class="card">
+    <div class="ctitle"><span>1. MAZE MANUAL STRIP</span><span class="stat" id="mStatus">No manual loaded</span></div>
+    <div class="drop" id="mDrop" tabindex="0"><b>Paste (Ctrl+V), drag & drop image or Discord link, or upload manual strip</b><span>Accepts files, Discord image drags, or web links. Tall 8-maze strips are automatically cut into 8 parts. Walls are saved in this browser.</span></div>
+    <div class="row">
+      <label class="btn" for="mFile">UPLOAD MANUAL</label><input type="file" id="mFile" accept="image/*">
+      <button type="button" class="ghost" id="mSample">⚡ SAMPLE 1 (maze-manual.png)</button>
+      <button type="button" class="ghost" id="mDiscordSample">🌐 LOAD DISCORD STRIP</button>
+      <button type="button" class="ghost" id="mUrlPrompt">🔗 LOAD FROM URL</button>
+      <button type="button" class="ghost" id="mClear">🗑️ CLEAR MANUAL</button>
+    </div>
+    <div class="mgrid" id="mGrid"></div>
+    <div class="stat" style="margin-top:8px">Pink lines on each thumbnail = detected walls. They should sit exactly on top of the black walls.</div>
+  </div>
+
+  <div class="card">
+    <div class="ctitle"><span>2. BOMB SCREENSHOTS</span><span class="stat" id="bStatus">Highlighted card receives the next Ctrl+V (then auto-advances)</span></div>
+    <div class="row" style="margin:0 0 14px"><label class="btn" for="bFiles">UPLOAD UP TO 8 AT ONCE</label><input type="file" id="bFiles" accept="image/*" multiple><span class="stat">Files are sorted by name → Bomb 1…8. Left-click a maze cell = set start, right-click / Shift+click = set goal.</span></div>
+    <div class="bgrid" id="bGrid"></div>
+  </div>
+
+  <div class="ans">
+    <div class="ctitle"><span>🧩 FINAL MAZE ANSWERS (NO SPACES)</span><span><button class="btn" id="copyAll">📋 COPY ALL</button><span class="toast" id="toast"></span></span></div>
+    <div id="aList"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+const N=8, NB=8, KEY='maze8_walls_v1';
+const $=id=>document.getElementById(id);
+const blank=()=>Array.from({length:N},()=>Array.from({length:N},()=>({u:false,d:false,l:false,r:false})));
+let walls=Array.from({length:NB},blank), wallsReady=Array(NB).fill(false), dotsReady=Array(NB).fill(false);
+let starts=Array.from({length:NB},()=>({r:0,c:0})), goals=Array.from({length:NB},()=>({r:7,c:7}));
+let active=0;
+
+const DISCORD_MANUAL_URL = 'https://cdn.discordapp.com/attachments/1532996726955315431/1559093854148235274/image.png?ex=6acdd2cd&is=6acc814d&hm=94380d3e4810beee12c6c9f4305fc16dcdbc68fca7421bce5f7136a786eec317&';
+
+const loadBlob = b => new Promise((res, rej) => {
+  const rd = new FileReader();
+  rd.onload = e => {
+    const im = new Image();
+    im.onload = () => res(im);
+    im.onerror = rej;
+    im.src = e.target.result;
+  };
+  rd.onerror = rej;
+  rd.readAsDataURL(b);
+});
+
+const loadUrl = async (url) => {
+  url = (url || '').trim();
+  if (!url) throw new Error('Empty URL');
+  if (url.startsWith('data:') || url.startsWith('blob:')) {
+    return new Promise((res, rej) => {
+      const im = new Image();
+      im.onload = () => res(im);
+      im.onerror = rej;
+      im.src = url;
+    });
+  }
+
+  // 1. Try fetch with CORS -> Blob -> dataURL (avoids canvas tainting completely)
+  try {
+    const resp = await fetch(url, { mode: 'cors' });
+    if (resp.ok) {
+      const blob = await resp.blob();
+      return await loadBlob(blob);
+    }
+  } catch (_) {}
+
+  // 2. Direct Image with crossOrigin = 'anonymous' (Discord CDN allows Access-Control-Allow-Origin: *)
+  try {
+    const im = await new Promise((res, rej) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => res(img);
+      img.onerror = rej;
+      img.src = url;
+    });
+    return im;
+  } catch (_) {}
+
+  // 3. If Discord manual link, fallback to local copy if available
+  if (url.includes('1559093854148235274') || url.includes('discord_maze')) {
+    try {
+      const resp = await fetch('discord_maze.png');
+      if (resp.ok) {
+        const blob = await resp.blob();
+        return await loadBlob(blob);
+      }
+    } catch (_) {}
+  }
+
+  // 4. Free CORS proxies fallback
+  if (/^https?:\/\//i.test(url)) {
+    const proxies = [
+      u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+      u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`
+    ];
+    for (const p of proxies) {
+      try {
+        const resp = await fetch(p(url));
+        if (resp.ok) {
+          const blob = await resp.blob();
+          return await loadBlob(blob);
+        }
+      } catch (_) {}
+    }
+  }
+
+  // 5. Fallback without crossOrigin
+  return new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => res(im);
+    im.onerror = rej;
+    im.src = url;
+  });
+};
+
+const loadImg = async (src) => {
+  if (!src) throw new Error('No image provided');
+  if (src instanceof HTMLImageElement) return src;
+  if (src instanceof Blob) return loadBlob(src);
+  if (typeof src === 'string') return loadUrl(src);
+  throw new Error('Unsupported image format');
+};
+
+const toCanvas = img => {
+  const c = document.createElement('canvas');
+  c.width = img.naturalWidth || img.width;
+  c.height = img.naturalHeight || img.height;
+  c.getContext('2d').drawImage(img, 0, 0);
+  return c;
+};
+
+const pixels = cv => {
+  const c = document.createElement('canvas');
+  c.width = cv.width;
+  c.height = cv.height;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.drawImage(cv, 0, 0);
+  return x.getImageData(0, 0, c.width, c.height).data;
+};
+
+const isStrip = img => {
+  const w = img.naturalWidth || img.width;
+  const h = img.naturalHeight || img.height;
+  if (!w || !h) return false;
+  const r = h / w;
+  return r >= 3 || r <= 1/3;
+};
+
+function layout(W, H) {
+  const r = H / W;
+  if (r >= 3) return { cols: 1, rows: 8 };
+  if (r <= 1/3) return { cols: 8, rows: 1 };
+  return H >= W ? { cols: 2, rows: 4 } : { cols: 4, rows: 2 };
+}
+
+function extractDataTransferSources(dt) {
+  if (!dt) return [];
+  const list = [];
+  if (dt.files && dt.files.length) {
+    for (let i = 0; i < dt.files.length; i++) {
+      const f = dt.files[i];
+      if (f && (f.type?.startsWith('image/') || /\.(png|jpe?g|webp|gif|bmp)$/i.test(f.name))) list.push(f);
+    }
+  }
+  if (!list.length && dt.items && dt.items.length) {
+    for (let i = 0; i < dt.items.length; i++) {
+      if (dt.items[i].kind === 'file') {
+        const f = dt.items[i].getAsFile();
+        if (f) list.push(f);
+      }
+    }
+  }
+  if (list.length) return list;
+
+  const addUrl = u => {
+    if (!u || typeof u !== 'string') return;
+    u = u.trim();
+    if (!u) return;
+    if (/^(https?:\/\/|data:image\/|blob:)/i.test(u) && !list.includes(u)) {
+      list.push(u);
+    }
+  };
+
+  const uris = dt.getData('text/uri-list');
+  if (uris) {
+    for (const line of uris.split(/\r?\n/)) {
+      const s = line.trim();
+      if (s && !s.startsWith('#')) addUrl(s);
+    }
+  }
+
+  const html = dt.getData('text/html');
+  if (html) {
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      doc.querySelectorAll('img').forEach(im => { if (im.src) addUrl(im.src); });
+      doc.querySelectorAll('a').forEach(a => {
+        if (a.href && (/\.(png|jpe?g|webp|gif|bmp)(\?.*)?$/i.test(a.href) || a.href.includes('discordapp.com') || a.href.includes('discord.com'))) {
+          addUrl(a.href);
+        }
+      });
+    } catch (_) {}
+  }
+
+  const txt = dt.getData('text/plain') || dt.getData('text');
+  if (txt) {
+    const urls = txt.match(/https?:\/\/[^\s"'<>]+/gi);
+    if (urls) urls.forEach(addUrl);
+    else if (/^(data:image\/|blob:)/i.test(txt.trim())) addUrl(txt.trim());
+  }
+
+  return list;
+}
+
+function extractClipboardSources(cd) {
+  if (!cd) return [];
+  const list = [];
+  if (cd.items && cd.items.length) {
+    for (let i = 0; i < cd.items.length; i++) {
+      if (cd.items[i].kind === 'file') {
+        const f = cd.items[i].getAsFile();
+        if (f) list.push(f);
+      }
+    }
+  }
+  if (list.length) return list;
+
+  const txt = cd.getData('text/plain') || cd.getData('text');
+  if (txt) {
+    const urls = txt.match(/https?:\/\/[^\s"'<>]+/gi);
+    if (urls) return urls;
+    if (/^(data:image\/|blob:)/i.test(txt.trim())) return [txt.trim()];
+  }
+
+  const html = cd.getData('text/html');
+  if (html) {
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const img = doc.querySelector('img');
+      if (img && img.src) return [img.src];
+      const a = doc.querySelector('a');
+      if (a && a.href) return [a.href];
+    } catch (_) {}
+  }
+
+  return [];
+}
+
+// ---------- Manual: extract walls from one maze slice ----------
+function extractWalls(cv){
+  const w=cv.width,h=cv.height,d=pixels(cv),lum=new Uint8Array(w*h),lt=new Uint8Array(w*h);
+  for(let i=0;i<w*h;i++){const r=d[i*4],g=d[i*4+1],b=d[i*4+2];lum[i]=.299*r+.587*g+.114*b;lt[i]=(r>150&&g>150&&b>150&&lum[i]>165)?1:0;}
+  // light board area (ignore title + screws by searching only the middle window)
+  const x0=Math.floor(w*.08),x1=Math.floor(w*.92),y0=Math.floor(h*.18),y1=Math.floor(h*.96);
+  const rc=new Int32Array(h),cc=new Int32Array(w);
+  for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++)if(lt[y*w+x]){rc[y]++;cc[x]++;}
+  const span=(a,lo,hi)=>{let m=0;for(let i=lo;i<hi;i++)m=Math.max(m,a[i]);let s=-1,e=-1;for(let i=lo;i<hi;i++)if(m>0&&a[i]>=m*.45){if(s<0)s=i;e=i;}return[s,e];};
+  const[ty,by]=span(rc,y0,y1),[lx,rx]=span(cc,x0,x1),bw=rx-lx+1,bh=by-ty+1;
+  let gx,gy,gw,gh,fallback=false;
+  if(lx>=0&&ty>=0&&bw>w*.3&&Math.abs(bw-bh)<.12*Math.max(bw,bh)){const s=bw/234;gx=lx-3*s;gy=ty-3*s;gw=bw+6*s;gh=bh+6*s;} // light area = grid minus the black frame
+  else{fallback=true;gx=100*w/440;gy=122*h/440;gw=240*w/440;gh=240*h/440;}
+  const cw=gw/N,ch=gh/N,TOL=Math.max(2,Math.round(.17*cw)),DARK=140,NEED=.7,grid=blank();let count=0;
+  // a wall exists if ANY line within ±TOL px of the cell edge is mostly dark along the middle of the edge (tolerates misalignment)
+  const vWall=(r,c)=>{const xl=Math.round(gx+(c+1)*cw),ya=Math.round(gy+(r+.28)*ch),yb=Math.round(gy+(r+.72)*ch);let best=0;
+    for(let dx=-TOL;dx<=TOL;dx++){const x=xl+dx;if(x<0||x>=w)continue;let n=0,t=0;for(let y=ya;y<=yb;y++){if(y<0||y>=h)continue;t++;if(lum[y*w+x]<DARK)n++;}if(t)best=Math.max(best,n/t);}return best>=NEED;};
+  const hWall=(r,c)=>{const yl=Math.round(gy+(r+1)*ch),xa=Math.round(gx+(c+.28)*cw),xb=Math.round(gx+(c+.72)*cw);let best=0;
+    for(let dy=-TOL;dy<=TOL;dy++){const y=yl+dy;if(y<0||y>=h)continue;let n=0,t=0;for(let x=xa;x<=xb;x++){if(x<0||x>=w)continue;t++;if(lum[y*w+x]<DARK)n++;}if(t)best=Math.max(best,n/t);}return best>=NEED;};
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    if(r===0)grid[r][c].u=true;if(r===N-1)grid[r][c].d=true;if(c===0)grid[r][c].l=true;if(c===N-1)grid[r][c].r=true;
+    if(c<N-1&&vWall(r,c)){grid[r][c].r=true;grid[r][c+1].l=true;count++;}
+    if(r<N-1&&hWall(r,c)){grid[r][c].d=true;grid[r+1][c].u=true;count++;}
+  }
+  return{grid,g:{gx,gy,gw,gh},count,fallback,cv};
+}
+
+function processManual(img){
+  const W=img.naturalWidth,H=img.naturalHeight,L=layout(W,H),sw=W/L.cols,sh=H/L.rows,res=[];
+  try{
+    for(let i=0;i<NB;i++){
+      const cv=document.createElement('canvas');cv.width=Math.round(sw);cv.height=Math.round(sh);
+      cv.getContext('2d').drawImage(img,(i%L.cols)*sw,Math.floor(i/L.cols)*sh,sw,sh,0,0,cv.width,cv.height);
+      res.push(extractWalls(cv));
+    }
+  }catch(e){$('mStatus').textContent='⚠ Browser blocked reading the image (opened from file://). Use UPLOAD or Ctrl+V instead.';return;}
+  res.forEach((o,i)=>{walls[i]=o.grid;wallsReady[i]=true;drawThumb(i,o);});
+  const bad=res.filter(o=>o.fallback).length;
+  $('mStatus').textContent=`Manual loaded ✓ (${W}×${H}, ${NB} parts)`+(bad?` — ⚠ ${bad} used fallback geometry`:'');
+  save();refreshAll();
+}
+
+function drawThumb(i,o){
+  const cv=$('mc'+i),x=cv.getContext('2d'),g=o.g,p=g.gw*.04,cx=g.gx-p,cy=g.gy-p,cs=g.gw+2*p,k=cv.width/cs,cw=g.gw/N;
+  x.fillStyle='#101216';x.fillRect(0,0,cv.width,cv.height);x.drawImage(o.cv,cx,cy,cs,cs,0,0,cv.width,cv.height);
+  x.strokeStyle='rgba(255,61,184,.95)';x.lineWidth=1;x.beginPath();
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){const w=o.grid[r][c];
+    if(c<N-1&&w.r){const X=(g.gx+(c+1)*cw-cx)*k;x.moveTo(X,(g.gy+r*cw-cy)*k);x.lineTo(X,(g.gy+(r+1)*cw-cy)*k);}
+    if(r<N-1&&w.d){const Y=(g.gy+(r+1)*cw-cy)*k;x.moveTo((g.gx+c*cw-cx)*k,Y);x.lineTo((g.gx+(c+1)*cw-cx)*k,Y);}}
+  x.stroke();$('mt'+i).textContent=o.count+' walls'+(o.fallback?' ⚠':' ✓');
+}
+
+// ---------- Bomb screenshot: find red (start) and yellow (goal) dots ----------
+function processBomb(i,img){
+  const cv=toCanvas(img),w=cv.width,h=cv.height;let d;
+  try{d=pixels(cv);}catch(e){$('bStatus').textContent='⚠ Could not read that image.';return;}
+  const gx=100*w/440,gy=122*h/440,cw=240*w/440/N,ch=240*h/440/N,R={x:0,y:0,n:0},Y={x:0,y:0,n:0};
+  for(let y=Math.max(0,Math.floor(gy-ch/2));y<Math.min(h,Math.ceil(gy+N*ch+ch/2));y++)
+    for(let x=Math.max(0,Math.floor(gx-cw/2));x<Math.min(w,Math.ceil(gx+N*cw+cw/2));x++){
+      const j=(y*w+x)*4,r=d[j],g=d[j+1],b=d[j+2];
+      if(r>170&&g<110&&b<110){R.x+=x;R.y+=y;R.n++;}else if(r>170&&g>150&&b<110){Y.x+=x;Y.y+=y;Y.n++;}}
+  const cell=(o)=>({r:Math.min(N-1,Math.max(0,Math.floor((o.y/o.n-gy)/ch))),c:Math.min(N-1,Math.max(0,Math.floor((o.x/o.n-gx)/cw)))});
+  if(R.n>=12)starts[i]=cell(R);if(Y.n>=12)goals[i]=cell(Y);
+  dotsReady[i]=R.n>=12&&Y.n>=12;
+  const t=$('bt'+i),x=t.getContext('2d');x.clearRect(0,0,t.width,t.height);x.drawImage(img,0,0,t.width,t.height);
+  $('bz'+i).querySelector('.zt').textContent=dotsReady[i]?'Screenshot loaded ✓':`⚠ ${R.n<12?'red':'yellow'} dot not found — click maze cells to set`;
+  refresh(i);solveAll();
+}
+
+// ---------- Solver ----------
+function solve(i){
+  const g=walls[i],s=starts[i],t=goals[i],seen=new Set([s.r+'_'+s.c]),q=[[s.r,s.c,[]]];
+  const mv=[[-1,0,'U','u'],[1,0,'D','d'],[0,-1,'L','l'],[0,1,'R','r']];
+  for(let h=0;h<q.length;h++){const[r,c,p]=q[h];if(r===t.r&&c===t.c)return p;
+    for(const[dr,dc,m,k]of mv){if(g[r][c][k])continue;const nr=r+dr,nc=c+dc,key=nr+'_'+nc;
+      if(nr<0||nr>=N||nc<0||nc>=N||seen.has(key))continue;seen.add(key);q.push([nr,nc,[...p,{move:m,r:nr,c:nc}]]);}}
+  return null;
+}
+function answer(i){
+  if(!wallsReady[i])return{t:'(load the manual first)',ok:false};
+  if(!dotsReady[i])return{t:'(waiting for bomb screenshot)',ok:false};
+  const p=solve(i);if(!p)return{t:'NO PATH — check walls/dots',ok:false};
+  return{t:p.map(m=>m.move).join(''),ok:true,path:p};
+}
+
+// ---------- UI ----------
+function buildCards(){
+  for(let i=0;i<NB;i++){
+    const m=document.createElement('div');m.className='mcard';
+    m.innerHTML=`<span class="mt">MAZE ${i+1}</span><canvas id="mc${i}" width="120" height="120"></canvas><span class="mt" style="color:var(--soft)" id="mt${i}">—</span>`;$('mGrid').appendChild(m);
+    const b=document.createElement('div');b.className='bomb';b.id='bomb'+i;
+    b.innerHTML=`<div class="bhead"><span class="bt">BOMB ${i+1} → MAZE ${i+1}</span><span class="stat" id="bs${i}"></span></div>
+      <div class="bz" id="bz${i}" tabindex="0"><canvas id="bt${i}" width="44" height="44"></canvas><span class="zt">Click, then Ctrl+V · or drop / <u>upload</u></span><input type="file" accept="image/*"></div>
+      <div id="mini${i}"></div><div class="pill" id="pill${i}"></div>`;
+    $('bGrid').appendChild(b);
+    const z=b.querySelector('.bz'),f=z.querySelector('input');
+    z.addEventListener('click',e=>{setActive(i);if(e.target.tagName==='U')f.click();});
+    f.addEventListener('change',async()=>{
+      if(f.files[0]){try{route(await loadImg(f.files[0]),i);}catch(err){toast('⚠ '+err.message);}}
+      f.value='';
+    });
+    z.addEventListener('dragover',e=>{e.preventDefault();z.classList.add('drag');});
+    z.addEventListener('dragleave',()=>z.classList.remove('drag'));
+    z.addEventListener('drop',async e=>{
+      e.preventDefault();e.stopPropagation();z.classList.remove('drag');
+      const srcs=extractDataTransferSources(e.dataTransfer);
+      if(!srcs.length)return;
+      for(let k=0;k<srcs.length;k++){
+        try{
+          const im=await loadImg(srcs[k]);
+          if(isStrip(im)){processManual(im);toast('Manual strip loaded ✓');break;}
+          else{processBomb(Math.min(i+k,NB-1),im);}
+        }catch(err){toast('⚠ Error loading image: '+err.message);}
+      }
+    });
+  }
+  setActive(0);
+}
+function setActive(i){active=i;for(let k=0;k<NB;k++)$('bomb'+k).classList.toggle('active',k===i);}
+function refresh(i){
+  const box=$('mini'+i),a=answer(i),pm=new Set((a.path||[]).map(p=>p.r+'_'+p.c)),g=document.createElement('div');g.className='mini';
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    const e=document.createElement('div'),w=walls[i][r][c];e.className='mc';
+    ['u','d','l','r'].forEach(k=>{if(wallsReady[i]&&w[k])e.classList.add(k);});
+    if(dotsReady[i]){if(r===starts[i].r&&c===starts[i].c){e.classList.add('s');e.textContent='S';}
+      else if(r===goals[i].r&&c===goals[i].c){e.classList.add('g');e.textContent='G';}
+      else if(pm.has(r+'_'+c)){e.classList.add('p');e.textContent='•';}}
+    const setGoal=ev=>{ev.preventDefault();goals[i]={r,c};dotsReady[i]=true;refresh(i);solveAll();};
+    e.addEventListener('click',ev=>{if(ev.shiftKey)return setGoal(ev);starts[i]={r,c};dotsReady[i]=true;refresh(i);solveAll();});
+    e.addEventListener('contextmenu',setGoal);
+    g.appendChild(e);}
+  box.innerHTML='';box.appendChild(g);
+  $('bs'+i).textContent=dotsReady[i]?`R${starts[i].r+1}C${starts[i].c+1} → R${goals[i].r+1}C${goals[i].c+1}`:'';
+  const p=$('pill'+i);p.textContent=`Ans ${i+1} : ${a.t}`;p.classList.toggle('bad',!a.ok);
+}
+function solveAll(){
+  const L=$('aList');L.innerHTML='';const all=[];
+  for(let i=0;i<NB;i++){
+    const a=answer(i),row=document.createElement('div');row.className='arow';
+    row.innerHTML=`<span class="alab">Ans ${i+1} :</span><span class="atxt${a.ok?'':' none'}"></span><button class="ghost">📋 Copy</button>`;
+    row.querySelector('.atxt').textContent=a.t;
+    row.querySelector('button').onclick=()=>{if(a.ok){copy(a.t);toast(`Copied Ans ${i+1}!`);}};
+    L.appendChild(row);all.push(`Ans ${i+1} : ${a.ok?a.t:''}`);
+    const p=$('pill'+i);if(p){p.textContent=`Ans ${i+1} : ${a.t}`;p.classList.toggle('bad',!a.ok);}
+  }
+  $('copyAll').onclick=()=>{copy(all.join('\n'));toast('Copied all answers!');};
+}
+function refreshAll(){for(let i=0;i<NB;i++)refresh(i);solveAll();}
+function copy(t){try{navigator.clipboard.writeText(t);}catch(e){}}
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1800);}
+
+// ---------- Routing ----------
+function route(img,target){
+  if(target==='manual'||isStrip(img))return processManual(img);
+  processBomb(target==null?active:target,img);
+}
+// persistence of the walls (manual rarely changes)
+function save(){try{localStorage.setItem(KEY,walls.map(g=>g.map(row=>row.map(c=>((c.u?1:0)|(c.d?2:0)|(c.l?4:0)|(c.r?8:0)).toString(16)).join('')).join('')).join(''));}catch(e){}}
+function restore(){try{const s=localStorage.getItem(KEY);if(!s||s.length!==NB*N*N)return false;let p=0;
+  for(let i=0;i<NB;i++)for(let r=0;r<N;r++)for(let c=0;c<N;c++){const v=parseInt(s[p++],16);walls[i][r][c]={u:!!(v&1),d:!!(v&2),l:!!(v&4),r:!!(v&8)};}
+  wallsReady.fill(true);return true;}catch(e){return false;}}
+
+// ---------- Events ----------
+$('mFile').addEventListener('change',async e=>{
+  const f=e.target.files[0];
+  if(f){try{route(await loadImg(f),'manual');}catch(err){$('mStatus').textContent='⚠ '+err.message;}}
+  e.target.value='';
+});
+
+$('bFiles').addEventListener('change',async e=>{
+  const fs=[...e.target.files].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).slice(0,NB);
+  let k=0;
+  for(const f of fs){
+    try{
+      const im=await loadImg(f);
+      if(isStrip(im))processManual(im);
+      else processBomb(k++,im);
+    }catch(err){toast('⚠ '+err.message);}
+  }
+  e.target.value='';
+});
+
+const md=$('mDrop');
+let mDragCount=0;
+md.addEventListener('dragenter',e=>{e.preventDefault();mDragCount++;md.classList.add('drag');});
+md.addEventListener('dragover',e=>{e.preventDefault();md.classList.add('drag');});
+md.addEventListener('dragleave',()=>{mDragCount--;if(mDragCount<=0){mDragCount=0;md.classList.remove('drag');}});
+md.addEventListener('drop',async e=>{
+  e.preventDefault();e.stopPropagation();mDragCount=0;md.classList.remove('drag');
+  const srcs=extractDataTransferSources(e.dataTransfer);
+  if(!srcs.length)return;
+  $('mStatus').textContent='Loading manual image...';
+  try{
+    const im=await loadImg(srcs[0]);
+    route(im,'manual');
+    toast('Manual loaded ✓');
+  }catch(err){
+    $('mStatus').textContent='⚠ Error loading image: '+err.message;
+    toast('⚠ Failed to load');
+  }
+});
+
+window.addEventListener('dragover',e=>e.preventDefault());
+window.addEventListener('drop',async e=>{
+  e.preventDefault();
+  if(e.target.closest('#mDrop')||e.target.closest('.bz'))return;
+  const srcs=extractDataTransferSources(e.dataTransfer);
+  if(!srcs.length)return;
+  let cur=active;
+  for(let k=0;k<srcs.length;k++){
+    try{
+      const im=await loadImg(srcs[k]);
+      if(isStrip(im)){processManual(im);toast('Manual strip loaded ✓');break;}
+      else{processBomb(cur,im);cur=Math.min(cur+1,NB-1);setActive(cur);}
+    }catch(err){toast('⚠ '+err.message);}
+  }
+});
+
+document.addEventListener('paste',async e=>{
+  const srcs=extractClipboardSources(e.clipboardData);
+  if(!srcs.length)return;
+  try{
+    const im=await loadImg(srcs[0]);
+    const strip=isStrip(im);
+    route(im);
+    if(strip){toast('Manual loaded from clipboard ✓');}
+    else{toast(`Bomb ${active+1} loaded ✓`);setActive(Math.min(active+1,NB-1));}
+  }catch(err){toast('⚠ Failed to load pasted image: '+err.message);}
+});
+
+async function loadSampleNamed(urlOrPath,name,silent){
+  if(!silent)$('mStatus').textContent=`Loading ${name}...`;
+  try{
+    const im=await loadImg(urlOrPath);
+    processManual(im);
+    if(!silent)toast(`${name} loaded ✓`);
+  }catch(err){
+    if(!silent)$('mStatus').textContent=`⚠ Could not load ${name} (${err.message}) — use UPLOAD or drag & drop`;
+  }
+}
+
+$('mSample').addEventListener('click',()=>loadSampleNamed('maze-manual.png','maze-manual.png',false));
+$('mDiscordSample').addEventListener('click',()=>loadSampleNamed(DISCORD_MANUAL_URL,'Discord manual',false));
+$('mUrlPrompt').addEventListener('click',async()=>{
+  const u=prompt('Enter image URL (manual strip or bomb screenshot):',DISCORD_MANUAL_URL);
+  if(!u||!u.trim())return;
+  $('mStatus').textContent='Loading from URL...';
+  try{
+    const im=await loadImg(u.trim());
+    route(im);
+    toast('Image loaded from URL ✓');
+  }catch(err){
+    $('mStatus').textContent='⚠ Error loading URL: '+err.message;
+    toast('⚠ Failed to load URL');
+  }
+});
+
+$('mClear').addEventListener('click',()=>{
+  walls=Array.from({length:NB},blank);wallsReady.fill(false);
+  try{localStorage.removeItem(KEY);}catch(e){}
+  for(let i=0;i<NB;i++){const c=$('mc'+i);c.getContext('2d').clearRect(0,0,c.width,c.height);$('mt'+i).textContent='—';}
+  $('mStatus').textContent='No manual loaded';refreshAll();
+});
+
+buildCards();
+if(restore()){
+  $('mStatus').textContent='Manual restored from last session ✓ (upload or drop to replace)';
+  for(let i=0;i<NB;i++)$('mt'+i).textContent='saved ✓';
+} else {
+  loadSampleNamed('maze-manual.png','maze-manual.png',true);
+}
+refreshAll();
+})();
+</script>
+</body>
+</html>

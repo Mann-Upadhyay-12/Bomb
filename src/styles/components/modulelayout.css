@@ -20,6 +20,16 @@
   width: 100%;
 }
 
+/* One of several stacked copies (like Wire Sequences): paste area left, answer + buttons right,
+   the (collapsed) working panel full width below */
+.module-layout-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.module-layout-left, .module-layout-right { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.module-layout-container.split > .module-layout-working { margin-top: 10px; }
+.module-layout-right .module-layout-controls:empty { display: none; }
+.module-layout-right .module-layout-controls .controls { justify-content: center; margin: 0; }
+.module-layout-left .module-input-wrap { display: flex; flex-direction: column; gap: 10px; margin-bottom: 0; }
+@media (max-width: 760px) { .module-layout-split { grid-template-columns: minmax(0, 1fr); } }
+
 /* ═══════════ MODULE GROUP (several copies of a "same manual" module) ═══════════ */
 .mgroup { display: flex; flex-direction: column; gap: 14px; }
 .mgroup-manual { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--paper-raised); }
@@ -53,10 +63,10 @@
 .mgroup-card .dropzone.compact .dz-title { font-size: 15px; }
 .mgroup-card .dropzone.compact .dz-sub { display: none; }
 
-/* Several copies: break out of the 880px page column and lay the cards out side by side,
-   so 2–3 modules fit on one screen without zooming the browser out. */
+/* Several copies: stacked one over the other (one full-width card per copy, like public/wireseq.html),
+   breaking out of the 880px page column a little so each card has room for its own side-by-side layout. */
 .mgroup.multi {
-  --mg-w: min(1760px, calc(100vw - 56px));
+  --mg-w: min(1250px, calc(100vw - 56px));
   width: var(--mg-w);
   position: relative;
   left: 50%;
@@ -64,8 +74,8 @@
 }
 .mgroup-cards {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
   align-items: start;
 }
 .mgroup-cards .mgroup-card { min-width: 0; padding: 12px; }
@@ -75,10 +85,6 @@
 .mgroup-cards .working-panel-header { padding: 8px 10px; }
 .mgroup-cards .working-panel-title { font-size: 11px; }
 
-/* columns follow the number of copies (2 → 2, 3 → 3, 4 → 2×2, 5+ → 3 per row), fewer on small screens */
-.mgroup-cards.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-@media (max-width: 1150px) { .mgroup-cards.cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 780px) { .mgroup-cards.cols-2, .mgroup-cards.cols-3 { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 780px) { .mgroup.multi { --mg-w: calc(100vw - 24px); } }
 
 /* compact cards: smaller chrome so the answer is visible without zooming out */

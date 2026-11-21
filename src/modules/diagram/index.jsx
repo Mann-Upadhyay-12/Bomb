@@ -3,6 +3,7 @@ import { VennCore } from './diagramCore.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
+import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { Dropzone } from '../../core/Dropzone.jsx';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
@@ -60,6 +61,7 @@ export function DiagramModule({ isActive = true }) {
   const { copyOnDecode, setLastCopyString } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
+  const answerChanged = useAnswerGate();
 
   const [mode, setMode] = useState(3); // 2 or 3
   const [orient2, setOrient2] = useState('h'); // 'h' or 'v'
@@ -122,10 +124,11 @@ export function DiagramModule({ isActive = true }) {
   const expr = VennCore.expression(letterNames, targetSet);
 
   React.useEffect(() => {
+    const fresh = answerChanged(expr); // false when only isActive changed
     if (!isActive) return;
     if (expr && expr !== 'Null') {
       setLastCopyString(expr);
-      if (copyOnDecode) {
+      if (copyOnDecode && fresh) {
         copy(expr);
       }
     } else {

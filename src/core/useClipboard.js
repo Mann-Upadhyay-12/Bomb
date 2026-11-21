@@ -42,13 +42,18 @@ export function useClipboard() {
     ta.style.cssText = 'position:fixed;opacity:0;';
     document.body.appendChild(ta);
     ta.select();
+    // execCommand returns false (or throws) when the copy didn't happen — typically the page isn't
+    // focused right after a drag from Discord. Say so: a false "COPIED ✓" makes the player paste
+    // whatever was on the clipboard before.
+    let ok = false;
     try {
-      document.execCommand('copy');
-      if (done) done();
+      ok = document.execCommand('copy');
     } catch (e) {
       console.error('Fallback copy failed:', e);
     }
     document.body.removeChild(ta);
+    if (ok) { if (done) done(); }
+    else showToast('⚠ COPY FAILED — CLICK THE ANSWER TO COPY', false, 3500);
   };
 
   return { copy, formatClipboardText };
