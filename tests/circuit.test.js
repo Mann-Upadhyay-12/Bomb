@@ -7,7 +7,7 @@ import { solveCircuit, parseCircuitManual, CIRCUIT_DEFAULT_MANUAL } from '../src
 const FIX = new URL('./fixtures/circuit/', import.meta.url).pathname;
 const MAN = parseCircuitManual(CIRCUIT_DEFAULT_MANUAL);
 // look-alikes of the game's Circuit module (bridge checked against numpy: 5.914529…)
-const CASES = { series: '32', diagonal: '9', bridge: '692/117', parallel: '72/7', real_shorted_r3: '10' }; // real_*: game screenshots
+const CASES = { series: '32', diagonal: '9', bridge: '692/117', parallel: '72/7', real_shorted_r3: '10', real_dark_labels: '26/3' }; // real_*: game screenshots (dark_labels: R3–R5 carry dark text)
 
 for (const [name, exact] of Object.entries(CASES)) {
   test(`circuit: ${name}`, () => {

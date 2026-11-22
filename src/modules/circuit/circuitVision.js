@@ -85,9 +85,20 @@ export function readCircuit(data, W, H) {
   // resistor bodies carry dark label text — fill it in so the body counts as solid
   // (summed-area table → "is every pixel in this square ink?")
   const r = Math.max(3, Math.round(Math.min(w, h) * 0.02));
+  // dark label text (on white / yellow bodies) is almost the panel colour, so it reads as holes that
+  // cut a narrow body into pieces — fill small holes enclosed by ink (the panel itself is huge)
+  const solid = ink.slice();
+  {
+    const { lab: hl, comps: holes } = components(ink.map(v => 1 - v), w, h, false);
+    const fill = new Uint8Array(holes.length + 1);
+    for (const c of holes) {
+      if (c.x0 > 0 && c.y0 > 0 && c.x1 < w - 1 && c.y1 < h - 1 && Math.max(c.x1 - c.x0, c.y1 - c.y0) < r * 5) fill[c.id] = 1;
+    }
+    for (let p = 0; p < w * h; p++) if (fill[hl[p]]) solid[p] = 1;
+  }
   const sat = new Int32Array((w + 1) * (h + 1));
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    sat[(y + 1) * (w + 1) + x + 1] = ink[y * w + x] + sat[y * (w + 1) + x + 1] + sat[(y + 1) * (w + 1) + x] - sat[y * (w + 1) + x];
+    sat[(y + 1) * (w + 1) + x + 1] = solid[y * w + x] + sat[y * (w + 1) + x + 1] + sat[(y + 1) * (w + 1) + x] - sat[y * (w + 1) + x];
   }
   const boxSum = (x0, y0, x1, y1) => sat[(y1 + 1) * (w + 1) + x1 + 1] - sat[y0 * (w + 1) + x1 + 1] - sat[(y1 + 1) * (w + 1) + x0] + sat[y0 * (w + 1) + x0];
   const core = new Uint8Array(w * h);
@@ -116,6 +127,8 @@ export function readCircuit(data, W, H) {
     // where a diagonal wire meets another, the wedge looks thick: it is wire-coloured (slate-300),
     // while white resistors are brighter (gray-100) — and a body is mostly one flat colour
     if ((rgb[0] - WIRE[0]) ** 2 + (rgb[1] - WIRE[1]) ** 2 + (rgb[2] - WIRE[2]) ** 2 < 22 ** 2) continue;
+    // a small wire loop whose inside got filled as a "hole" is panel-coloured, not a body
+    if ((rgb[0] - PANEL[0]) ** 2 + (rgb[1] - PANEL[1]) ** 2 + (rgb[2] - PANEL[2]) ** 2 < 40 ** 2) continue;
     let flat = 0, area = 0;
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       const i = px(x, y); area++;
