@@ -10,6 +10,7 @@ import {
   wsReadImage
 } from './wireseqRules.js';
 import { Dropzone } from '../../core/Dropzone.jsx';
+import { manualBoxPaste } from '../../core/airPaste.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
@@ -17,6 +18,22 @@ import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { useSharedSetting } from '../../core/sharedSetting.js';
 import { useInstance } from '../../core/InstanceContext.jsx';
 import { WireseqWorking } from './working.jsx';
+import { readWireManual, wireManualText, isWireManual } from './wireseqManual.js';
+import { ReportButton } from '../../core/components/ReportButton.jsx';
+
+const STAMP = '# read from the manual picture';
+
+/** The Red / Blue / Black table picture (it changes every game) → its rules, or null if it isn't one. */
+function readManualPicture(img) {
+  const W = img.naturalWidth || img.width, H = img.naturalHeight || img.height;
+  if (!W || !H) return null;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0);
+  const r = readWireManual(ctx.getImageData(0, 0, W, H).data, W, H);
+  return isWireManual(r) ? r : null;
+}
 
 export function WireseqModule({ isActive = true }) {
   const inst = useInstance();
@@ -36,7 +53,7 @@ export function WireseqModule({ isActive = true }) {
   const [quickText, setQuickText] = useState('');
   const [status, setStatus] = useState({ text: '', ok: null });
   // The manual is the same for every copy of this module, so all windows share it
-  const [rulesText, setRulesText] = useSharedSetting('bombvision_wireseq_rules_v3', WS_DEFAULT_MANUAL);
+  const [rulesText, setRulesText] = useSharedSetting('bombvision_wireseq_rules_v4', WS_DEFAULT_MANUAL);
   const rules = React.useMemo(() => wsParseManual(rulesText), [rulesText]);
 
   const perStage = wsSolveAll(stages, rules);
@@ -161,7 +178,23 @@ export function WireseqModule({ isActive = true }) {
     return Math.min(WS_STAGES - 1, active + 1);
   };
 
+  // This game's manual picture, pasted or dropped anywhere (a card or the page): it goes into the
+  // shared rules, so every copy uses it. Returns false for a stage screenshot.
+  const tryManual = (img) => {
+    let r = null;
+    try { r = readManualPicture(img); } catch (e) { return false; }
+    if (!r) return false;
+    setRulesText(wireManualText(r.rules, `${STAMP} ${new Date().toISOString()}`));
+    const n = r.cells.length;
+    setStatus(r.ok
+      ? { text: `Manual picture read ✓ all ${n} cells — used by every Wire Sequences module`, ok: true }
+      : { text: `Manual picture not read cleanly (${r.problems.join('; ')}) — check the table (📖 debug in the manual bar)`, ok: false });
+    showToast(r.ok ? 'WIRE SEQUENCES MANUAL READ ✓' : 'WIRE MANUAL READ — CHECK THE TABLE');
+    return true;
+  };
+
   const handleImage = (img, dataUri, fileBlob) => {
+    if (tryManual(img)) return;
     setLastImage(img, fileBlob);
     try {
       applyTraces([traceImage(img, fallbackStage())]);
@@ -174,6 +207,7 @@ export function WireseqModule({ isActive = true }) {
     const list = Array.from(files).filter(f => f && (!f.type || f.type.startsWith('image/')));
     list.sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { numeric: true }));
     const traces = [];
+    let manuals = 0;
     let hint = fallbackStage();
     for (const f of list) {
       const url = URL.createObjectURL(f);
@@ -184,6 +218,7 @@ export function WireseqModule({ isActive = true }) {
           im.onerror = reject;
           im.src = url;
         });
+        if (tryManual(img)) { manuals++; continue; }
         const t = traceImage(img, hint);
         traces.push(t);
         hint = Math.min(WS_STAGES - 1, t.stageIdx + 1);
@@ -194,7 +229,7 @@ export function WireseqModule({ isActive = true }) {
       }
     }
     if (traces.length) applyTraces(traces);
-    else setStatus({ text: 'Could not open those images.', ok: false });
+    else if (!manuals) setStatus({ text: 'Could not open those images.', ok: false });
   };
 
   const handleSample = () => {
@@ -212,7 +247,7 @@ export function WireseqModule({ isActive = true }) {
 
   const handleRestoreDefaultRules = () => {
     setRulesText(WS_DEFAULT_MANUAL);
-    showToast('RESTORED DEFAULT WIRE SEQUENCE RULES ✓');
+    showToast('RESTORED THE BUILT-IN WIRE TABLE ✓');
   };
 
   const handleClear = () => {
@@ -257,7 +292,7 @@ export function WireseqModule({ isActive = true }) {
             multiple
             icon="📷"
             title={`Drop Stage ${panelNo} screenshot`}
-            sub={<>click · <kbd>Ctrl</kbd>+<kbd>V</kbd> · drag &amp; drop — stage read from the dots</>}
+            sub={<>click · <kbd>Ctrl</kbd>+<kbd>V</kbd> · drag &amp; drop — stage read from the dots · the <b>manual picture</b> works here too</>}
           />
           {preview && (
             <div className="wsq-preview">
@@ -290,6 +325,7 @@ export function WireseqModule({ isActive = true }) {
                 : <span className="ph">NONE TO CUT</span>}
             </div>
           </div>
+          <ReportButton />
 
           <div className="wsq-chips">
             {results.map(r => {
@@ -355,8 +391,9 @@ export function WireseqModule({ isActive = true }) {
             placeholder="Paste the Red / Blue / Black rules here..."
             value={rulesText}
             onChange={e => handleRulesChange(e.target.value)}
+            onPaste={manualBoxPaste(inst && inst.multi ? inst.index : null)}
           />
-          <button type="button" className="bg-btn" onClick={handleRestoreDefaultRules}>🔄 Restore default rules</button>
+          <button type="button" className="bg-btn" onClick={handleRestoreDefaultRules}>🔄 Restore the built-in table</button>
         </details>
       )}
     </div>

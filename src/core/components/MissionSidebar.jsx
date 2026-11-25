@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { SECTIONS_DATA, KNOWN_MODULE_NAMES } from '../sectionsData.js';
 
-export function MissionSidebar({
+// Memoised: App re-renders on every tab switch, and the sidebar only needs to when its props change
+export const MissionSidebar = React.memo(function MissionSidebar({
   isOpen,
   onClose,
   activeMission,
@@ -175,4 +176,4 @@ export function MissionSidebar({
       </aside>
     </>
   );
-}
+});

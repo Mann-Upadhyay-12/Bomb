@@ -4,6 +4,7 @@
 // pasted line of the form "<conditions>: <N>s" (with or without "**" and "1." numbering)
 // into clauses, and evaluate them against the bomb facts. "Use the first matching rule".
 
+import { discordPlain } from '../../utils/discordText.js';
 export const BUTTON_COLORS = ['white', 'blue', 'yellow', 'red', 'green', 'black', 'purple', 'orange'];
 export const DEFAULT_LABELS = ['BLUE', 'WHITE', 'RED', 'YELLOW', 'GREEN', 'HOLD', 'PUNCH', 'PRESS', 'ABORT', 'DETONATE', 'TAP', 'PURPLE', 'ORANGE', 'BLACK'];
 
@@ -55,6 +56,46 @@ const serialVowels = (s) => (s.toUpperCase().match(/[AEIOU]/g) || []).length;
 const serialConsonants = (s) => (s.toUpperCase().match(/[B-DF-HJ-NP-TV-Z]/g) || []).length;
 const serialLetters = (s) => (s.toUpperCase().match(/[A-Z]/g) || []).length;
 const hasRepeat = (s) => { const c = s.toUpperCase().replace(/[^A-Z0-9]/g, ''); return new Set(c).size !== c.length; };
+
+// A kind of serial character that can be counted: "letters", "digits"/"numbers", "vowels", "consonants",
+// "odd digits", "even digits"
+const SERIAL_KIND = '(odd\\s+(?:digit|number)s?|even\\s+(?:digit|number)s?|vowels?|consonants?|letters?|digits?|numbers?)';
+function serialKind(word) {
+  const w = word.replace(/\s+/g, ' ').replace(/s$/, '').replace(/number$/, 'digit');
+  if (w === 'odd digit') return { name: 'odd digits', count: s => serialDigits(s).filter(d => d % 2 === 1).length };
+  if (w === 'even digit') return { name: 'even digits', count: s => serialDigits(s).filter(d => d % 2 === 0).length };
+  if (w === 'vowel') return { name: 'vowels', count: serialVowels };
+  if (w === 'consonant') return { name: 'consonants', count: serialConsonants };
+  if (w === 'letter') return { name: 'letters', count: serialLetters };
+  return { name: 'digits', count: s => serialDigits(s).length };
+}
+
+const COMPARE = { '≥': (a, b) => a >= b, '≤': (a, b) => a <= b, '>': (a, b) => a > b, '<': (a, b) => a < b, '=': (a, b) => a === b };
+
+// Two kinds of serial character compared with each other:
+// "serial has (at least | at most | exactly)? as many letters as digits",
+// "serial has (no)? more / fewer / less vowels than consonants",
+// "serial has the same number of letters and digits", "there are more letters than digits in the serial"
+function serialComparison(t) {
+  const body = t.match(/^serial(?:\s+number)?\s+(?:has|contains|includes)\s+(.+)$/)
+    || t.match(/^there\s+(?:are|is)\s+(.+?)\s+(?:in|on)\s+(?:the\s+)?serial(?:\s+number)?$/);
+  if (!body) return null;
+  const s = body[1], K = SERIAL_KIND;
+  let m, op, a, b;
+  if ((m = s.match(new RegExp(`^(?:(at least|no fewer than|no less than)|(at most|no more than)|exactly|precisely|just)?\\s*as many ${K} as\\s+(?:there are\\s+|it has\\s+)?${K}$`)))) {
+    op = m[1] ? '≥' : m[2] ? '≤' : '='; a = m[3]; b = m[4];
+  } else if ((m = s.match(new RegExp(`^(no\\s+)?(more|fewer|less)\\s+${K}\\s+than\\s+(?:there are\\s+|it has\\s+)?${K}$`)))) {
+    const more = m[2] === 'more';
+    op = m[1] ? (more ? '≤' : '≥') : (more ? '>' : '<'); a = m[3]; b = m[4];
+  } else if ((m = s.match(new RegExp(`^(?:the\\s+same|an?\\s+equal|equal)\\s+(?:number|count|amount)\\s+of\\s+${K}\\s+(?:and|as)\\s+${K}$`)))) {
+    op = '='; a = m[1]; b = m[2];
+  } else return null;
+  const A = serialKind(a), B = serialKind(b), test = COMPARE[op];
+  return {
+    kind: 'serial', desc: `serial ${A.name} ${op} ${B.name}`,
+    eval: c => (c.serial ? test(A.count(c.serial), B.count(c.serial)) : null)
+  };
+}
 
 // What a single serial character must be: "a digit", "an even digit", "a letter", "a vowel", "a consonant", "A", "7"
 function charTest(what) {
@@ -193,6 +234,11 @@ export function compileClause(raw) {
     return { kind: 'serial', desc: 'serial has no repeats', eval: c => (c.serial ? !hasRepeat(c.serial) : null) };
   }
 
+  // One kind of serial character against another: "serial has at least as many letters as digits",
+  // "serial has more vowels than consonants", "there are fewer digits than letters in the serial"
+  const cmp = serialComparison(t);
+  if (cmp) return cmp;
+
   // Vowels / consonants / letters / digits: "serial has at least 2 vowels", "serial contains a vowel", "serial has no vowels"
   if ((m = t.match(/^serial(?:\s+number)?\s+(?:has|contains|includes)\s+(.+?)\s+(vowels?|consonants?|letters?|digits?|numbers?)$/))) {
     const q = parseQuantity(m[1]), what = m[2];
@@ -258,6 +304,12 @@ function splitClauses(cond) {
   // a list split by its commas ("this is button 1, 2, or 3", "button is red, blue or green") belongs to the clause before
   const out = [];
   for (const p of parts) {
+    // "the same number of letters and digits" is one clause, not two
+    if (out.length && /(?:same|equal)\s+(?:number|count|amount)\s+of\s+(?:(?:odd|even)\s+)?\w+$/i.test(out[out.length - 1])
+      && new RegExp(`^${SERIAL_KIND}(?:\\s+(?:in|on)\\s+(?:the\\s+)?serial(?:\\s+number)?)?$`, 'i').test(p)) {
+      out[out.length - 1] += ` and ${p}`;
+      continue;
+    }
     if (out.length && /^(?:or\s+)?(?:\d+|[a-z]+)$/i.test(p) && /(?:\d|\b(?:is|says|reads)\s+(?:not\s+)?(?:a\s+)?\w+)$/i.test(out[out.length - 1])
       && (/^(?:or\s+)?\d+$/i.test(p) ? /\d$/.test(out[out.length - 1]) : BUTTON_COLORS.includes(p.replace(/^or\s+/i, '').toLowerCase()) || /^or\s+/i.test(p))) {
       out[out.length - 1] += `, ${p}`;
@@ -274,6 +326,7 @@ const RULE_RE = /^\s*(?:[-*•]\s*)?(?:\(?\d+[.)]\s*)?\**\s*(.+?)\s*\**\s*[:=–
  *   facts holds anything recognised in "Key: value" lines (serial, module counts).
  */
 export function parseChecklist(text) {
+  text = discordPlain(text); // a phone copies Discord's **markup** too
   const rules = [];
   const facts = {};
   for (const rawLine of String(text || '').split(/\r?\n/)) {

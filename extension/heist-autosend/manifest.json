@@ -1,0 +1,44 @@
+{
+  "manifest_version": 2,
+  "name": "Heist auto-send",
+  "version": "1.3",
+  "description": "When Discord shows a new Heist image, sends it to the open Heist app and copies the answer. Glass and Caesar instructions are read from a screenshot of the tab (OCR). Never reads or changes Discord's page.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "heist-autosend@local"
+    }
+  },
+  "permissions": [
+    "webRequest",
+    "notifications",
+    "clipboardWrite",
+    "storage",
+    "<all_urls>",
+    "*://cdn.discordapp.com/*",
+    "*://media.discordapp.net/*",
+    "*://discord.com/*"
+  ],
+  "browser_action": {
+    "default_title": "Heist auto-send",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "scripts": [
+      "ocr/tesseract.min.js",
+      "rules.js",
+      "background.js"
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+}

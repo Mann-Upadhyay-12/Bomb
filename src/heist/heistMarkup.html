@@ -3,7 +3,7 @@
 
 <div class="view" id="mainView">
 
-  <div class="eyebrow">SCOUT + LOCKSMITH + VANGUARD · v1.27</div>
+  <div class="eyebrow">SCOUT + LOCKSMITH + VANGUARD · v1.28</div>
   <h1>Mann's bot (Mqnic's auto with freetoe's UI)</h1>
   <div class="sub" id="modeSub">One image, many ways to solve. Automatically detects Morse, A1Z26, Binary, Sort, Braille, Chinese, Words, Caesar, Color Text or Captcha, and sends <b>468×360 px</b> scout screenshots to Map.</div>
 
@@ -478,6 +478,9 @@
     </p>
     <button class="changelog-btn" id="changelogBtn" type="button" aria-expanded="false">CHANGELOG ▾</button>
     <ul class="changelog-list" id="changelogList" hidden>
+      <li><span class="changelog-version">v1.28</span><span class="changelog-text"><strong>Cyberpunk 2077 theme:</strong> the backdrop is now the Samurai picture. A background picture of your own still replaces it.</span></li>
+      <li><span class="changelog-version">v1.28</span><span class="changelog-text"><strong>Cyberpunk 2077 theme:</strong> Settings → Theme &amp; Colors → Cyberpunk 2077. The game's yellow, cyan and red, square panels, cut-corner buttons and a Night City skyline behind the page (a background picture replaces it). Picking any other colour turns it off.</span></li>
+      <li><span class="changelog-version">v1.28</span><span class="changelog-text"><strong>Auto-copy remembered:</strong> turning COPY ON DECODE (or Settings → Auto-copy) off now stays off on this device, and it is one switch with the bomb app.</span></li>
       <li><span class="changelog-version">v1.27</span><span class="changelog-text"><strong>Speed:</strong> the captcha reader runs its network in WebAssembly SIMD — about 12× faster (≈0.9 s → 0.08 s per captcha), with identical answers on all 515 labelled captchas; browsers without WebAssembly SIMD use the previous JavaScript reader. Caesar and digit matching do the same comparisons faster (identical results). Dragging a Discord image or coming back to the page to paste a link now opens the connection to Discord early, so the download starts sooner. The game choice is kept in the address hash, so opening the file on a phone no longer says &quot;File couldn't be accessed&quot;.</span></li>
       <li><span class="changelog-version">v1.26</span><span class="changelog-text"><strong>Audit fixes:</strong> typed capital letters in All mode now decode as Caesar instead of Captcha; a scout screenshot pasted in All no longer wipes the current answer; corrected captcha characters now auto-copy; dragging plain text no longer triggers the image drop handler or clears the answer; extra files are reported when a mode reads only one; map detection requires the navy background even at 468×360; the captcha shortcut checks width; recognizer errors are logged to the console; the copy-retry no longer fires on unrelated clicks; fetched images obey the 30 MB cap; Patch Notes now mirrors the About changelog. Housekeeping: shared CipherState object instead of window.__ globals, captcha weights parsed only on first use, duplicate label/shift/reset code merged.</span></li>
       <li><span class="changelog-version">v1.25</span><span class="changelog-text"><strong>Color Text / Multi-Grid OCR:</strong> Replaced fixed-template restrictions with instant, pure offline recognition (<10ms). Added full ground-truth templates for missing words including <code>coin</code> and <code>ancient</code> (total 64 words). Dynamic projection segmentation now seamlessly auto-detects and solves any grid dimension (2×3, 2×4, 5×2, etc.) with 100% precision. Added dedicated Settings and Patch Notes views.</span></li>
@@ -691,7 +694,7 @@
           <span class="ui-toggle-slider"></span>
           <span class="ui-toggle-label">
             <strong>Auto-copy answer on decode</strong><br/>
-            <span style="font-size:12px;color:var(--ink-soft);">Instantly write the primary answer to the clipboard as soon as image recognition finishes.</span>
+            <span style="font-size:12px;color:var(--ink-soft);">Instantly write the primary answer to the clipboard as soon as image recognition finishes. Remembered on this device; the bomb app uses the same switch.</span>
           </span>
         </label>
         <label class="ui-toggle">
@@ -731,7 +734,11 @@
           <button type="button" class="theme-preset-btn" data-color="#F7F2E7"><span class="theme-preset-dot" style="background:#F7F2E7;"></span> Paper Raised (#F7F2E7)</button>
           <button type="button" class="theme-preset-btn" data-color="#E5DEC9"><span class="theme-preset-dot" style="background:#E5DEC9;"></span> Antique Sand (#E5DEC9)</button>
           <button type="button" class="theme-preset-btn" data-color="#D9D0BE"><span class="theme-preset-dot" style="background:#D9D0BE;"></span> Weathered (#D9D0BE)</button>
+          <button type="button" class="theme-preset-btn theme-preset-cyberpunk" data-color="#0F0A0F" data-skin="cyberpunk" title="Cyberpunk 2077: #0F0A0F + yellow #FCEE0A, cyan #00F0FF, red #FD0130"><span class="theme-preset-dot theme-preset-dot-multi" style="background:#0F0A0F;"><span style="background:#FCEE0A;"></span><span style="background:#00F0FF;"></span><span style="background:#FD0130;"></span></span> Cyberpunk 2077</button>
+          <button type="button" class="theme-preset-btn theme-preset-yuza" data-color="#0B080D" data-skin="yuza" title="Yuza: Yuza's colours, black #0B080D + blood red #DC1F3C and purple #A66CFF"><span class="theme-preset-dot theme-preset-dot-multi" style="background:#0B080D;"><span style="background:#DC1F3C;"></span><span style="background:#A66CFF;"></span><span style="background:#8B0A1E;"></span></span> Yuza</button>
+          <button type="button" class="theme-preset-btn theme-preset-dixie" data-color="#0A0F1E" data-skin="dixie" title="Dixie: light blue #8EC5FF (Dixie's favourite) with hot pink #FF4FA3, magenta #E0218A and white, on #0A0F1E"><span class="theme-preset-dot theme-preset-dot-multi" style="background:#0A0F1E;"><span style="background:#8EC5FF;"></span><span style="background:#FF4FA3;"></span><span style="background:#FFFFFF;"></span></span> Dixie</button>
         </div>
+        <p class="settings-card-desc" id="skinNote" style="margin-top:10px;" hidden>Cyberpunk 2077 is on: the game's yellow, cyan and red, its square panels, and the Samurai backdrop (a background picture below replaces it). Picking any colour turns it off.</p>
       </div>
 
       <div style="margin-top:22px;padding-top:16px;border-top:1px dashed var(--line);">

@@ -1,8 +1,10 @@
 import { useAppState } from './AppStateContext.jsx';
 import { useToast } from './ToastContext.jsx';
 
+import { leftSinceLastAction } from './leftPage.js';
+
 export function useClipboard() {
-  const { prefixHash } = useAppState();
+  const { prefixHash, setClip } = useAppState();
   const { showToast } = useToast();
 
   const formatClipboardText = (text) => {
@@ -24,8 +26,10 @@ export function useClipboard() {
     if (!text || text === '— — —') return;
     const formatted = formatClipboardText(text);
     if (!formatted) return;
+    // the player went elsewhere after starting this: keep what they copied there
+    if (leftSinceLastAction()) { setClip({ text: formatted, ok: false }); return; }
 
-    const done = () => showToast(customToast, true);
+    const done = () => { setClip({ text: formatted, ok: true }); showToast(customToast, true); };
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(formatted)
@@ -39,9 +43,11 @@ export function useClipboard() {
   const fallbackCopy = (formattedText, done) => {
     const ta = document.createElement('textarea');
     ta.value = formattedText;
-    ta.style.cssText = 'position:fixed;opacity:0;';
+    ta.setAttribute('readonly', ''); // no phone keyboard popping up
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px;';
     document.body.appendChild(ta);
     ta.select();
+    ta.setSelectionRange(0, formattedText.length); // iPhones ignore select() alone
     // execCommand returns false (or throws) when the copy didn't happen — typically the page isn't
     // focused right after a drag from Discord. Say so: a false "COPIED ✓" makes the player paste
     // whatever was on the clipboard before.
@@ -53,7 +59,10 @@ export function useClipboard() {
     }
     document.body.removeChild(ta);
     if (ok) { if (done) done(); }
-    else showToast('⚠ COPY FAILED — CLICK THE ANSWER TO COPY', false, 3500);
+    else {
+      setClip({ text: formattedText, ok: false }); // the answer shows "NOT COPIED — TAP HERE"
+      showToast('⚠ COPY FAILED — CLICK THE ANSWER TO COPY', false, 3500);
+    }
   };
 
   return { copy, formatClipboardText };

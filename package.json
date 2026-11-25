@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "node scripts/build-variants.mjs",
+    "build:bomb": "node scripts/build-variants.mjs bomb",
     "preview": "vite preview",
     "test": "node --test tests/",
     "build:captcha-wasm": "node scripts/build-captcha-wasm.mjs"

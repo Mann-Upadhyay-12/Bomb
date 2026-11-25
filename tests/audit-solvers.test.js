@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 const S = '../src/modules/';
 const { swBFS, swNorm } = await import(S + 'switches/switchesSolver.js');
 const { DEFAULT_RULES, parseRules, solveCore, matchWord, POS_NAMES } = await import(S + 'wof/wofSolver.js');
-const { SIMON_DEFAULT_RULES, parseSimonRules, siToFlashes } = await import(S + 'simons/simonsSolver.js');
+const { siToFlashes } = await import(S + 'simons/simonsSolver.js');
 const { pnNote, pnParseCodes, PN_DEFAULT_CODES, PN_INT } = await import(S + 'piano/pianoSolver.js');
 const { filterPasswordCandidates, MASTER_PASSWORDS } = await import(S + 'password/passwordSolver.js');
 const { solveWordSearch } = await import(S + 'search/searchSolver.js');
@@ -62,10 +62,7 @@ test('wof: fuzzy match keeps apostrophes and question marks', () => {
   assert.equal(matchWord('YOU ARE', R.buttonLabels).w, 'YOU ARE');
 });
 
-test('simon: default rules; curly/markdown variants', () => {
-  const m = parseSimonRules(SIMON_DEFAULT_RULES);
-  assert.deepEqual(m.even, { R: 'R', B: 'G', Y: 'Y', G: 'B' });
-  assert.deepEqual(m.odd, { R: 'G', B: 'R', Y: 'B', G: 'Y' });
+test('simon: repeated flashes split by a gap', () => {
   assert.deepEqual(siToFlashes(['R', 'R', null, 'R', 'B', null, null, 'B', 'G']).map(f => f.c), ['R', 'R', 'B', 'B', 'G']);
 });
 

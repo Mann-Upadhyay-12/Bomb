@@ -1,6 +1,6 @@
 import React from 'react';
 
-const SWATCH = { red: '#dc2626', orange: '#ea580c', yellow: '#eab308', green: '#16a34a', blue: '#2563eb', violet: '#7c3aed', white: '#f3f4f6', gray: '#6b7280' };
+export const SWATCH = { red: '#dc2626', orange: '#ea580c', yellow: '#eab308', green: '#16a34a', blue: '#2563eb', violet: '#7c3aed', white: '#f3f4f6', gray: '#6b7280' };
 
 export function CircuitWorking({ shot, circuit, colors, values, colorNames, onColor }) {
   if (!shot || !circuit) {

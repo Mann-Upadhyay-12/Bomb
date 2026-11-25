@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readPng } from './pngDecode.js';
-import { syReadPanels } from '../src/modules/symbols/symbolsVision.js';
+import { syReadPanels, syReadModule } from '../src/modules/symbols/symbolsVision.js';
 import { addGrids } from '../src/modules/symbols/stripStore.js';
 
 const load = f => readPng(new URL(`./fixtures/${f}`, import.meta.url).pathname);
@@ -50,4 +50,26 @@ test('symbols: a strip section goes to its own puzzle', () => {
   const { grids } = addGrids([a, b], [c]);
   assert.equal(grids.length, 3);
   assert.deepEqual(total(grids.filter(g => g.group === 1)), { ZHE: 25, YAT: 25 });
+});
+
+// The defuser's 2×2 keypad, at 584×607 (bigger than the game's 440): the white inside the © ring
+// passed for a fifth tile, took the third place and pushed ☆ out ("Ж © Ϙ ƛ").
+test('symbols: the keypad reads in order, the white inside © is not a tile', () => {
+  const r = syReadModule(load('symbols_module_copyright.png'));
+  assert.deepEqual(r.buttons, ['ZHE', 'COPYRIGHT', 'LAMBDA_STROKE', 'STAR_HOLLOW']);
+  assert.equal(r.tiles, 4);
+});
+
+// Real keypad screenshots that read wrong with the hand-drawn patterns and a fixed ink cut-off:
+// a mouse cursor on a tile, and small or blurry pictures where ☆ and ©'s thin lines come out grey.
+const KEYPADS = {
+  'symbols_keypad_cursor1.png': ['DOUBLE_CROSS', 'OMEGA', 'ZHE', 'LAMBDA_STROKE'], // cursor on Ω (read ¿)
+  'symbols_keypad_cursor2.png': ['INV_QUESTION', 'YAT', 'OMEGA', 'ZHE'], // cursor on ¿ (read Ж)
+  'symbols_keypad_blurry_star.png': ['OT', 'KOPPA', 'STAR_HOLLOW', 'STAR_SOLID'], // ☆ read ©
+  'symbols_keypad_blurry_copyright.png': ['OMEGA', 'STAR_SOLID', 'COPYRIGHT', 'PSI'], // © read Ϙ
+  'symbols_keypad_blurry_small.png': ['OT', 'COPYRIGHT', 'YAT', 'LAMBDA_STROKE'], // © read Ѿ
+  'symbols_keypad_small_star.png': ['STAR_HOLLOW', 'STAR_SOLID', 'YAT', 'OMEGA'] // ☆ read Ω
+};
+test('symbols: real keypads read right (cursor on a tile, small and blurry pictures)', () => {
+  for (const [f, want] of Object.entries(KEYPADS)) assert.deepEqual(syReadModule(load(f)).buttons, want, f);
 });

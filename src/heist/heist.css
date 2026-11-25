@@ -2292,3 +2292,128 @@
     font-weight: 700;
   }
 
+
+/* ============================================================
+   CYBERPUNK 2077 THEME (Settings → Theme Colors → Cyberpunk 2077)
+   On while <html data-skin="cyberpunk">. Colours: src/core/cyberpunk.js (where each comes from).
+   heistCore.js applySkin sets the background palette, yellow accent, red deep accent, dark red
+   borders and cyan soft text; this adds the game's look. A background picture hides the backdrop.
+   ============================================================ */
+.theme-preset-dot-multi { display: inline-flex; align-items: center; justify-content: center; gap: 1px; overflow: hidden; width: 16px; height: 16px; }
+.theme-preset-dot-multi > span { width: 3px; height: 10px; border-radius: 1px; }
+.theme-preset-btn.theme-preset-cyberpunk { border-color: rgba(252,238,10,.6); font-weight: 700; }
+.theme-preset-btn.on { border-color: #FCEE0A; box-shadow: 0 0 0 2px rgba(252,238,10,.25); }
+
+[data-skin="cyberpunk"] {
+  --cp-yellow: #FCEE0A;
+  --cp-cyan: #00F0FF;
+  --cp-red: #FD0130;
+  --cp-hud-red: #FF6154;
+  --cp-font: 'Rajdhani', 'Bahnschrift', 'Arial Narrow', system-ui, sans-serif;
+  --cp-cut: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  --shadow-out: 0 0 0 1px rgba(0,240,255,.03), 0 10px 28px rgba(0,0,0,.55);
+  --shadow-in: inset 0 1px 3px rgba(0,0,0,.6);
+  scrollbar-color: var(--cp-hud-red) var(--paper);
+}
+[data-skin="cyberpunk"] ::selection { background: var(--cp-cyan); color: #000; }
+
+[data-skin="cyberpunk"] body { background: var(--paper); }
+[data-skin="cyberpunk"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  /* the default backdrop: the Samurai picture the owner picked (2026-11-25; i.imgur.com/Ah1Zs1Z.jpeg,
+     bundled so it needs no imgur), under the theme's faint scanlines. Its black is the page's black. */
+  background:
+    repeating-linear-gradient(to bottom, rgba(255,255,255,.022) 0 1px, transparent 1px 3px),
+    url("../assets/cyberpunk-samurai.jpg") center / cover no-repeat,
+    #030507;
+}
+[data-skin="cyberpunk"] body.bg-picture::before { display: none; }
+
+[data-skin="cyberpunk"] h1 {
+  font-family: var(--cp-font);
+  text-transform: uppercase;
+  letter-spacing: .02em;
+  color: var(--cp-yellow);
+  text-shadow: 2px 2px 0 rgba(253,1,48,.8), -1px -1px 0 rgba(0,240,255,.45);
+}
+[data-skin="cyberpunk"] .eyebrow { color: var(--cp-cyan); font-family: var(--cp-font); font-size: 13px; font-weight: 700; }
+[data-skin="cyberpunk"] .eyebrow::before { background: var(--cp-red); height: 2px; }
+[data-skin="cyberpunk"] a { color: var(--cp-cyan); }
+[data-skin="cyberpunk"] .stamp-label,
+[data-skin="cyberpunk"] .settings-card-title { color: var(--cp-hud-red); }
+[data-skin="cyberpunk"] .settings-card-title { font-family: var(--cp-font); text-transform: uppercase; letter-spacing: .04em; }
+
+[data-skin="cyberpunk"] .stamp,
+[data-skin="cyberpunk"] .settings-card,
+[data-skin="cyberpunk"] .mode-toggle,
+[data-skin="cyberpunk"] .quick-dropdowns-bar {
+  border-radius: 0;
+  background-image: linear-gradient(225deg, var(--cp-red) 0 7px, transparent 7px);
+}
+[data-skin="cyberpunk"] .stamp { border-left: 3px solid var(--cp-yellow); }
+[data-skin="cyberpunk"] .stamp-word { color: var(--cp-yellow); text-shadow: 0 0 12px rgba(252,238,10,.25); }
+[data-skin="cyberpunk"] .stamp-word .ph { color: var(--line); text-shadow: none; }
+[data-skin="cyberpunk"] .stamp-hint { color: var(--cp-cyan); }
+
+[data-skin="cyberpunk"] .dropzone {
+  border-radius: 0;
+  border-color: rgba(0,240,255,.55);
+  background: repeating-linear-gradient(0deg, transparent, transparent 15px, rgba(0,240,255,.035) 15px, rgba(0,240,255,.035) 16px), var(--paper);
+}
+[data-skin="cyberpunk"] .dropzone .dz-title { font-family: var(--cp-font); font-weight: 700; font-size: 21px; letter-spacing: .03em; }
+[data-skin="cyberpunk"] .dropzone .dz-icon { color: var(--cp-cyan); }
+[data-skin="cyberpunk"] .dropzone:focus,
+[data-skin="cyberpunk"] .dropzone.drag {
+  border-color: var(--cp-cyan);
+  background:
+    repeating-linear-gradient(0deg, transparent, transparent 15px, rgba(0,240,255,.08) 15px, rgba(0,240,255,.08) 16px),
+    var(--dropzone-active);
+  box-shadow: 0 0 18px rgba(0,240,255,.18);
+}
+
+[data-skin="cyberpunk"] .upload-btn,
+[data-skin="cyberpunk"] .reset-btn,
+[data-skin="cyberpunk"] .copy-btn,
+[data-skin="cyberpunk"] .bg-btn,
+[data-skin="cyberpunk"] .mode-btn,
+[data-skin="cyberpunk"] .theme-preset-btn,
+[data-skin="cyberpunk"] .settings-tab-btn,
+[data-skin="cyberpunk"] .about-btn,
+[data-skin="cyberpunk"] .back-btn {
+  border-radius: 0;
+  clip-path: var(--cp-cut);
+  font-family: var(--cp-font);
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+[data-skin="cyberpunk"] .upload-btn,
+[data-skin="cyberpunk"] .mode-btn.active,
+[data-skin="cyberpunk"] .settings-tab-btn.active { background: var(--cp-yellow); color: #000; }
+[data-skin="cyberpunk"] .upload-btn:hover { background: var(--cp-cyan); color: #000; }
+[data-skin="cyberpunk"] .reset-btn:hover,
+[data-skin="cyberpunk"] .bg-btn:hover,
+[data-skin="cyberpunk"] .copy-btn:hover,
+[data-skin="cyberpunk"] .theme-preset-btn:hover { border-color: var(--cp-cyan); color: var(--cp-cyan); }
+/* the Samurai backdrop would show through the see-through buttons: they get the page colour behind them */
+[data-skin="cyberpunk"] .reset-btn,
+[data-skin="cyberpunk"] .copy-btn,
+[data-skin="cyberpunk"] .bg-btn,
+[data-skin="cyberpunk"] .about-btn,
+[data-skin="cyberpunk"] .back-btn { background-color: var(--paper); }
+[data-skin="cyberpunk"] .copy-btn.on { background: linear-gradient(rgba(252,238,10,.10), rgba(252,238,10,.10)), var(--paper); }
+[data-skin="cyberpunk"] button:focus-visible { outline: 2px solid var(--cp-cyan); outline-offset: -3px; }
+
+[data-skin="cyberpunk"] input[type=text],
+[data-skin="cyberpunk"] input[type=number],
+[data-skin="cyberpunk"] textarea,
+[data-skin="cyberpunk"] select { border-radius: 0 !important; }
+[data-skin="cyberpunk"] input[type=text]:focus,
+[data-skin="cyberpunk"] textarea:focus,
+[data-skin="cyberpunk"] select:focus { border-color: var(--cp-cyan) !important; outline-color: var(--cp-cyan); }
+[data-skin="cyberpunk"] input[type=range],
+[data-skin="cyberpunk"] input[type=checkbox] { accent-color: var(--cp-yellow); }

@@ -8,6 +8,7 @@ import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
 import { useAnswerGate } from '../../core/useAnswerGate.js';
+import { useBombSerial, serialLastDigit } from '../../core/bombSerial.js';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
 import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
@@ -30,7 +31,7 @@ export function ComplexWiresModule({ isActive = true }) {
   const [edge, setEdge] = useState({ even: false, needy: false, gte5: true });
   const [wires, setWires] = useState(blankWires);
   const [unsure, setUnsure] = useState(() => new Set());
-  const [serial, setSerial] = useState('');
+  const [serial, setSerial] = useBombSerial(); // game-wide, also in the top bar
   const [readStatus, setReadStatus] = useState({ text: '', ok: null });
   const [thumbs, setThumbs] = useState({ diagram: '', wires: '' });
 
@@ -43,12 +44,12 @@ export function ComplexWiresModule({ isActive = true }) {
     setReadStatus({ text: `Loaded ${CW_PRESET_NAMES[k]}.`, ok: true });
   };
 
-  // Typing the serial number sets EVEN/ODD from its last digit
-  const handleSerial = (val) => {
-    setSerial(val);
-    const digits = val.match(/\d/g);
-    if (digits) setEdge(prev => ({ ...prev, even: Number(digits[digits.length - 1]) % 2 === 0 }));
-  };
+  // The serial (here or in the top bar) sets EVEN/ODD from its last digit
+  const lastDigit = serialLastDigit(serial);
+  React.useEffect(() => {
+    if (lastDigit !== null) setEdge(prev => ({ ...prev, even: lastDigit % 2 === 0 }));
+  }, [lastDigit]);
+  const handleSerial = (val) => setSerial(val);
 
   // Wide image = Venn rule diagram, tall/square = wires panel (same heuristic as the original)
   const handleImage = (img, dataUri, fileBlob) => {

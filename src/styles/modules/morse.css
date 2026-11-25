@@ -10,4 +10,7 @@
   .morse-word-sep { width: 1px; height: 52px; background: var(--line); border-radius: 2px; margin: 0 6px; flex: none; }
   .legend-box.dot { background: #48BB78; border: 1px solid #2F855A; }
   .legend-box.dash { background: var(--brass); border: 1px solid var(--brass-deep); }
-
+  /* the three readings side by side: forward, backward, swapped (wrap on narrow screens) */
+  .morse-stamps { display: flex; flex-wrap: wrap; gap: 14px; align-items: stretch; }
+  .morse-stamps .stamp { flex: 1 1 180px; min-width: 0; margin-bottom: 0; }
+  @media (max-width: 640px) { .morse-stamps { gap: 8px; } }

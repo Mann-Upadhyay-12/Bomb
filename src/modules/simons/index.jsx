@@ -1,18 +1,14 @@
 import React, { useState } from 'react';
-import {
-  SINAMES,
-  SIMON_DEFAULT_RULES,
-  parseSimonRules,
-  siAnalyzeFrames
-} from './simonsSolver.js';
+import { SINAMES, simonRules, siAnalyzeFrames, siReadManual } from './simonsSolver.js';
 import { decodeGIFRGBA } from '../../utils/gif.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
 import { useAnswerGate } from '../../core/useAnswerGate.js';
-import { useSharedSetting } from '../../core/sharedSetting.js';
+import { useSharedSetting, useSharedState } from '../../core/sharedSetting.js';
 import { useInstance } from '../../core/InstanceContext.jsx';
-import { Dropzone } from '../../core/Dropzone.jsx';
+import { useBombSerial, serialHasVowel } from '../../core/bombSerial.js';
+import { Dropzone, ManualPasteBox } from '../../core/Dropzone.jsx';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
 import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
@@ -39,6 +35,7 @@ async function readSimonFile(blob, img) {
       const g = decodeGIFRGBA(buf);
       if (g.frames.length) {
         const r = siAnalyzeFrames(g.frames, g.w, g.h);
+        if (r.notSimon) return { name, notSimon: true };
         const secs = (g.frames.reduce((a, x) => a + x.delay, 0) / 1000).toFixed(1);
         let note = `GIF ${g.frames.length} fr, ${secs}s · ${r.flashes.length} flash${r.flashes.length === 1 ? '' : 'es'}: ${r.flashes.join(' ') || 'none'}`;
         if (r.stage) note += ` · stage ${r.stage}`;
@@ -57,29 +54,39 @@ async function readSimonFile(blob, img) {
   ctx.drawImage(src, 0, 0);
   const data = ctx.getImageData(0, 0, W, H).data;
   const r = siAnalyzeFrames([{ data }], W, H);
+  if (r.notSimon) {
+    // not the module: maybe this game's manual table
+    const table = siReadManual(data, W, H);
+    return table ? { name, manual: table } : { name, notSimon: true };
+  }
   return { name, color: r.color, thumb: thumbFrom(data, W, H), note: 'still frame', warn: r.warn ? 'colours look unusual — different crop?' : '' };
 }
 
 export function SimonsModule({ isActive = true }) {
   const inst = useInstance();
-  const grouped = Boolean(inst && inst.grouped);
   const multi = Boolean(inst && inst.multi);
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
   const answerChanged = useAnswerGate();
 
-  // The manual is the same for every copy of this module, so all windows share it
-  const [rulesText, setRulesText] = useSharedSetting('bombvision_simon_rules', SIMON_DEFAULT_RULES);
-  const rules = React.useMemo(() => parseSimonRules(rulesText) || parseSimonRules(SIMON_DEFAULT_RULES), [rulesText]);
+  // This game's manual table (changes every game, so in memory only: a refresh clears it), shared
+  // by every Simon copy; its row comes from the bomb serial (top bar) having a vowel
+  const [table, setTable] = useSharedState('simon_manual_table', null);
+  const [serial, setSerial] = useBombSerial();
+  const hasSerial = Boolean(serial);
+  const vowel = serialHasVowel(serial);
+  const rules = simonRules(table, vowel);
+  const ready = Boolean(table && hasSerial);
   // Which answer COPY ON DECODE puts on the clipboard (both are always shown)
   const [autoCopy, setAutoCopy] = useSharedSetting('bombvision_simon_autocopy', 'odd');
   const [entries, setEntries] = useState([]);
   const [busy, setBusy] = useState(false);
 
   const counted = entries.filter(e => e.color);
-  const oddSeq = counted.map(e => rules.odd[e.color]);
-  const evenSeq = counted.map(e => rules.even[e.color]);
+  // No manual or no serial yet → no answer (it would be a guess)
+  const oddSeq = ready ? counted.map(e => rules.odd[e.color]) : [];
+  const evenSeq = ready ? counted.map(e => rules.even[e.color]) : [];
   const oddStr = oddSeq.join(' ');
   const evenStr = evenSeq.join(' ');
   const copyFormatted = autoCopy === 'even' ? evenStr : oddStr;
@@ -103,12 +110,23 @@ export function SimonsModule({ isActive = true }) {
       catch (e) { found.push({ name: (blob && blob.name) || 'image', color: null, thumb: '', note: 'could not read file', warn: '' }); }
     }
     setBusy(false);
-    if (!found.length) return;
-    setEntries(prev => [...prev, ...found]);
-    const got = found.filter(f => f.color);
-    showToast(got.length
+    // The manual table picture sets this game's rules; anything else that isn't the module is skipped
+    const manuals = found.filter(f => f.manual);
+    if (manuals.length) setTable(manuals[manuals.length - 1].manual);
+    const skipped = found.filter(f => f.notSimon).length;
+    const kept = found.filter(f => !f.notSimon && !f.manual);
+    if (!kept.length) {
+      if (manuals.length) showToast('SIMON MANUAL READ ✓');
+      else if (skipped) showToast('NOT A SIMON MODULE OR MANUAL — IGNORED');
+      return;
+    }
+    setEntries(prev => [...prev, ...kept]);
+    const got = kept.filter(f => f.color);
+    const skipNote = (manuals.length ? ' · manual read' : '')
+      + (skipped ? ` · ${skipped} non-Simon image${skipped === 1 ? '' : 's'} ignored` : '');
+    showToast((got.length
       ? `STAGE ${counted.length + got.length}: ${got.map(f => SINAMES[f.color]).join(' → ')} ✓`
-      : 'NO GLOW FOUND — PICK THE COLOUR ON THE ENTRY');
+      : 'NO GLOW FOUND — PICK THE COLOUR ON THE ENTRY') + skipNote);
   };
 
   const handleImage = (img, dataUri, fileBlob) => {
@@ -137,7 +155,31 @@ export function SimonsModule({ isActive = true }) {
 
   const copySeq = (label, s) => { if (s) copy(s, `${label} COPIED ✓`); };
 
+  const manualPrompt = !table && (
+    <div className="simon-serial-need">
+      <span>Paste <b>this game's manual table</b> picture here (it changes every game) — then the GIFs.</span>
+    </div>
+  );
+
+  const serialPrompt = !hasSerial && (
+    <div className="simon-serial-need">
+      <span>Type the bomb <b>SERIAL</b> (top bar, once per game) — the table row depends on whether it has a vowel:</span>
+      <input
+        type="text"
+        className="bg-hex"
+        value={serial}
+        placeholder="serial"
+        spellCheck="false"
+        autoComplete="off"
+        onChange={(e) => setSerial(e.target.value)}
+      />
+    </div>
+  );
+
   const answers = (
+    <>
+    {manualPrompt}
+    {serialPrompt}
     <div className="simon-answer">
       {[['odd', 'ODD', 'odd # of modules disarmed', oddSeq, oddStr], ['even', 'EVEN', 'even # of modules disarmed', evenSeq, evenStr]].map(([k, label, sub, seq, str]) => (
         <div
@@ -154,11 +196,12 @@ export function SimonsModule({ isActive = true }) {
             <span className="simon-ans-sub">{sub}</span>
           </div>
           <div className="simon-ans-row">
-            {seq.length ? seq.map((c, i) => <SimonChip key={i} c={c} />) : <span className="simon-status">—</span>}
+            {seq.length ? seq.map((c, i) => <SimonChip key={i} c={c} />) : <span className="simon-status">{ready || !counted.length ? '—' : !table ? 'needs manual' : 'needs serial'}</span>}
           </div>
         </div>
       ))}
     </div>
+    </>
   );
 
   return (
@@ -171,8 +214,8 @@ export function SimonsModule({ isActive = true }) {
               onFiles={handleFiles}
               multiple
               icon={busy ? '⏳' : '🔴 🔵 🟡 🟢'}
-              title={multi ? 'Drop / paste this Simon’s GIF' : 'Click here, then paste the Simon Says GIF or frame'}
-              sub={<>one GIF per stage — its <b>last</b> flash is the new colour · several files are read in name order</>}
+              title={multi ? 'Drop / paste this Simon’s GIF (or the manual)' : 'Click here, then paste the Simon manual table, then each GIF'}
+              sub={<>manual picture once per game · one GIF per stage — its <b>last</b> flash is the new colour · several files are read in name order</>}
             />
           }
           controls={
@@ -187,22 +230,13 @@ export function SimonsModule({ isActive = true }) {
             </>
           }
         >
-          {!grouped && (
-            <details className="simon-manual-details" style={{ marginTop: '8px' }}>
-              <summary className="simon-manual-summary">📖 MANUAL RULES (EVEN / ODD)</summary>
-              <textarea
-                className="search-words-field"
-                style={{ height: '140px', resize: 'vertical', fontSize: '12px', lineHeight: 1.45, fontFamily: 'monospace', width: '100%' }}
-                spellCheck={false}
-                value={rulesText}
-                onChange={e => setRulesText(e.target.value)}
-              />
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                <button type="button" className="bg-btn" onClick={() => setRulesText(SIMON_DEFAULT_RULES)}>🔄 RESTORE DEFAULT</button>
-                {!parseSimonRules(rulesText) && <span className="simon-status warn">Could not find all 8 rules — using the default table.</span>}
-              </div>
-            </details>
-          )}
+          <div className="simon-status" style={{ marginTop: '8px' }}>
+            {!table ? <>No manual yet — paste this game's Simon manual table picture.</>
+              : hasSerial
+                ? <>Manual read ✓ · serial <b>{serial}</b> → <b>{vowel ? 'VOWEL' : 'NO VOWEL'}</b> rows</>
+                : <>Manual read ✓ · its rows are picked by the serial — set it in the top bar.</>}
+          </div>
+          <ManualPasteBox what="Simon manual table" card={multi ? inst.index : null} />
         </ModuleInput>
       }
       answers={answers}
@@ -210,7 +244,8 @@ export function SimonsModule({ isActive = true }) {
         <WorkingPanel title={`STAGES (${counted.length}) — uploads, fixes & rule table`} defaultExpanded>
           <SimonsWorking
             entries={entries}
-            rules={rules}
+            table={table}
+            vowel={hasSerial ? vowel : null}
             compact={multi}
             onAddColor={addManual}
             onFixEntry={fixEntry}
@@ -228,6 +263,6 @@ export const simonsModule = {
   tabLabel: '🔴 SIMON SAYS',
   eyebrow: 'SIMON SAYS SOLVER',
   title: 'Simon Says Vision',
-  sub: 'Paste one GIF per stage — the <b>last flash</b> in it is read and mapped through both tables. <b>ODD</b> is on the left, <b>EVEN</b> on the right; tap a colour on any stage to fix a misread.',
+  sub: 'Paste this game\'s <b>manual table</b> picture (it changes every game), then one GIF per stage — the <b>last flash</b> in it is mapped through that table, using the <b>serial</b> from the top bar (vowel / no vowel). <b>ODD</b> modules disarmed is on the left, <b>EVEN</b> on the right; tap a colour on any stage to fix a misread.',
   Component: SimonsModule
 };

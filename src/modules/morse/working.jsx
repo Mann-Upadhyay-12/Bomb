@@ -20,13 +20,13 @@ export function MorseWorking({ rle = [], decoded = null, frameCount = 0 }) {
     ctx.fillRect(0, 0, W, H);
 
     const totalDur = rle.reduce((s, x) => s + x.duration, 0);
-    const unit = (decoded && decoded.unit) || 100;
+    const unit = (decoded && decoded.forward.unit) || 100;
     let x = 0;
 
     for (const { is_on, duration } of rle) {
       const w = (duration / totalDur) * W;
       if (is_on) {
-        const isDash = duration > unit * 2;
+        const isDash = duration > unit * 2;   // as sent (the SWAPPED reading flips these)
         const col = isDash ? (isDark ? '#E5B84B' : '#AD7A2E') : (isDark ? '#4CAF50' : '#3E7C4A');
         const glow = isDash ? 'rgba(173,122,46,0.2)' : 'rgba(62,124,74,0.2)';
         ctx.fillStyle = glow;
@@ -64,7 +64,27 @@ export function MorseWorking({ rle = [], decoded = null, frameCount = 0 }) {
     );
   }
 
-  const letters = (decoded && decoded.letters) || [];
+  const letterRow = (letters) => (
+    <div className="morse-letter-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+      {letters.map((l, i) => {
+        if (l.char === ' ') {
+          return <div key={i} className="morse-word-sep" />;
+        }
+        return (
+          <div key={i} className="morse-letter-card">
+            <div className="mlc-char">{l.char}</div>
+            <div className="mlc-code">
+              {l.code.split('').map((s, si) => (
+                <span key={si} style={{ color: s === '-' ? '#E5B84B' : '#4CAF50' }}>
+                  {s}
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div className="morse-working-container">
@@ -72,29 +92,14 @@ export function MorseWorking({ rle = [], decoded = null, frameCount = 0 }) {
         <canvas ref={canvasRef} height="70" style={{ width: '100%', display: 'block' }} />
       </div>
 
-      <div className="morse-letter-section-label" style={{ marginTop: '14px', marginBottom: '8px' }}>
-        LETTER BREAKDOWN
-      </div>
-
-      <div className="morse-letter-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-        {letters.map((l, i) => {
-          if (l.char === ' ') {
-            return <div key={i} className="morse-word-sep" />;
-          }
-          return (
-            <div key={i} className="morse-letter-card">
-              <div className="mlc-char">{l.char}</div>
-              <div className="mlc-code">
-                {l.code.split('').map((s, si) => (
-                  <span key={si} style={{ color: s === '-' ? '#E5B84B' : '#4CAF50' }}>
-                    {s}
-                  </span>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      {decoded && [['forward', '▶ FORWARD'], ['backward', '◀ BACKWARD (pulses read from the end)'], ['swapped', '⇄ SWAPPED (dots ⇄ dashes)']].map(([k, name]) => (
+        <React.Fragment key={k}>
+          <div className="morse-letter-section-label" style={{ marginTop: '14px', marginBottom: '8px' }}>
+            LETTER BREAKDOWN — {name}
+          </div>
+          {letterRow(decoded[k].letters)}
+        </React.Fragment>
+      ))}
     </div>
   );
 }

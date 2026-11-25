@@ -65,6 +65,8 @@ export function DiagramModule({ isActive = true }) {
 
   const [mode, setMode] = useState(3); // 2 or 3
   const [orient2, setOrient2] = useState('h'); // 'h' or 'v'
+  // Which region is answered (and auto-copied): the SHADED / UNSHADED switch, SHADED to start.
+  // (The serial no longer picks it — the vowel rule was removed 2026-11-24.)
   const [showUnshaded, setShowUnshaded] = useState(false);
 
   const [lettersState, setLettersState] = useState({
@@ -123,10 +125,13 @@ export function DiagramModule({ isActive = true }) {
 
   const expr = VennCore.expression(letterNames, targetSet);
 
+  // Only a diagram with something on it is copied: a region shaded, or a picture of the shading.
+  // An empty diagram's UNSHADED answer ("S", everything) used to be copied on opening the tab.
+  const hasContent = currentSel.size > 0 || shots.some(sh => sh.type === 'shade' || sh.type === 'both');
   React.useEffect(() => {
-    const fresh = answerChanged(expr); // false when only isActive changed
+    const fresh = answerChanged(hasContent ? expr : null); // false when only isActive changed
     if (!isActive) return;
-    if (expr && expr !== 'Null') {
+    if (hasContent && expr && expr !== 'Null') {
       setLastCopyString(expr);
       if (copyOnDecode && fresh) {
         copy(expr);
@@ -134,7 +139,7 @@ export function DiagramModule({ isActive = true }) {
     } else {
       setLastCopyString('');
     }
-  }, [expr, isActive]);
+  }, [expr, isActive, hasContent]);
 
   // Tracks the current "round" of screenshots: the game shows the circle labels and
   // the shading in separate screenshots, so a labels-only shot must not wipe shading.

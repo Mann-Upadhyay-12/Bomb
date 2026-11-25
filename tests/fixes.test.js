@@ -1,7 +1,7 @@
 // Regression tests for the tester-reported bugs (Simon, Wire Sequences, Logic, Balance).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { siAnalyzeFrames, SI_POS, SI_REF } from '../src/modules/simons/simonsSolver.js';
+import { siAnalyzeFrames, siReadManual, SI_POS, SI_REF } from '../src/modules/simons/simonsSolver.js';
 import { wsReadImage } from '../src/modules/wireseq/wireseqRules.js';
 import { evaluateExpression, classify } from '../src/modules/logic/logicSolver.js';
 import { fixOcrFormulaSide, balanceEquation } from '../src/modules/balance/balanceSolver.js';
@@ -33,6 +33,16 @@ test('simon: a GIF stage is its LAST flash; repeats separated by a gap count twi
   assert.deepEqual(r.flashes, ['Y', 'B', 'B']);
   assert.equal(r.color, 'B');
   for (const c of ['R', 'G', 'Y', 'B']) assert.equal(siAnalyzeFrames([null, c, null].map(simonFrame), W, H).color, c);
+});
+
+test('simon: the manual table (or any non-Simon image) is rejected, not read as a flash', () => {
+  // Manual-like frame: dark-grey cells where the tiles should be, bright cells elsewhere
+  const d = new Uint8ClampedArray(W * H * 4);
+  for (let i = 0; i < W * H; i++) { d[i * 4] = 44; d[i * 4 + 1] = 46; d[i * 4 + 2] = 54; d[i * 4 + 3] = 255; }
+  const r = siAnalyzeFrames([{ data: d }], W, H);
+  assert.equal(r.notSimon, true);
+  assert.equal(r.color, null);
+  assert.equal(siAnalyzeFrames([simonFrame('R')], W, H).notSimon, false);
 });
 
 // ── Wire Sequences: pager-dot stage detection ─────────────────────────────────────────────
@@ -130,4 +140,37 @@ test('diagram: a strip of panels is split one per card, a single panel is not', 
   assert.equal(dgSplitPanels(panel(440, 880, [[8, 8, 424], [8, 448, 424]]), 440, 880).length, 2);
   assert.equal(dgSplitPanels(panel(880, 440, [[8, 8, 424], [448, 8, 424]]), 880, 440).length, 2);
   assert.equal(dgSplitPanels(panel(440, 440, [[8, 8, 424]]), 440, 440).length, 0);
+});
+
+test('simon: a module frame is never read as the manual table', () => {
+  assert.equal(siReadManual(simonFrame('R').data, W, H), null);
+});
+
+// Mines: tell the helper when the safe squares to click are the last ones on the board
+import { solveMinesGrid as __solveMines, finishCheck as __finishCheck, MINES_ROWS as __MR, MINES_COLS as __MC } from '../src/modules/mines/minesSolver.js';
+const __board = (open) => Array.from({ length: __MR }, (_, r) => Array.from({ length: __MC }, (_, c) => {
+  const name = String.fromCharCode(65 + c) + (r + 1);
+  return { r, c, name, state: open(r, c), isSafe: false, isMine: false };
+}));
+test('mines: the last safe squares are flagged as the input that solves the board', () => {
+  // one mine in the top-left corner; every square open except the mine and its 3 neighbours
+  const near = (r, c) => r <= 1 && c <= 1;
+  const counts = (r, c) => ((r <= 1 && c <= 1 && !(r === 0 && c === 0)) ? 1 : 0);
+  const g = __board((r, c) => (near(r, c) ? '#' : counts(r, c)));
+  const { safeList, mineList } = __solveMines(g);
+  assert.deepEqual(mineList, []); // A1 has no open neighbour yet: nothing says it is a mine
+  assert.deepEqual(safeList, ['A2', 'B1', 'B2']);
+  assert.equal(__finishCheck(g, safeList).solves, false);
+  // B1 and B2 open (both 1), A3 open (0) → A2 is safe, so A1 is the mine and A2 the last square
+  const g2 = __board((r, c) => ((r === 0 && c === 0) || (r === 1 && c === 0) ? '#' : counts(r, c)));
+  const s2 = __solveMines(g2);
+  assert.deepEqual(s2.mineList.sort(), ['A1']);
+  assert.deepEqual(s2.safeList, ['A2']);
+  const f = __finishCheck(g2, new Set(s2.safeList));
+  assert.equal(f.solves, true);
+  // the same board when A2 was already handed out earlier: every square is known, but this input is empty
+  const f2 = __finishCheck(g2, new Set());
+  assert.equal(f2.solves, false);
+  assert.equal(f2.allKnown, true);
+  assert.deepEqual(f2.earlier, ['A2']);
 });

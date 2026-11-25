@@ -1,0 +1,29 @@
+/* WIRE PLACEMENT Mode Styles (uses the .bat-* layout classes of batteries.css) */
+.wp-board-wrap { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; margin-top: 10px; }
+.wp-board { width: 230px; max-width: 100%; height: auto; background: #1f2228; border-radius: 10px; border: 1px solid var(--line); }
+.wp-lbl { fill: #c9a24a; font: 700 13px ui-monospace, Consolas, monospace; text-anchor: middle; }
+.wp-tile { fill: #3a3f48; }
+.wp-tile.c3 { stroke: var(--brass); stroke-width: 2; }
+.wp-peg { fill: #9aa0a8; }
+.wp-line { stroke-width: 7; stroke-linecap: round; }
+.wp-line-edge { stroke: #8a9099; stroke-width: 10; stroke-linecap: round; } /* a black wire on the dark board */
+.wp-wire.keep { opacity: .35; }
+.wp-cut-halo { stroke: #ff5252; stroke-width: 13; stroke-linecap: round; opacity: .55; }
+.wp-scissors { fill: #fff; font-size: 15px; text-anchor: middle; paint-order: stroke; stroke: #000; stroke-width: 3px; }
+
+.wp-why { list-style: none; margin: 0; padding: 0; font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--ink-soft); line-height: 1.7; flex: 1 1 220px; }
+.wp-why li.cut { color: var(--ink); }
+.wp-why li.cut b { color: #ff6b6b; }
+.wp-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; border: 1px solid #777; vertical-align: -1px; }
+
+.wp-wires { display: flex; flex-direction: column; gap: 6px; }
+.wp-wire-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--ink); }
+.wp-wire-row.add { margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.wp-color, .wp-cell {
+  padding: 3px 4px; border: 1px solid var(--line); border-radius: 5px;
+  background: var(--paper); color: var(--ink); font: inherit; font-size: 12px;
+}
+.wp-color { border-left: 6px solid var(--wp-c, var(--line)); min-width: 78px; }
+.wp-cell.unsure { border-color: #c0392b; box-shadow: 0 0 0 1px #c0392b inset; }
+.wp-table th.used, .wp-table td.used { background: rgba(201, 162, 74, .16); }
+.wp-table tr.on td.used { background: rgba(255, 82, 82, .22); }

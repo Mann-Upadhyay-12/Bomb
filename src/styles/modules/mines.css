@@ -48,7 +48,7 @@
   }
 
   [data-theme="parchment"] .grid-cell.flag {
-    background: rgba(173,122,46,0.12);
+    background: rgba(var(--brass-rgb),0.12);
     border-color: var(--brass-deep);
     color: var(--brass-deep);
   }
@@ -75,7 +75,7 @@
     color: #B04A3A !important;
   }
   [data-theme="parchment"] .grid-cell.has-queen {
-    box-shadow: 0 0 12px rgba(173,122,46,0.6);
+    box-shadow: 0 0 12px rgba(var(--brass-rgb),0.6);
     border-color: var(--brass-deep) !important;
   }
 
@@ -113,3 +113,17 @@
   [data-theme="parchment"] .mines-stat-lbl { color: var(--brass-deep); }
   [data-theme="parchment"] .mines-tag.past { background: rgba(33,29,23,0.06); color: var(--ink-soft); }
   [data-theme="parchment"] .mines-tag.new { background: rgba(62,124,74,0.18); border-color: var(--select-green); color: var(--select-green-deep); }
+
+/* "this input solves Mines" note under the answer */
+.mines-finish {
+  margin-top: 8px; padding: 9px 12px; border-radius: 10px;
+  border: 1px solid #3a9d5d; background: rgba(58, 157, 93, .16); color: var(--ink);
+  font-family: ui-monospace, Consolas, monospace; font-size: 13px; line-height: 1.5;
+}
+.mines-finish b { color: #3a9d5d; }
+.mines-finish.partial { border-color: var(--brass); background: rgba(201, 162, 74, .12); }
+.mines-finish.partial b { color: var(--brass); }
+/* safe only because of the 16-mine total / the board can't hold 16 */
+.mines-finish.count { border-color: var(--brass); background: rgba(201, 162, 74, .12); }
+.mines-finish.count b { color: var(--brass); }
+.mines-finish.warn { border-color: #c0504d; background: rgba(192, 80, 77, .14); }

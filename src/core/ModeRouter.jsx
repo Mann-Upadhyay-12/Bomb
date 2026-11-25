@@ -1,32 +1,14 @@
 import React from 'react';
-import { useAppState } from './AppStateContext.jsx';
+import { useAppMode } from './AppStateContext.jsx';
 import { KNOWN_MODULE_NAMES } from './sectionsData.js';
 
-export const MODULE_REGISTRY = [
-  { id: 'mines', tabId: 'tabMines', label: '💣 MINES (8×10)', name: 'Mines' },
-  { id: 'queens', tabId: 'tabQueens', label: '👑 QUEENS (8×8)', name: 'Queens' },
-  { id: 'morse', tabId: 'tabMorse', label: '📡 MORSE (GIF)', name: 'Morse Code' },
-  { id: 'search', tabId: 'tabSearch', label: '🔍 SEARCH (5×5)', name: 'Search' },
-  { id: 'maze', tabId: 'tabMaze', label: '🧩 MAZE (8×8)', name: 'Maze' },
-  { id: 'password', tabId: 'tabPassword', label: '🔑 PASSWORD', name: 'Password' },
-  { id: 'switches', tabId: 'tabSwitches', label: '🎚️ SWITCHES', name: 'Switches' },
-  { id: 'diagram', tabId: 'tabDiagram', label: '🔵 DIAGRAM', name: 'Diagram' },
-  { id: 'piano', tabId: 'tabPiano', label: '🎹 PIANO', name: 'Piano' },
-  { id: 'wof', tabId: 'tabWof', label: '🥊 WHO\'S ON FIRST', name: 'Who\'s On First' },
-  { id: 'knob', tabId: 'tabKnob', label: '🎛️ KNOBS', name: 'Knobs' },
-  { id: 'cube', tabId: 'tabCube', label: '🧊 RUBIK\'S CUBE', name: 'Rubik\'s Cube' },
-  { id: 'logic', tabId: 'tabLogic', label: '🔣 LOGIC', name: 'Logic' },
-  { id: 'chess', tabId: 'tabChess', label: '♔ CHESS (8×8)', name: 'Chess' },
-  { id: 'simons', tabId: 'tabSimons', label: '🔴 SIMON SAYS', name: 'Simon Says' },
-  { id: 'wireseq', tabId: 'tabWireSeq', label: '🔌 WIRE SEQ', name: 'Wire Sequences' },
-  { id: 'complexwires', tabId: 'tabComplexWires', label: '⚡ COMPLEX WIRES', name: 'Complex Wires' },
-  { id: 'symbols', tabId: 'tabSymbols', label: '🔣 SYMBOLS', name: 'Symbols' },
-  { id: 'button', tabId: 'tabButton', label: '🔘 THE BUTTON', name: 'The Button' },
-  { id: 'balance', tabId: 'tabBalance', label: '⚖️ BALANCE', name: 'Balance' },
-  { id: 'circuit', tabId: 'tabCircuit', label: '⚡ CIRCUIT', name: 'Circuit' }
-];
+// The list lives in moduleRegistry.js (settings read it too); re-exported for the old imports
+export { MODULE_REGISTRY } from './moduleRegistry.js';
+import { MODULE_REGISTRY } from './moduleRegistry.js';
+import { useSetting, shownModules } from './settings.js';
 
-export function ModeRouter({
+// Memoised: re-renders when the module, level or picker settings change, not with the sidebar or Settings
+export const ModeRouter = React.memo(function ModeRouter({
   currentMode,
   onSelectMode,
   activeMission = null,
@@ -34,7 +16,8 @@ export function ModeRouter({
   onSelectSlot = null,
   onClearMission = null
 }) {
-  const { appMode, setAppMode } = useAppState();
+  const [appMode, setAppMode] = useAppMode();
+  const [hiddenValue] = useSetting('hiddenModules'); // Settings → modules in the picker (levels show theirs regardless)
   const activeMode = currentMode || appMode;
 
   const handleSelect = (id) => {
@@ -78,7 +61,7 @@ export function ModeRouter({
       };
     }).filter(Boolean);
   } else {
-    renderedTabs = MODULE_REGISTRY.map(m => ({
+    renderedTabs = shownModules(hiddenValue).map(m => ({
       key: m.id,
       slotIndex: null,
       id: m.id,
@@ -159,4 +142,4 @@ export function ModeRouter({
       </div>
     </div>
   );
-}
+});

@@ -1,0 +1,50 @@
+/* ── Astrology ── */
+.astro-status { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--ink-soft); margin-top: 8px; line-height: 1.5; }
+.astro-status.warn, .astro-status .warn { color: #F87171; }
+.astro-problem { margin: 4px 0 10px; font-weight: 700; }
+.astro-link { background: none; border: 0; color: var(--brass); cursor: pointer; font: inherit; text-decoration: underline; margin-left: 6px; padding: 0; }
+.astro-manual { margin-top: 8px; }
+.astro-manual summary { cursor: pointer; font-family: monospace; font-weight: 600; font-size: 12px; letter-spacing: .08em; color: var(--ink-soft); margin-bottom: 8px; }
+.astro-manual textarea { width: 100%; font-family: monospace; font-size: 12px; line-height: 1.45; resize: vertical; }
+.astro-board { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 12px; }
+.astro-stars { display: flex; align-items: center; gap: 6px; }
+.astro-stars input { width: 64px; text-align: center; }
+.astro-label { font-family: ui-monospace, Consolas, monospace; font-size: 11px; font-weight: 800; letter-spacing: .12em; color: var(--brass); margin-right: 4px; }
+.astro-buttons { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 560px) { .astro-buttons { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.astro-btn { border: 1.5px solid var(--line); border-radius: 12px; padding: 8px; background: var(--paper-raised); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.astro-btn.answer { border-color: var(--brass); box-shadow: 0 0 0 3px rgba(var(--brass-rgb),.25); }
+.astro-btn.unsure { border-style: dashed; }
+.astro-btn-n { font-family: ui-monospace, Consolas, monospace; font-weight: 800; color: var(--brass); font-size: 15px; }
+.astro-btn-glyphs { display: flex; align-items: center; gap: 6px; min-height: 40px; }
+.astro-thumb { height: 40px; width: auto; max-width: 60px; background: #141a2c; border-radius: 6px; border: 1px solid var(--line); }
+.astro-ref { background: #1b2238; border-radius: 5px; border: 1px solid var(--line); display: inline-block; vertical-align: middle; image-rendering: auto; }
+.astro-ref.none { opacity: .4; }
+.astro-btn select { width: 100%; min-width: 0; font-family: ui-monospace, Consolas, monospace; font-size: 12px; background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 3px 4px; }
+.astro-btn-q { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
+.astro-hit { color: var(--brass); font-weight: 700; }
+.astro-quad { display: inline-block; min-width: 26px; text-align: center; border-radius: 5px; padding: 1px 4px; font-family: ui-monospace, Consolas, monospace; font-size: 11px; font-weight: 800; border: 1px solid var(--line); color: var(--ink); }
+.astro-quad.none { color: var(--ink-soft); }
+.astro-working { display: flex; flex-direction: column; gap: 10px; }
+.astro-targets { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--ink); }
+.astro-target { display: inline-flex; align-items: center; gap: 4px; }
+.astro-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; max-width: 520px; }
+.astro-cell { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; min-height: 54px; }
+.astro-cell.hit { border-color: var(--brass); background: rgba(var(--brass-rgb),.08); }
+.astro-cell-head { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 2px; }
+.astro-cell-t { color: var(--brass); }
+.astro-cell-b { color: var(--ink); }
+.astro-cell-empty { color: var(--ink-soft); }
+.astro-starcheck { position: relative; max-width: 320px; }
+.astro-starcheck img { width: 100%; display: block; border-radius: 8px; }
+.astro-starcheck svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.astro-star-ring { fill: none; stroke: #F3CA65; stroke-width: 1.5; }
+.astro-star-n { fill: #F3CA65; font-family: ui-monospace, Consolas, monospace; font-weight: 700; }
+[data-theme="parchment"] .astro-label, [data-theme="parchment"] .astro-btn-n, [data-theme="parchment"] .astro-hit, [data-theme="parchment"] .astro-cell-t { color: var(--brass-deep); }
+[data-theme="parchment"] .astro-status.warn, [data-theme="parchment"] .astro-status .warn { color: #B04A3A; }
+.astro-steps { margin: 10px 0 4px; padding-left: 20px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.7; color: var(--ink); }
+.astro-steps li.todo { color: #F87171; }
+.astro-steps li.ok { color: var(--ink-soft); }
+.astro-steps .warn { color: #F87171; }
+.astro-newgame { margin-top: 4px; font-size: 11px; }
+[data-theme="parchment"] .astro-steps li.todo { color: #B04A3A; }

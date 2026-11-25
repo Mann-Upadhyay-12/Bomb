@@ -1,5 +1,6 @@
 // Pure Who's on First manual parser, fuzzy word matcher, and solving logic
 
+import { discordPlain } from '../../utils/discordText.js';
 export const DEFAULT_RULES = `Step 1. The display word tells you which button label to ask for:
 
     top left: NOTHING, READ, IDK, NOT, THEY'RE, YOU, YOUR
@@ -45,6 +46,7 @@ export const POS_NAMES = ['TOP LEFT', 'TOP RIGHT', 'MIDDLE LEFT', 'MIDDLE RIGHT'
 export const BLANK = '(BLANK)';
 
 export function parseRules(text) {
+  text = discordPlain(text); // a phone copies Discord's **markup** too
   const R = { posOfWord: {}, step2: {}, displayWords: [], buttonLabels: [] };
   let mode = 1, npos = 0;
   const seenPos = {};

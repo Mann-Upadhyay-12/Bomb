@@ -29,7 +29,10 @@ export const MORSE_FREQUENCIES = {
   BEATS: '3.600 MHz'
 };
 
-export function decodeMorseRLE(rle) {
+/**
+ * swap: true for a red light, where long and short flashes are swapped (a short flash is a dash).
+ */
+export function decodeMorseRLE(rle, { swap = false } = {}) {
   const onDurs = rle.filter(x => x.is_on).map(x => x.duration).sort((a, b) => a - b);
   if (!onDurs.length) return { letters: [], unit: 100 };
   const unit = onDurs[0];
@@ -38,7 +41,7 @@ export function decodeMorseRLE(rle) {
 
   for (const { is_on, duration } of rle) {
     if (is_on) {
-      cur.push(duration > unit * 2 ? '-' : '.');
+      cur.push((duration > unit * 2) !== swap ? '-' : '.');
     } else {
       if (duration > unit * 5) {
         if (cur.length) {
@@ -80,5 +83,23 @@ export function decodeMorseRLE(rle) {
     }
   }
 
-  return { letters, unit, word, frequency };
+  // every pulse group is a real letter (no "[.-.-]")
+  const valid = letters.every(l => l.char === ' ' || MORSE_TABLE[l.code]);
+  return { letters, unit, word, frequency, valid, swapped: swap };
+}
+
+/**
+ * Three readings of one signal, and the player picks the one that makes sense:
+ *  forward  — as sent;
+ *  backward — some games play the word backwards (CARGO came through as "OWRN[.-.-]");
+ *  swapped  — forward with dots and dashes swapped (a red light: a short flash is a dash).
+ * opts.swap flips the base: forward / backward swapped, and "swapped" back to normal.
+ */
+export function decodeMorseBothWays(rle, opts = {}) {
+  const swap = Boolean(opts.swap);
+  return {
+    forward: decodeMorseRLE(rle, { swap }),
+    backward: decodeMorseRLE([...rle].reverse(), { swap }),
+    swapped: decodeMorseRLE(rle, { swap: !swap })
+  };
 }

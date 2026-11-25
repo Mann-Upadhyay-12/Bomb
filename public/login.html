@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Log in · Bomb Vision</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px;
+  background:#14161b;color:#e8e6e1;font:15px/1.5 'IBM Plex Sans',system-ui,sans-serif}
+main{width:100%;max-width:400px;text-align:center}
+.title{font:700 15px 'IBM Plex Mono',ui-monospace,monospace;letter-spacing:.14em;color:#d9a35b;margin-bottom:18px}
+.card{background:#1d2027;border:1px solid #333845;border-radius:14px;padding:26px 22px}
+.icon{font-size:40px;line-height:1;margin-bottom:10px}
+h1{font-size:19px;margin:0 0 8px}
+p{margin:0 0 16px;color:#b9bdc6}
+.who{display:flex;align-items:center;justify-content:center;gap:10px;margin:0 0 16px}
+.who img{width:40px;height:40px;border-radius:50%;background:#333845}
+.role{display:inline-block;margin-left:6px;padding:1px 9px;font:700 11px 'IBM Plex Mono',ui-monospace,monospace;letter-spacing:.14em;vertical-align:2px}
+.role.owner{padding-left:10px;color:#0F0A0F;background:linear-gradient(225deg,#FD0130 0 7px,#FCEE0A 7px);box-shadow:inset 3px 0 0 #00F0FF;text-shadow:1px 0 rgba(253,1,48,.55),-1px 0 rgba(0,240,255,.55)}
+.role.og{border-radius:99px;color:#14161b;background:linear-gradient(90deg,#8EC5FF,#C4B1F2)}
+.btns{display:flex;flex-direction:column;gap:10px}
+.btn{display:flex;align-items:center;justify-content:center;gap:10px;border-radius:10px;padding:11px 16px;font:600 15px system-ui,sans-serif;
+  text-decoration:none;border:1px solid #3a3f4b;color:#e8e6e1;background:transparent}
+.btn.main{background:#d9a35b;border-color:#d9a35b;color:#14161b}
+.btn.discord{background:#5865f2;border-color:#5865f2;color:#fff}
+.btn:hover{filter:brightness(1.08)}
+.small{font-size:13px;color:#8d939e;margin:16px 0 0}
+.small a{color:#9aa0ab}
+.err{background:rgba(235,110,110,.12);border:1px solid rgba(235,110,110,.35);color:#f3a3a3;border-radius:10px;padding:10px 12px;font-size:14px;margin:0 0 16px}
+.ok{background:rgba(110,200,140,.12);border:1px solid rgba(110,200,140,.3);color:#97dcae;border-radius:10px;padding:10px 12px;font-size:14px;margin:0 0 16px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <div class="title">BOMB VISION</div>
+  <div class="card" id="card"><p>Checking…</p></div>
+</main>
+<script>
+(() => {
+  const q = new URLSearchParams(location.search);
+  // only a path on this site (parsed like the browser will: "/<tab>/evil.example" is another site)
+  const next = (() => {
+    const n = q.get('next') || '/';
+    try { const u = new URL(n, location.origin); return n.startsWith('/') && u.origin === location.origin ? u.pathname + u.search + u.hash : '/'; }
+    catch { return '/'; }
+  })();
+  const card = document.getElementById('card');
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const ERRORS = {
+    cancelled: 'You cancelled the Discord login.',
+    state: 'That login took too long or came from another tab. Try again.',
+    discord: 'Discord didn’t finish the login. Try again.',
+    discord_token: 'Discord didn’t accept the login. Try again.',
+    discord_user: 'Discord didn’t say who you are. Try again.',
+    discord_secret: 'The site’s Discord settings are wrong (client secret). Tell the owner.',
+    db: 'The site couldn’t check its user list. Try again in a minute.',
+    setup: 'Logging in isn’t set up on this site yet. Tell the owner.',
+  };
+  const discordIcon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18.2 18.2 0 0 0-5.6 0L8.6 3a19.5 19.5 0 0 0-4.9 1.5C.6 9.1-.3 13.6.1 18a19.8 19.8 0 0 0 6 3l1.3-2.1a12.8 12.8 0 0 1-2-1l.5-.4a14.1 14.1 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.7 19.7 0 0 0 6-3c.5-5.1-.8-9.6-3.6-13.6ZM8 15.3c-1.2 0-2.2-1.1-2.2-2.4s1-2.5 2.2-2.5 2.2 1.1 2.2 2.5-1 2.4-2.2 2.4Zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.5 2.2-2.5 2.2 1.1 2.2 2.5-1 2.4-2.2 2.4Z"/></svg>';
+
+  const loginHref = '/api/auth/login?next=' + encodeURIComponent(next);
+  const errorBox = q.get('error') ? `<div class="err">${esc(ERRORS[q.get('error')] || 'Something went wrong. Try again.')}</div>` : '';
+  const role = (me) => me.admin ? ' <span class="role owner">OWNER</span>' : me.og ? ' <span class="role og">OG</span>' : '';
+  const who = (me) => `<div class="who"><img src="${esc(me.avatar)}" alt=""><div><b>${esc(me.name)}</b>${role(me)}</div></div>`;
+  const logout = '<a class="btn" href="/api/auth/logout">Log out</a>';
+
+  function show(me) {
+    if (me.state === 'allowed') {
+      const until = me.expires_at ? `<p class="small">Your access lasts until ${esc(new Date(me.expires_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))}.</p>` : '';
+      card.innerHTML = `${who(me)}<div class="btns"><a class="btn main" href="${esc(next)}">Open the solver</a>
+        ${me.admin ? '<a class="btn" href="/admin">Admin: who can use the site</a>' : me.og ? '<a class="btn" href="/admin">Who uses the site</a>' : ''}${logout}</div>${until}`;
+      return;
+    }
+    if (me.state === 'waiting' || me.state === 'blocked' || me.state === 'expired') {
+      const text = {
+        waiting: ['⏳', 'Waiting for the owner', 'You’re logged in. The owner has to let you in before you can use the solver. Come back later.'],
+        blocked: ['🔒', 'No access', 'The owner hasn’t given this account access to the solver.'],
+        expired: ['⌛', 'Your access ended', 'Your time on the solver is up. Ask the owner if you need more.'],
+      }[me.state];
+      card.innerHTML = `<div class="icon">${text[0]}</div><h1>${text[1]}</h1>${who(me)}<p>${text[2]}</p><div class="btns">${logout}</div>`;
+      return;
+    }
+    if (me.state === 'error') {
+      card.innerHTML = `<div class="icon">⚠️</div><h1>Can’t check your access</h1><p>The site couldn’t reach its user list. Try again in a minute.</p>
+        <div class="btns"><a class="btn main" href="${esc(location.href)}">Try again</a>${logout}</div>`;
+      return;
+    }
+    // guest
+    const bye = q.get('bye') ? '<div class="ok">You’re logged out.</div>' : '';
+    const setup = me.ready === false && !q.get('error') ? `<div class="err">${ERRORS.setup}</div>` : '';
+    card.innerHTML = `${bye}${errorBox}${setup}<div class="icon">💣</div><h1>Log in to use the solver</h1>
+      <p>Bomb and Heist solver. Log in with your Discord account; the site only learns your name and avatar.</p>
+      <div class="btns"><a class="btn discord" href="${esc(loginHref)}">${discordIcon}Log in with Discord</a></div>`;
+  }
+
+  fetch('/api/auth/me', { credentials: 'same-origin', cache: 'no-store' })
+    .then((r) => r.json())
+    .then(show)
+    .catch(() => {
+      card.innerHTML = `<div class="icon">📡</div><h1>Can’t reach the site</h1><p>Check your internet connection.</p>
+        <div class="btns"><a class="btn main" href="${esc(location.href)}">Try again</a></div>`;
+    });
+})();
+</script>
+</body>
+</html>

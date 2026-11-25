@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useId } from 'react';
+import React, { useState, useEffect, useId, useMemo } from 'react';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
@@ -11,9 +11,13 @@ import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
 import { CopyLines } from '../../core/components/CopyLines.jsx';
 import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
 import { LogicWorking } from './working.jsx';
-import {STAGE_SYMBOLS, evaluateExpression, readLogicGrid, detectStage} from './logicSolver.js';
-// Extract Boolean assignments from arbitrary text.
-const VAR_RE = /\b([PQRST])\s*[:=]\s*(TRUE|FALSE|T|F|1|0)\b/gi;
+import { useSharedSetting } from '../../core/sharedSetting.js';
+import {STAGE_SYMBOLS, evaluateExpression, parseManualText, readLogicGrid, detectStage} from './logicSolver.js';
+
+// This game's P–T values, saved (a reload keeps them) and shared by every Logic window; New game
+// puts the built-in ones back (core/newGame.js).
+const LOGIC_VARS_KEY = 'bombvision_logic_vars';
+const varsText = (v) => Object.entries(v).map(([k, x]) => `${k} = ${x ? 'T' : 'F'}`).join(', ');
 
 const DEFAULT_MANUAL_TEXT = 'P = T, Q = T, R = F, S = T, T = T';
 
@@ -32,60 +36,54 @@ export function LogicModule({ isActive = true }) {
   const answerChanged = useAnswerGate();
   const uid = useId(); // per-instance ids: missions can show the same module several times
 
-  const [vars, setVars] = useState(DEFAULT_VARS);
-  const [manualText, setManualText] = useState(DEFAULT_MANUAL_TEXT);
+  const [savedVars, setSavedVars] = useSharedSetting(LOGIC_VARS_KEY, DEFAULT_MANUAL_TEXT);
+  const vars = useMemo(() => ({ ...DEFAULT_VARS, ...parseManualText(savedVars) }), [savedVars]);
+  const setVars = (next) => setSavedVars(varsText(typeof next === 'function' ? next(vars) : next));
+  const [manualText, setManualText] = useState(savedVars);
   // Start empty so opening the tab doesn't silently overwrite the clipboard
   const [stages, setStages] = useState(['', '', '', '', '']);
   const [activeStageIdx, setActiveStageIdx] = useState(0);
   const [previewUri, setPreviewUri] = useState('');
   const [previewMeta, setPreviewMeta] = useState('');
 
-  // Parse the single input and update only variables that were supplied.
+  // Parse the manual text and update only the variables it gives. parseManualText also reads a
+  // phone's copy from Discord, which keeps the **bold** marks (**P** = **T** wasn't read before).
   const handleManualTextChange = (text) => {
     setManualText(text);
-
-    const matches = [...text.matchAll(VAR_RE)];
-
-    if (matches.length === 0) return;
-
-    const updates = {};
-
-    for (const match of matches) {
-      const key = match[1].toUpperCase();
-      const value = match[2].toUpperCase();
-
-      updates[key] =
-        value === 'T' ||
-        value === 'TRUE' ||
-        value === '1';
-    }
-
+    const updates = parseManualText(text);
+    if (Object.keys(updates).length === 0) return;
     setVars(prev => ({ ...prev, ...updates }));
   };
 
-  // Evaluate each stage using the current variable assignments.
-const results = (() => {
-  const greek = {};
-  return stages.map((expr, i) => {
-    if (!expr || !expr.trim()) return null;
-    try {
-      const val = evaluateExpression(expr, greek, vars);
-      if (STAGE_SYMBOLS[i]) greek[STAGE_SYMBOLS[i]] = val;
-      return { val };
-    } catch (err) {
-      return { error: (err && err.message) || 'invalid' };
-    }
-  });
-})();
+  // Evaluate each stage using the current variable assignments. `greek`: α–δ as this stage sees
+  // them (for the coloured formula in the workbench); `pending`: it needs an earlier stage first.
+  const results = (() => {
+    const greek = {};
+    return stages.map((expr, i) => {
+      if (!expr || !expr.trim()) return null;
+      const seen = { ...greek };
+      try {
+        const val = evaluateExpression(expr, greek, vars);
+        if (STAGE_SYMBOLS[i]) greek[STAGE_SYMBOLS[i]] = val;
+        return { val, greek: seen };
+      } catch (err) {
+        const msg = (err && err.message) || 'invalid';
+        return { error: msg, pending: /not solved yet/.test(msg), greek: seen };
+      }
+    });
+  })();
 
   // Stage 5 has no greek symbol, so it is reported as just T / F
-  const validResults = results
+  const solved = results
     .map((result, i) => {
       if (!result || result.error) return null;
       const tf = result.val ? 'T' : 'F';
-      return STAGE_SYMBOLS[i] ? `${STAGE_SYMBOLS[i]}=${tf}` : tf;
+      return { text: STAGE_SYMBOLS[i] ? `${STAGE_SYMBOLS[i]}=${tf}` : tf, val: result.val };
     })
     .filter(Boolean);
+  const validResults = solved.map(r => r.text);
+  // a false result is a red chip / copy button (true ones stay green), so α=F reads as false at a glance
+  const resultTones = solved.map(r => (r.val ? null : 'bad'));
 
   const copyFormatted = validResults.join(' ');
 
@@ -162,9 +160,10 @@ const results = (() => {
     showToast('LOGIC CLEARED ✓');
   };
 
-  const copyItems = validResults.map(item => ({
-    label: item,
-    value: item
+  const copyItems = solved.map(r => ({
+    label: r.text,
+    value: r.text,
+    tone: r.val ? null : 'bad'
   }));
 
   const stampStats =
@@ -251,6 +250,7 @@ onImage={(img, dataUri, fileBlob) => {
           label="EVALUATED LOGIC STAGE RESULTS"
           stats={stampStats}
           answers={validResults}
+          tones={resultTones}
           copyValue={copyFormatted}
           placeholder="ENTER STAGE EXPRESSIONS"
         />

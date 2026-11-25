@@ -135,10 +135,12 @@ export function CubeModule({ isActive = true }) {
   };
 
   const handleSample = () => {
+    // a solved cube scrambled with R U F U' (solution U F' U' R'). The old sample (three top edges
+    // cycled) needs 10+ quarter turns, so the search always timed out on it.
     const sampleCells = {
-      U: ['W', 'G', 'W', 'W', 'W', 'W', 'W', 'W', 'W'],
-      F: ['G', 'R', 'G', 'G', 'G', 'G', 'G', 'G', 'G'],
-      R: ['R', 'W', 'R', 'R', 'R', 'R', 'R', 'R', 'R']
+      U: ['W', 'W', 'Y', 'W', 'W', 'O', 'W', 'W', 'O'],
+      F: ['G', 'G', 'Y', 'G', 'G', 'R', 'Y', 'Y', 'R'],
+      R: ['G', 'G', 'R', 'G', 'R', 'R', 'G', 'R', 'R']
     };
     setCells(sampleCells);
     solve(sampleCells);

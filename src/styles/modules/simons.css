@@ -8,11 +8,11 @@
     .simon-drop {
       border: 2px dashed var(--brass); border-radius: 12px;
       padding: 20px 12px; text-align: center; cursor: pointer;
-      background: repeating-linear-gradient(0deg,transparent,transparent 15px,rgba(229,184,75,.04) 15px,rgba(229,184,75,.04) 16px);
+      background: repeating-linear-gradient(0deg,transparent,transparent 15px,rgba(var(--brass-rgb),.04) 15px,rgba(var(--brass-rgb),.04) 16px);
       color: var(--ink-soft); font-family: ui-monospace,Consolas,monospace; font-size: 12px;
       transition: background .15s, border-color .15s;
     }
-    .simon-drop.over { border-color: #F3CA65; background: rgba(229,184,75,.12); }
+    .simon-drop.over { border-color: var(--brass-hi); background: rgba(var(--brass-rgb),.12); }
     .simon-chip {
       display:inline-flex;align-items:center;justify-content:center;
       width:40px;height:40px;border-radius:6px;color:#fff;
@@ -39,7 +39,7 @@
     .simon-rules-area:focus{outline:2px solid var(--brass);outline-offset:1px}
     .simon-status{font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--ink-soft)}
     .simon-status.warn{color:#F87171}
-    .simon-rules-table{width:100%;border-collapse:collapse;font-size:13px;font-family:ui-monospace,Consolas,monospace;max-width:380px}
+    .simon-rules-table{width:100%;border-collapse:collapse;font-size:13px;font-family:ui-monospace,Consolas,monospace;max-width:520px}
     .simon-rules-table td,.simon-rules-table th{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:middle;color:var(--ink)}
     .simon-rules-table th{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--brass)}
     [data-theme="parchment"] .simon-lbl{color:var(--brass-deep)}
@@ -51,7 +51,7 @@
 .simon-answer { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 6px 0 12px; }
 .simon-ans-col { border: 1.5px solid var(--line); border-radius: 14px; padding: 10px 12px; background: var(--paper-raised); cursor: pointer; min-width: 0; transition: border-color .12s, box-shadow .12s; }
 .simon-ans-col:hover { border-color: var(--brass); }
-.simon-ans-col.auto { border-color: var(--brass); box-shadow: 0 0 0 2px rgba(229,184,75,.18); }
+.simon-ans-col.auto { border-color: var(--brass); box-shadow: 0 0 0 2px rgba(var(--brass-rgb),.18); }
 .simon-ans-head { display: flex; flex-direction: column; gap: 1px; margin-bottom: 4px; }
 .simon-ans-label { font-family: ui-monospace, Consolas, monospace; font-size: 15px; font-weight: 800; letter-spacing: .12em; color: var(--brass); }
 .simon-ans-sub { font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; color: var(--ink-soft); }
@@ -81,3 +81,9 @@
 .simon-del { background: none; border: 1px solid var(--line); border-radius: 6px; color: var(--ink-soft); cursor: pointer; width: 26px; height: 26px; }
 .simon-working.compact .simon-log { max-height: 220px; }
 [data-theme="parchment"] .simon-ans-label { color: var(--brass-deep); }
+
+.simon-rules-table tr.on td:first-child { color: var(--brass); font-weight: 700; }
+.simon-rules-table tr.off { opacity: .4; }
+.simon-serial-need { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 4px 0 8px; padding: 8px 12px; border: 1px dashed var(--brass); border-radius: 10px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--ink); }
+.simon-serial-need input { width: 120px; text-transform: uppercase; }
+[data-theme="parchment"] .simon-rules-table tr.on td:first-child { color: var(--brass-deep); }

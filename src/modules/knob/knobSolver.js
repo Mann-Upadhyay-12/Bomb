@@ -1,48 +1,13 @@
 // Pure Knobs solver: 12-LED truth table parsing and direction resolver
 
+import { discordPlain } from '../../utils/discordText.js';
 export const KEY = 'bombvision_knob_rules';
 
-export const DEFAULT_RULES = `UP:
-XOXOXX
-XXOOXX
-OOXOXO
-XXXOXX
-OXOOXX
-XXXOOX
-XOOXXO
-XXOXOO
-
-DOWN:
-OOOXXX
-XXOOXO
-OXXOOX
-OXXXXX
-OOOOXX
-XOXOXO
-OXOOOO
-OXOXOX
-
-LEFT:
-XXXXXX
-OXXXXO
-OXXXOX
-XOXOOX
-XXOOOX
-OOOXOX
-OXOXXX
-XOXXXX
-
-RIGHT:
-OXXOOO
-OOXOXX
-XOOXOX
-OXXOXX
-OOOOOO
-XXXOXO
-XOXXOO
-XXXXXO`;
+// The table (8 patterns per direction) changes every game: it's read from the manual picture
+// (knobManual.js) or pasted as text, never built in.
 
 export function parseKnobRules(text) {
+  text = discordPlain(text); // a phone copies Discord's **markup** too
   const rules = { UP: [], DOWN: [], LEFT: [], RIGHT: [] };
   let curDir = null;
   const lines = String(text || '').split(/\r?\n/);

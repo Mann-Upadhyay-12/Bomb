@@ -1,0 +1,24 @@
+/* ── Limbo ── */
+.limbo-status { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--ink-soft); margin-top: 8px; }
+.limbo-status.warn { color: #F87171; }
+.limbo-board { display: flex; flex-direction: column; align-items: center; margin: 10px 0; }
+.limbo-board svg { width: 100%; max-width: 240px; height: auto; }
+.limbo-slot { cursor: pointer; }
+.limbo-slot:hover circle:last-of-type { stroke: var(--brass); }
+.limbo-start-ring { fill: none; stroke: #fde68a; stroke-width: 3; stroke-dasharray: 4 3; }
+.limbo-end-ring { fill: none; stroke: var(--brass); stroke-width: 4; }
+.limbo-tag { font-family: ui-monospace, Consolas, monospace; font-size: 10px; font-weight: 800; letter-spacing: .1em; fill: var(--ink-soft); text-anchor: middle; dominant-baseline: middle; }
+.limbo-tag.end { fill: var(--brass); }
+.limbo-board-note { font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; color: var(--ink-soft); }
+.limbo-working { display: flex; flex-direction: column; gap: 10px; }
+.limbo-thumbs { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.limbo-thumbs figure { margin: 0; text-align: center; }
+.limbo-thumbs img { width: 96px; height: 96px; border: 1px solid var(--line); border-radius: 6px; display: block; }
+.limbo-thumbs figcaption { font-family: ui-monospace, Consolas, monospace; font-size: 10px; color: var(--ink-soft); }
+.limbo-moves { width: 100%; border-collapse: collapse; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+.limbo-moves th, .limbo-moves td { padding: 4px 6px; border-bottom: 1px solid var(--line); text-align: left; color: var(--ink); }
+.limbo-moves th { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--brass); }
+.limbo-moves tr.moved td { color: var(--brass); font-weight: 700; }
+.limbo-moves tr.unsure td:last-child { color: #F87171; }
+[data-theme="parchment"] .limbo-moves th, [data-theme="parchment"] .limbo-tag.end { color: var(--brass-deep); fill: var(--brass-deep); }
+[data-theme="parchment"] .limbo-status.warn { color: #B04A3A; }

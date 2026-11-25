@@ -1,9 +1,11 @@
 // Logic solver: Boolean expressions parser & evaluator and OCR glyph recognition
 
+import { discordPlain } from '../../utils/discordText.js';
 export const GREEK_VARS = ['α', 'β', 'γ', 'δ'];
 export const STAGE_SYMBOLS = ['α', 'β', 'γ', 'δ', ''];
 
 export function parseManualText(text) {
+  text = discordPlain(text); // a phone copies Discord's **markup** too
   const vars = {};
   const re = /\b([PQRST])\s*[:=]\s*(TRUE|FALSE|T|F|1|0)\b/gi;
   let m;
@@ -14,14 +16,39 @@ export function parseManualText(text) {
   return vars;
 }
 
+/**
+ * The one spelling the evaluator reads: ¬ ^ V → ( ) P–T α–δ. Also takes the other ways people (and
+ * other solvers, Discord, a keyboard) write them: ! ~ for ¬; & && ∧ * for ^; | || ∨ v + for V;
+ * -> => ⇒ ⟹ ⟶ for →; lower-case p–t; ß for β.
+ */
+export function normalizeExpression(src) {
+  return String(src || '').replace(/=>|->|[⇒⟹⟶]/g, '→')
+    .replace(/&&/g, '^')
+    .replace(/\|\|/g, 'V')
+    .replace(/[!~]/g, '¬')
+    .replace(/[&∧*]/g, '^')
+    .replace(/[|∨v+]/g, 'V')
+    .replace(/[pqrst]/g, c => c.toUpperCase())
+    .replace(/ß/g, 'β')
+    .replace(/\s+/g, '');
+}
+
+/**
+ * The expression as tokens for showing it coloured by value: { t, kind, val }, kind 'var' (P–T),
+ * 'greek' (α–δ; val undefined until its stage is solved), 'op', 'paren' or 'bad' (not understood).
+ */
+export function expressionTokens(src, greek = {}, vars = {}) {
+  return [...normalizeExpression(src)].map((t) => {
+    if (vars && t in vars) return { t, kind: 'var', val: vars[t] };
+    if (GREEK_VARS.includes(t)) return { t, kind: 'greek', val: greek[t] };
+    if ('¬^V→'.includes(t)) return { t, kind: 'op' };
+    if (t === '(' || t === ')') return { t, kind: 'paren' };
+    return { t, kind: 'bad' };
+  });
+}
+
 export function evaluateExpression(src, greek, vars) {
-  const s = src.replace(/=>|->/g, '→')
-             .replace(/[!~]/g, '¬')
-             .replace(/[&∧]/g, '^')
-             .replace(/[|∨v]/g, 'V')
-             .replace(/[pqrst]/g, c => c.toUpperCase())
-             .replace(/ß/g, 'β')
-             .replace(/\s+/g, '');
+  const s = normalizeExpression(src);
   let p = 0;
   const peek = () => s[p];
 
@@ -234,8 +261,22 @@ export function measure(g) {
   for (let x = 0; x < w; x++) { let r = 0; for (let y = 0; y <= h; y++) { if (y < h && m[y * w + x]) r++; else if (r) { runs.push(r); r = 0; } } }
   runs.sort((a, b) => a - b);
   const stroke = runs.length ? runs[runs.length >> 1] / g.tileH : NaN;
+  // Tilt: how far the left edge moves right per unit of height going up, fitted over the middle
+  // 80% of the rows. The game's α β γ δ are italic (α ≈ 0.18, β ≈ 0.22); P Q R S T and the
+  // brackets stand upright (≤ 0; T and S lean slightly the other way).
+  const pts = [];
+  for (let y = Math.floor(0.1 * h); y < Math.ceil(0.9 * h); y++) {
+    for (let x = 0; x < w; x++) if (m[y * w + x]) { pts.push([(h - 1 - y) / h, x / h]); break; }
+  }
+  let lean = NaN;
+  if (pts.length >= 3) {
+    const mu = pts.reduce((a, p) => a + p[0], 0) / pts.length, mx = pts.reduce((a, p) => a + p[1], 0) / pts.length;
+    let sxy = 0, syy = 0;
+    for (const [u, x] of pts) { sxy += (u - mu) * (x - mx); syy += (u - mu) ** 2; }
+    if (syy > 0) lean = sxy / syy;
+  }
   return {
-    stem, stroke, bright: g.bright, w, h, aspect: w / h, hRel: h / g.tileH, holes: holes.length, holeCy: big ? (big.cy - 1) / h : -1,
+    stem, stroke, lean, bright: g.bright, w, h, aspect: w / h, hRel: h / g.tileH, holes: holes.length, holeCy: big ? (big.cy - 1) / h : -1,
     TL: reg(0, .3, 0, .3), TC: reg(.3, .7, 0, .3), TR: reg(.7, 1, 0, .3),
     BL: reg(0, .3, .7, 1), BC: reg(.3, .7, .7, 1), BR: reg(.7, 1, .7, 1),
     ML: reg(0, .3, .3, .7), BRq: reg(.55, 1, .6, 1),
@@ -248,10 +289,14 @@ export function measure(g) {
 const TALL = 0.71;
 const SHORT = 0.5;
 const BRACKET = 0.68; // brackets are ≈ 0.8 of the tile tall, letters ≈ 0.57
+const GREY_INK = 0.79; // α β γ δ's grey, as a share of the white letters' brightness above the tile
 
-// α β γ δ are thin grey italics, P Q R S T bold white capitals. Known from brightness (most reliable,
-// survives rescaling) and stroke thickness; null when the features weren't measured.
+// α β γ δ are thin grey italics, P Q R S T bold white upright capitals. A letter that leans is Greek,
+// whatever its brightness. Otherwise known from brightness (survives rescaling) and stroke thickness;
+// null when those weren't measured.
+const ITALIC_LEAN = 0.1;
 export function isGreekGlyph(f) {
+  if (f.lean >= ITALIC_LEAN) return true;
   if (!Number.isFinite(f.bright)) return null;
   const thin = Number.isFinite(f.stroke) && f.stroke < 0.125;
   if (f.bright < 0.88) return true;
@@ -312,10 +357,20 @@ export function readLogicGrid(data, w, h) {
   let acc = 0, gmax = 255; for (let v = 255; v >= 0; v--) { acc += hist[v]; if (acc >= 0.002 * tot) { gmax = v; break; } }
   if (gmax - level < 50) return { rows: [], text: '', tilesFound: !!found };
   const thr = level + 0.4 * (gmax - level);
-  const rows = groupRows(tiles).map(r => r.map(t => {
+  const glyphs = groupRows(tiles).map(r => r.map(t => {
     const g = extractGlyph(L, w, t, thr, { level, gmax });
-    if (!g) return null;
-    const f = measure(g);
+    return g ? { t, g, f: measure(g) } : null;
+  }));
+  // Brightness is measured against the grid's brightest ink, normally a bold white letter or bracket.
+  // A grid with none ("β" alone, "¬α") has grey ink as its brightest, which would read as white: β
+  // became Q. Thin strokes and a dim grey (≈190, white ≈235) mean no white ink: grey ink is ≈0.79 of white.
+  const cells = glyphs.flat().filter(Boolean);
+  const boldInk = cells.some(c => c.f.hRel >= SHORT && c.f.stroke >= 0.125);
+  const greyScale = !boldInk && gmax < 215 ? GREY_INK : 1;
+  const rows = glyphs.map(r => r.map(cell => {
+    if (!cell) return null;
+    const { t, g, f } = cell;
+    f.bright *= greyScale;
     let sym = classify(f);
     // Not recognised: a blurry screenshot can fill in a thin letter's loop (β's eye). Read the tile
     // again keeping only the glyph's brighter core, which opens the loop back up.
@@ -325,7 +380,7 @@ export function readLogicGrid(data, w, h) {
         const g2 = extractGlyph(L, w, t, level + k * (peak - level), { level, gmax });
         if (!g2) continue;
         const f2 = measure(g2);
-        f2.bright = f.bright; // brightness belongs to the glyph, not to the cut-off
+        f2.bright = f.bright; // brightness belongs to the glyph, not to the cut-off (already scaled)
         const s2 = classify(f2);
         if (s2 !== '?') return { sym: s2, f: f2 };
       }

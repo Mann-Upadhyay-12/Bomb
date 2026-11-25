@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTouchScreen, tapWord } from '../../utils/touch.js';
 
 const SHOWN = {
   // Filled glyphs for both colours; colour comes from CSS (white fill + dark outline)
@@ -12,14 +13,14 @@ export function ChessWorking({
   merged = Array(64).fill(''),
   onSquareClick = () => {}
 }) {
+  const touch = useTouchScreen();
   return (
     <div className="chess-working-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
       <div
         className="chess-board-grid"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(8, 44px)',
-          gridTemplateRows: 'repeat(8, 44px)',
+          gridTemplateColumns: 'repeat(8, minmax(0, 44px))', // 44px squares that shrink to fit a phone
           border: '2px solid var(--line)',
           borderRadius: '8px',
           overflow: 'hidden'
@@ -42,13 +43,14 @@ export function ChessWorking({
                 onSquareClick(i, nextPiece);
               }}
               style={{
-                width: '44px',
-                height: '44px',
+                width: '100%',
+                aspectRatio: '1',
+                minWidth: 0,
                 background: isDarkSquare ? '#769656' : '#eeeed2',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '28px',
+                fontSize: 'min(28px, 7.5vw)',
                 color: isWhitePiece ? '#FFFFFF' : '#12141A',
                 // Solid glyphs + outline so white pieces stay visible on light squares
                 WebkitTextStroke: isWhitePiece ? '1.2px #12141A' : '0',
@@ -57,7 +59,7 @@ export function ChessWorking({
                 cursor: 'pointer',
                 userSelect: 'none'
               }}
-              title={`Square ${String.fromCharCode(97 + c)}${8 - r}: ${piece || 'empty'} (click to cycle)`}
+              title={touch ? undefined : `Square ${String.fromCharCode(97 + c)}${8 - r}: ${piece || 'empty'} (click to cycle)`}
             >
               {symbol}
             </div>
@@ -65,7 +67,7 @@ export function ChessWorking({
         })}
       </div>
       <div style={{ fontSize: '11px', color: 'var(--ink-soft)' }}>
-        Click any square to cycle pieces (Empty → White P N B R Q K → Black p n b r q k → Empty)
+        {tapWord(touch)} any square to cycle pieces (Empty → White P N B R Q K → Black p n b r q k → Empty)
       </div>
     </div>
   );

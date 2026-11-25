@@ -2,6 +2,8 @@
 // The manual maps resistor colours to ohms ("Red = 2 Ω" …). The circuit is solved by nodal analysis
 // with exact fractions, so series, parallel, shorted corners and bridges all work the same way.
 
+// An earlier game's table — the values change every game (read from the legend picture); the tests use it
+import { discordPlain } from '../../utils/discordText.js';
 export const CIRCUIT_DEFAULT_MANUAL = `Red = 2 Ω
 Orange = 6 Ω
 Yellow = 16 Ω
@@ -16,6 +18,7 @@ const ALIAS = { purple: 'violet', grey: 'gray', silver: 'gray' };
 
 /** "Red = 2 Ω …" → { red: '2', … } (values kept as decimal strings for exact maths) */
 export function parseCircuitManual(text) {
+  text = discordPlain(text); // a phone copies Discord's **markup** too
   const out = {};
   const re = /\b([a-z]+)\s*[=:–-]\s*(\d+(?:\.\d+)?)/gi;
   let m;

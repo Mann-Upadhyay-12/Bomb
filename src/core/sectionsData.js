@@ -28,13 +28,24 @@ export const KNOWN_MODULE_NAMES = {
   'The Button': { id: 'button', isImplemented: true, shared: true },
   'Balance': { id: 'balance', isImplemented: true },
   'Circuit': { id: 'circuit', isImplemented: true, shared: true },
+  'Limbo': { id: 'limbo', isImplemented: true },
+  'Astrology': { id: 'astrology', isImplemented: true, shared: true },
+  'Pipes': { id: 'pipes', isImplemented: true },
+  'Hangman': { id: 'hangman', isImplemented: true },
+  'Blackjack': { id: 'blackjack', isImplemented: true },
+  'Batteries': { id: 'batteries', isImplemented: true, shared: true },
+  'Wire Placement': { id: 'wireplace', isImplemented: true, shared: true },
+  'Laundry': { id: 'laundry', isImplemented: true },
+  'Battleship': { id: 'battleship', isImplemented: true },
+  'Bluescreen': { id: 'bluescreen', isImplemented: true }, // needy: answers a crash
+  'Wires': { id: 'wires', isImplemented: true },
+  'Memory': { id: 'memory', isImplemented: true },
+  'Echo': { id: 'echo', isImplemented: true },
 
-  // Modules not yet implemented or KTANE/GTA variants:
-  // "Wires" is standard regular wires (or complex wires as fallback if desired, but as a distinct module it's missing)
-  'Wires': { id: 'wires', isImplemented: false, shared: true },
-  'Memory': { id: 'memory', isImplemented: false, shared: true },
+  // Needy modules with no Helper tab (nothing to look up): the Defuser handles them alone
   'Pressure': { id: 'pressure', isImplemented: false },
-  'Breaker': { id: 'breaker', isImplemented: false }
+  'Breaker': { id: 'breaker', isImplemented: false },
+  'The Eye': { id: 'theeye', isImplemented: false }
 };
 
 // Raw level list as it appears in the game (includes modules with no solver yet)

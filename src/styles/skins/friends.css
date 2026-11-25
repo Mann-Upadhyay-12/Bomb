@@ -1,0 +1,282 @@
+/* The Yuza and Dixie themes (Settings → Theme & colors, and Heist's Theme Colors), named after the site's
+   first two players, in their colours. On while <html data-skin="yuza"> / "dixie". Colours: src/core/skins.js;
+   the background, accent, borders and secondary text are set on <html> there (ThemeContext / heistCore).
+   Both apps load this file, so it styles both: class names only one of them has simply match nothing there.
+   The drawings are original SVG (a gothic night; stars over angular ridges). A background picture replaces them. */
+
+/* the swatch in the theme lists */
+.theme-preset-yuza { border-color: rgba(220,31,60,.55); }
+.theme-preset-dixie { border-color: rgba(255,79,163,.6); }
+.theme-preset-btn.theme-preset-yuza,
+.theme-preset-btn.theme-preset-dixie { font-weight: 700; }
+
+/* ══ Yuza: mainly black, blood red and purple — a vampire night ══ */
+[data-skin="yuza"] {
+  --yz-red: #DC1F3C;
+  --yz-blood: #8B0A1E;
+  --yz-purple: #A66CFF;
+  --yz-lilac: #C79BFF;
+  --yz-bone: #EFE3EA;
+  --yz-font: 'Grenze Gotisch', 'Old English Text MT', Georgia, serif;
+  --shadow-out: 0 0 0 1px rgba(166,108,255,.05), 0 12px 30px rgba(0,0,0,.65);
+  scrollbar-color: var(--yz-blood) var(--paper);
+}
+[data-skin="yuza"] ::selection { background: var(--yz-red); color: #fff; }
+
+/* backdrop: a purple night, a full moon with bats, a cathedral, a graveyard and roses along the bottom */
+[data-skin="yuza"] body { background: var(--paper); }
+[data-skin="yuza"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 320' preserveAspectRatio='xMidYMax slice'%3E%3Cdefs%3E%3Cg id='r'%3E%3Ccircle r='11' fill='%234E0817'/%3E%3Ccircle r='7.5' fill='%236A0C1F'/%3E%3Cpath d='M-2 0a2 2 0 1 1 4 0a4.5 4.5 0 1 1-8 -1.5a7.5 7.5 0 1 1 12 -5' fill='none' stroke='%23A0182F' stroke-width='1.6' stroke-linecap='round'/%3E%3C/g%3E%3Cpath id='l' d='M0 0q9-8 18 0q-9 8-18 0z' fill='%231B0C19'/%3E%3C/defs%3E%3Cpath fill='%23120A16' d='M0 320V250Q120 230 240 244T480 236T720 246T960 232T1200 244T1440 236V320Z'/%3E%3Cg fill='%23060407'%3E%3Cpath d='M330 320V150L340 140L350 40L360 140L370 150V210L445 165L520 210V175L528 168L537 110L546 168L555 175V320Z'/%3E%3Cpath d='M1160 320V180h10v-12h10v12h10v-12h10v12h10v-12h10v12h10V320Z'/%3E%3Cpath d='M1196 182V122L1205 58L1214 122V182Z'/%3E%3Cpath d='M720 320V268a16 16 0 0 1 32 0V320Z'/%3E%3Cpath d='M790 320V276a12 12 0 0 1 24 0V320Z'/%3E%3Cpath d='M870 320V250h-12v-8h12v-14h8v14h12v8h-12V320Z'/%3E%3Cpath d='M940 320V272a14 14 0 0 1 28 0V320Z'/%3E%3Cpath d='M1040 320V266h-9v-6h9v-10h6v10h9v6h-9V320Z'/%3E%3C/g%3E%3Cg fill='%237A1026' opacity='.85'%3E%3Cpath d='M343 232v-24a7 7 0 0 1 14 0v24z'/%3E%3Ccircle cx='445' cy='222' r='10'/%3E%3Cpath d='M392 292v-30a6 6 0 0 1 12 0v30z'/%3E%3Cpath d='M486 292v-30a6 6 0 0 1 12 0v30z'/%3E%3Ccircle cx='1205' cy='140' r='4.5'/%3E%3Cpath d='M1182 250v-18a5 5 0 0 1 10 0v18z'/%3E%3C/g%3E%3Cg fill='none' stroke='%23060407' stroke-linecap='round'%3E%3Cpath stroke-width='10' d='M130 320C128 280 136 250 126 214C120 190 132 170 124 140'/%3E%3Cpath stroke-width='4' d='M127 230C108 214 92 206 66 204M66 204C58 198 54 190 50 178M130 200C150 186 166 178 192 172M192 172C202 164 208 154 210 140M125 165C108 150 104 136 92 120M126 150C138 132 150 124 164 112M92 120C86 110 86 100 80 92M164 112C172 104 174 96 182 90'/%3E%3C/g%3E%3Cpath fill='%23050306' d='M0 320V292Q240 280 480 290T960 288T1440 290V320Z'/%3E%3Cg fill='none' stroke='%232A0E1E' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M0 302C80 286 140 314 220 298S360 286 430 304'/%3E%3Cpath d='M1040 306C1120 288 1200 314 1280 296S1390 288 1440 300'/%3E%3C/g%3E%3Cuse href='%23l' transform='translate(130 300) rotate(-20)'/%3E%3Cuse href='%23l' transform='translate(250 296) rotate(25)'/%3E%3Cuse href='%23l' transform='translate(1160 300) rotate(-30)'/%3E%3Cuse href='%23l' transform='translate(1320 296) rotate(15)'/%3E%3Cuse href='%23r' x='92' y='294'/%3E%3Cuse href='%23r' x='186' y='302'/%3E%3Cuse href='%23r' x='308' y='292'/%3E%3Cuse href='%23r' x='1118' y='298'/%3E%3Cuse href='%23r' x='1248' y='302'/%3E%3Cuse href='%23r' x='1384' y='292'/%3E%3C/svg%3E") no-repeat center bottom / max(100%, 1100px) auto,
+    radial-gradient(70% 50% at 50% 0%, rgba(107,63,160,.22), transparent 70%),
+    radial-gradient(60% 35% at 50% 100%, rgba(139,10,30,.22), transparent 70%);
+}
+/* the moon and its bats: their own layer, dimmed where the page is too narrow to keep them beside it */
+[data-skin="yuza"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 140'%3E%3Cdefs%3E%3Cpath id='b' d='M0 6C5 2 10 2 13 6C15 3 17 2 18 4L20 1L22 4C23 2 25 3 27 6C30 2 35 2 40 6C36 7 33 10 32 13C30 10 27 10 25 12C23 10 21 11 20 13C19 11 17 10 15 12C13 10 10 10 8 13C7 10 4 7 0 6Z'/%3E%3C/defs%3E%3Cuse href='%23b' fill='%2307040A' transform='translate(126 58) scale(1.3)'/%3E%3Cuse href='%23b' fill='%232A1834' transform='translate(40 26) scale(.8) rotate(8)'/%3E%3Cuse href='%23b' fill='%232A1834' transform='translate(196 104) scale(.6) rotate(-12)'/%3E%3C/svg%3E") no-repeat right 30px top 40px / 240px 140px,
+    radial-gradient(circle at calc(100% - 134px) 98px, rgba(170,140,190,.4) 0 8px, transparent 9px),
+    radial-gradient(circle at calc(100% - 104px) 124px, rgba(170,140,190,.32) 0 5px, transparent 6px),
+    radial-gradient(circle at calc(100% - 120px) 110px, #EFE6F4 0 44px, rgba(239,230,244,.2) 46px, rgba(166,108,255,.10) 90px, transparent 170px);
+}
+@media (max-width: 1240px) { [data-skin="yuza"] body::after { opacity: .3; } }
+[data-skin="yuza"] body.bg-picture::before,
+[data-skin="yuza"] body.bg-picture::after { display: none; }
+
+/* ── type ── */
+[data-skin="yuza"] h1 {
+  font-family: var(--yz-font);
+  font-weight: 700;
+  letter-spacing: .01em;
+  color: var(--yz-bone);
+  text-shadow: 0 0 18px rgba(220,31,60,.35), 2px 2px 0 rgba(139,10,30,.7);
+}
+/* a line of blood dripping under the title */
+[data-skin="yuza"] h1::after {
+  content: "";
+  display: block;
+  width: 180px;
+  height: 18px;
+  margin-top: 8px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 18'%3E%3Cpath fill='%23DC1F3C' d='M0 0H180V3Q170 3 168 8Q166 14 164 8Q162 3 150 3H120Q114 3 113 10Q112 17 110 10Q109 3 100 3H60Q54 3 53 7Q52 11 51 7Q50 3 40 3H20Q16 3 15.5 6Q15 9 14.5 6Q14 3 10 3H0Z'/%3E%3C/svg%3E") no-repeat left top / contain;
+}
+[data-skin="yuza"] .eyebrow { color: var(--yz-purple); }
+[data-skin="yuza"] .eyebrow::before { background: var(--yz-red); height: 2px; }
+[data-skin="yuza"] a { color: var(--yz-lilac); }
+[data-skin="yuza"] .stamp-label,
+[data-skin="yuza"] .bg-panel-title,
+[data-skin="yuza"] .setting-sub,
+[data-skin="yuza"] .sidebar-section-title,
+[data-skin="yuza"] .working-panel-title,
+[data-skin="yuza"] .settings-card-title { color: var(--yz-purple); }
+[data-skin="yuza"] .dropzone .dz-title,
+[data-skin="yuza"] .sidebar-title,
+[data-skin="yuza"] .mgroup-manual-name,
+[data-skin="yuza"] .settings-card-title { font-family: var(--yz-font); font-weight: 700; letter-spacing: .02em; }
+[data-skin="yuza"] .dropzone .dz-title { font-size: 24px; }
+[data-skin="yuza"] .sidebar-title { color: var(--yz-red); }
+
+/* ── panels: plum borders with a thin blood-red edge on top ── */
+[data-skin="yuza"] .stamp,
+[data-skin="yuza"] .about-panel,
+[data-skin="yuza"] .working-panel,
+[data-skin="yuza"] .mgroup-card,
+[data-skin="yuza"] .mgroup-manual-bar,
+[data-skin="yuza"] .serial-bar,
+[data-skin="yuza"] .mission-sidebar,
+[data-skin="yuza"] .sidebar-mission-card,
+[data-skin="yuza"] .settings-card,
+[data-skin="yuza"] .quick-dropdowns-bar {
+  box-shadow: inset 0 1px 0 rgba(220,31,60,.35), var(--shadow-out);
+}
+[data-skin="yuza"] .stamp { border-left: 3px solid var(--yz-red); }
+[data-skin="yuza"] .stamp:hover { border-color: var(--yz-purple); border-left-color: var(--yz-red); box-shadow: 0 0 18px rgba(166,108,255,.22); }
+[data-skin="yuza"] .stamp-word { color: var(--yz-red); text-shadow: 0 0 14px rgba(220,31,60,.35); }
+[data-skin="yuza"] .stamp-word .ph { color: var(--line); text-shadow: none; }
+[data-skin="yuza"] .stamp-hint { color: var(--yz-lilac); }
+
+/* ── drop box: purple, a faint red glow; solid underneath so the drawing never shows through its text ── */
+[data-skin="yuza"] .dropzone {
+  border-color: rgba(166,108,255,.5);
+  background: radial-gradient(120% 100% at 50% 0%, rgba(139,10,30,.14), transparent 60%), var(--paper);
+}
+[data-skin="yuza"] .dropzone:focus,
+[data-skin="yuza"] .dropzone.drag {
+  border-color: var(--yz-red);
+  background: radial-gradient(120% 100% at 50% 0%, rgba(220,31,60,.22), transparent 65%), var(--dropzone-active);
+  box-shadow: 0 0 20px rgba(220,31,60,.25);
+}
+[data-skin="yuza"] .dropzone .dz-icon { color: var(--yz-red); }
+[data-skin="yuza"] .manual-paste { border-color: rgba(166,108,255,.5); background: rgba(166,108,255,.04); }
+[data-skin="yuza"] .manual-paste-label { color: var(--yz-lilac); }
+
+/* ── buttons: white on blood red, deep purple on hover ── */
+[data-skin="yuza"] .mode-btn-main.active,
+[data-skin="yuza"] .mode-btn.active,
+[data-skin="yuza"] .settings-tab-btn.active,
+[data-skin="yuza"] .upload-btn { background: var(--yz-red); color: #fff; }
+[data-skin="yuza"] .upload-btn:hover { background: #7B3FE4; color: #fff; }
+[data-skin="yuza"] .report-send { color: #fff; }
+[data-skin="yuza"] .reset-btn:hover,
+[data-skin="yuza"] .bg-btn:hover:not(:disabled),
+[data-skin="yuza"] .copy-btn:hover,
+[data-skin="yuza"] .theme-preset:hover,
+[data-skin="yuza"] .theme-preset-btn:hover,
+[data-skin="yuza"] .mgroup-manual-debug:hover,
+[data-skin="yuza"] .about-btn:hover,
+[data-skin="yuza"] .back-btn:hover { border-color: var(--yz-purple); color: var(--yz-lilac); }
+[data-skin="yuza"] .theme-preset.on { color: var(--yz-red); border-color: var(--yz-red); }
+[data-skin="yuza"] .theme-preset-btn.on { border-color: var(--yz-red); box-shadow: 0 0 0 2px rgba(220,31,60,.25); }
+[data-skin="yuza"] button:focus-visible { outline: 2px solid var(--yz-purple); outline-offset: 2px; }
+
+/* ── fields ── */
+[data-skin="yuza"] input[type=text]:focus,
+[data-skin="yuza"] input[type=number]:focus,
+[data-skin="yuza"] textarea:focus,
+[data-skin="yuza"] select:focus { border-color: var(--yz-purple); outline-color: var(--yz-purple); }
+[data-skin="yuza"] input[type=range],
+[data-skin="yuza"] input[type=checkbox] { accent-color: var(--yz-red); }
+
+
+/* ══ Dixie: light blue first (Dixie's favourite), then hot pink, magenta and white; purple only on the far ridge ══ */
+[data-skin="dixie"] {
+  --dx-blue: #8EC5FF;
+  --dx-pink: #FF4FA3;
+  --dx-magenta: #E0218A;
+  --dx-red: #FF4D6A;
+  --dx-night: #0A0F1E;
+  --dx-font: 'Outfit', 'Segoe UI', system-ui, sans-serif;
+  --shadow-out: 0 10px 28px rgba(0,0,0,.55);
+  scrollbar-color: var(--dx-magenta) var(--paper);
+}
+[data-skin="dixie"] ::selection { background: var(--dx-pink); color: #fff; }
+
+/* backdrop: a deep navy night, crisp stars, one faint pink light beam, angular ridges rimmed in hot pink */
+[data-skin="dixie"] body { background: var(--paper); }
+[data-skin="dixie"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 240' preserveAspectRatio='xMidYMax slice'%3E%3Cpolygon fill='%23111933' points='0,170 90,132 170,160 260,108 350,150 430,124 520,168 610,118 700,150 780,100 880,146 960,122 1050,164 1140,112 1230,150 1320,126 1440,160 1440,240 0,240'/%3E%3Cpolyline fill='none' stroke='%238F7BE0' stroke-opacity='.3' stroke-width='1.5' points='0,170 90,132 170,160 260,108 350,150 430,124 520,168 610,118 700,150 780,100 880,146 960,122 1050,164 1140,112 1230,150 1320,126 1440,160'/%3E%3Cpolygon fill='%230C1228' points='0,200 70,178 150,206 240,166 330,198 410,172 500,210 590,170 680,200 770,162 860,196 950,174 1040,208 1130,168 1220,198 1310,176 1440,202 1440,240 0,240'/%3E%3Cpolyline fill='none' stroke='%23FF4FA3' stroke-opacity='.75' stroke-width='2' stroke-linejoin='miter' points='0,200 70,178 150,206 240,166 330,198 410,172 500,210 590,170 680,200 770,162 860,196 950,174 1040,208 1130,168 1220,198 1310,176 1440,202'/%3E%3C/svg%3E") no-repeat center bottom / max(100%, 1100px) auto,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 360 280'%3E%3Cpath fill='%23FFFFFF' opacity='0.6' d='M40 44L41.2 48.8L46 50L41.2 51.2L40 56L38.8 51.2L34 50L38.8 48.8Z'/%3E%3Cpath fill='%238EC5FF' opacity='0.5' d='M250 73L251.4 78.6L257 80L251.4 81.4L250 87L248.6 81.4L243 80L248.6 78.6Z'/%3E%3Cpath fill='%23FF4FA3' opacity='0.5' d='M200 185L201.0 189.0L205 190L201.0 191.0L200 195L199.0 191.0L195 190L199.0 189.0Z'/%3E%3Cpath fill='%23FFFFFF' opacity='0.45' d='M320 236L320.8 239.2L324 240L320.8 240.8L320 244L319.2 240.8L316 240L319.2 239.2Z'/%3E%3Cg opacity='.55'%3E%3Ccircle cx='70' cy='100' r='1.3' fill='%23FFFFFF'/%3E%3Ccircle cx='120' cy='220' r='1.1' fill='%238EC5FF'/%3E%3Ccircle cx='180' cy='120' r='1.5' fill='%23FFFFFF'/%3E%3Ccircle cx='230' cy='20' r='1' fill='%23FFFFFF'/%3E%3Ccircle cx='280' cy='150' r='1.2' fill='%238EC5FF'/%3E%3Ccircle cx='340' cy='180' r='1.1' fill='%23FFFFFF'/%3E%3Ccircle cx='20' cy='140' r='1' fill='%23FF4FA3'/%3E%3Ccircle cx='160' cy='260' r='1.3' fill='%23FFFFFF'/%3E%3Ccircle cx='330' cy='110' r='1' fill='%238EC5FF'/%3E%3Ccircle cx='110' cy='60' r='1' fill='%23FFFFFF'/%3E%3Ccircle cx='260' cy='260' r='1.1' fill='%23FF4FA3'/%3E%3Ccircle cx='150' cy='30' r='1.4' fill='%23FFFFFF'/%3E%3Ccircle cx='90' cy='160' r='1.2' fill='%238EC5FF'/%3E%3Ccircle cx='300' cy='40' r='1' fill='%23FFFFFF'/%3E%3C/g%3E%3C/svg%3E") repeat left top / 360px 280px,
+    linear-gradient(115deg, transparent 58%, rgba(255,79,163,.07) 58.3%, rgba(255,79,163,.02) 63%, transparent 63.3%),
+    radial-gradient(45% 35% at 8% 0%, rgba(142,197,255,.16), transparent 70%),
+    radial-gradient(70% 30% at 50% 100%, rgba(224,33,138,.2), transparent 70%);
+}
+[data-skin="dixie"] body.bg-picture::before { display: none; }
+
+/* ── type: the title light blue into hot pink, a sharp slanted bar under it ── */
+[data-skin="dixie"] h1 {
+  font-family: var(--dx-font);
+  font-weight: 700;
+  letter-spacing: -.015em;
+  width: fit-content;
+  max-width: 100%;
+  background: linear-gradient(90deg, var(--dx-blue) 45%, var(--dx-pink));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+[data-skin="dixie"] h1::after {
+  content: "";
+  display: block;
+  width: 150px;
+  height: 4px;
+  margin-top: 8px;
+  background: linear-gradient(90deg, var(--dx-blue), var(--dx-pink) 70%, #fff);
+  clip-path: polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%);
+}
+[data-skin="dixie"] .eyebrow { color: var(--dx-pink); font-family: var(--dx-font); font-size: 12px; font-weight: 700; }
+[data-skin="dixie"] .eyebrow::before { background: var(--dx-pink); height: 2px; }
+[data-skin="dixie"] a { color: var(--dx-blue); }
+[data-skin="dixie"] .stamp-label,
+[data-skin="dixie"] .bg-panel-title,
+[data-skin="dixie"] .setting-sub,
+[data-skin="dixie"] .sidebar-section-title,
+[data-skin="dixie"] .working-panel-title,
+[data-skin="dixie"] .settings-card-title { color: var(--dx-pink); }
+[data-skin="dixie"] .dropzone .dz-title,
+[data-skin="dixie"] .sidebar-title,
+[data-skin="dixie"] .mgroup-manual-name,
+[data-skin="dixie"] .settings-card-title { font-family: var(--dx-font); font-weight: 700; }
+[data-skin="dixie"] .dropzone .dz-title { font-size: 20px; color: #fff; }
+[data-skin="dixie"] .sidebar-title { color: var(--dx-blue); }
+
+/* ── panels: a thin hot-pink edge on top (no soft glow), a light blue edge on the answer ── */
+[data-skin="dixie"] .stamp,
+[data-skin="dixie"] .about-panel,
+[data-skin="dixie"] .working-panel,
+[data-skin="dixie"] .mgroup-card,
+[data-skin="dixie"] .mgroup-manual-bar,
+[data-skin="dixie"] .serial-bar,
+[data-skin="dixie"] .mission-sidebar,
+[data-skin="dixie"] .sidebar-mission-card,
+[data-skin="dixie"] .settings-card,
+[data-skin="dixie"] .quick-dropdowns-bar {
+  box-shadow: inset 0 1px 0 rgba(255,79,163,.4), var(--shadow-out);
+}
+[data-skin="dixie"] .stamp { border-left: 3px solid var(--dx-blue); }
+[data-skin="dixie"] .stamp:hover { border-color: var(--dx-pink); border-left-color: var(--dx-blue); box-shadow: inset 0 1px 0 rgba(255,79,163,.4), 0 0 0 1px rgba(255,79,163,.35), var(--shadow-out); }
+[data-skin="dixie"] .stamp-word { color: var(--dx-blue); }
+[data-skin="dixie"] .stamp-word .ph { color: var(--line); }
+[data-skin="dixie"] .stamp-hint { color: var(--dx-pink); }
+
+/* ── drop box: hot-pink edge, red icons, a magenta glow when something is dragged over; solid underneath ── */
+[data-skin="dixie"] .dropzone {
+  border-color: rgba(255,79,163,.55);
+  background: linear-gradient(180deg, rgba(255,79,163,.05), transparent 55%), var(--paper);
+}
+[data-skin="dixie"] .dropzone:focus,
+[data-skin="dixie"] .dropzone.drag {
+  border-color: var(--dx-blue);
+  background: linear-gradient(180deg, rgba(142,197,255,.12), transparent 65%), var(--dropzone-active);
+  box-shadow: 0 0 18px rgba(224,33,138,.35);
+}
+[data-skin="dixie"] .dropzone .dz-icon { color: var(--dx-red); }
+[data-skin="dixie"] .manual-paste { border-color: rgba(255,79,163,.5); background: rgba(255,79,163,.04); }
+[data-skin="dixie"] .manual-paste-label { color: var(--dx-pink); }
+
+/* ── buttons: solid light blue with a hot-pink underline, hot pink on hover ── */
+[data-skin="dixie"] .mode-btn-main.active,
+[data-skin="dixie"] .mode-btn.active,
+[data-skin="dixie"] .settings-tab-btn.active,
+[data-skin="dixie"] .upload-btn {
+  background: var(--dx-blue);
+  color: var(--dx-night);
+  box-shadow: inset 0 -3px 0 var(--dx-pink);
+}
+[data-skin="dixie"] .upload-btn:hover { background: var(--dx-pink); color: var(--dx-night); box-shadow: inset 0 -3px 0 var(--dx-blue); }
+[data-skin="dixie"] .report-send { color: var(--dx-night); }
+[data-skin="dixie"] .reset-btn:hover,
+[data-skin="dixie"] .bg-btn:hover:not(:disabled),
+[data-skin="dixie"] .copy-btn:hover,
+[data-skin="dixie"] .theme-preset:hover,
+[data-skin="dixie"] .theme-preset-btn:hover,
+[data-skin="dixie"] .mgroup-manual-debug:hover,
+[data-skin="dixie"] .about-btn:hover,
+[data-skin="dixie"] .back-btn:hover { border-color: var(--dx-pink); color: var(--dx-pink); }
+[data-skin="dixie"] .theme-preset.on { color: var(--dx-blue); border-color: var(--dx-blue); }
+[data-skin="dixie"] .theme-preset-btn.on { border-color: var(--dx-blue); box-shadow: 0 0 0 2px rgba(142,197,255,.25); }
+[data-skin="dixie"] button:focus-visible { outline: 2px solid var(--dx-pink); outline-offset: 2px; }
+
+/* ── fields ── */
+[data-skin="dixie"] input[type=text]:focus,
+[data-skin="dixie"] input[type=number]:focus,
+[data-skin="dixie"] textarea:focus,
+[data-skin="dixie"] select:focus { border-color: var(--dx-pink); outline-color: var(--dx-pink); }
+[data-skin="dixie"] input[type=range],
+[data-skin="dixie"] input[type=checkbox] { accent-color: var(--dx-pink); }

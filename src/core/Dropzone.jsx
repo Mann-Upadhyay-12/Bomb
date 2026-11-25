@@ -1,12 +1,16 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { extractImageSource, extractImageFromPaste, loadImageSource, warmImageHosts, dragHasLink } from '../utils/image.js';
+import { extractImageSource, extractImageFromPaste, loadImageSource, warmImageHosts, dragHasLink, isInternalDrag } from '../utils/image.js';
 import { useInstance } from './InstanceContext.jsx';
+import { useTouchScreen, phoneTitle } from '../utils/touch.js';
+import { AIR_PASTE_EVENT, pasteInAir } from './airPaste.js';
+import { noteInput } from './report.js';
+
 
 // Phones can't Ctrl+V or drag & drop. This is a real text box: long-press it → Paste works with no
 // clipboard permission (a normal paste event). It takes a pasted image, or an image link (Discord
 // "Copy Link" works — cdn.discordapp.com allows other sites to read its images).
 const URL_RE = /https?:\/\/[^\s<>"']+/i;
-export function PasteBox({ onSource, busy }) {
+export function PasteBox({ onSource, busy, placeholder = 'Long-press → Paste image / link', label = 'Paste an image or image link here' }) {
   const ref = useRef(null);
   const [msg, setMsg] = useState('');
   const clear = () => { if (ref.current) ref.current.innerHTML = ''; };
@@ -85,8 +89,8 @@ export function PasteBox({ onSource, busy }) {
           contentEditable
           suppressContentEditableWarning
           role="textbox"
-          aria-label="Paste an image or image link here"
-          data-placeholder={busy ? 'Loading…' : 'Long-press → Paste image / link'}
+          aria-label={label}
+          data-placeholder={busy ? 'Loading…' : placeholder}
           onPaste={onPaste}
           onInput={onInput}
           onFocus={() => { setMsg(''); warmImageHosts(); }}
@@ -94,6 +98,36 @@ export function PasteBox({ onSource, busy }) {
         <button type="button" className="dz-paste-btn" onClick={fromClipboard} title="Paste from clipboard">📋</button>
       </div>
       {msg && <div className="dz-paste-msg">{msg}</div>}
+    </div>
+  );
+}
+
+/**
+ * Phones: a box for this game's manual picture or its link (pasted "in air" on a computer). What is
+ * pasted goes to the module's picture box, which tells the manual from a module picture as for a
+ * Ctrl+V. `card`: this card's index in a group (null = the selected card, for a bar above the cards).
+ * Hidden with a mouse (the same rule as the paste box in the picture box).
+ */
+export function ManualPasteBox({ what = 'manual', card = null }) {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState('');
+  const onSource = (src) => {
+    setNote('');
+    setBusy(true);
+    const taken = pasteInAir(src, {
+      card,
+      done: (ok) => {
+        setBusy(false);
+        setNote(ok ? '' : 'Could not load that link — it may have expired. Copy the link again.');
+      }
+    });
+    if (!taken) { setBusy(false); setNote('Open the module first, then paste here.'); }
+  };
+  return (
+    <div className="manual-paste">
+      <div className="manual-paste-label">📖 {what} — picture or link</div>
+      <PasteBox onSource={onSource} busy={busy} placeholder="Long-press → Paste link here" label={`Paste the ${what} picture or its link here`} />
+      {note && <div className="dz-paste-msg">{note}</div>}
     </div>
   );
 }
@@ -108,13 +142,25 @@ export function Dropzone({
 }) {
   const fileInputRef = useRef(null);
   const containerRef = useRef(null);
+  const touch = useTouchScreen();
   const [isDrag, setIsDrag] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // every picture this box takes is noted for the ⚑ wrong-answer report (report.js)
+  const took = (src) => noteInput(containerRef.current, src);
+  const takeImage = (img, dataUri, fileBlob) => {
+    took(fileBlob || dataUri);
+    if (onImage) onImage(img, dataUri, fileBlob);
+  };
+  const takeFiles = (files) => {
+    for (const f of Array.from(files || []).slice(-3)) took(f);
+    onFiles(files);
+  };
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files.length) {
       if (multiple && onFiles) {
-        onFiles(e.target.files);
+        takeFiles(e.target.files);
         e.target.value = '';
         return;
       }
@@ -129,27 +175,30 @@ export function Dropzone({
       { type: 'file', file },
       (img, dataUri, fileBlob) => {
         setLoading(false);
-        if (onImage) onImage(img, dataUri, fileBlob);
+        takeImage(img, dataUri, fileBlob);
       },
       () => setLoading(false)
     );
   };
 
   const [loadError, setLoadError] = useState('');
-  const loadFromSource = (srcObj) => {
+  // done(ok): told when the picture has loaded or failed (a manual link box waiting on it)
+  const loadFromSource = (srcObj, done = null) => {
     // a pasted file goes through onFiles when the module takes several at once
-    if (srcObj.type === 'file' && multiple && onFiles) { setLoadError(''); onFiles([srcObj.file]); return; }
+    if (srcObj.type === 'file' && multiple && onFiles) { setLoadError(''); takeFiles([srcObj.file]); if (done) done(true); return; }
     setLoading(srcObj.type === 'url' ? 'url' : true);
     setLoadError('');
     loadImageSource(
       srcObj,
       (img, dataUri, fileBlob) => {
         setLoading(false);
-        if (onImage) onImage(img, dataUri, fileBlob);
+        takeImage(img, dataUri, fileBlob);
+        if (done) done(true);
       },
       () => {
         setLoading(false);
         if (srcObj.type === 'url') setLoadError('Could not load that link — it may have expired. Copy the image again.');
+        if (done) done(false);
       }
     );
   };
@@ -157,7 +206,7 @@ export function Dropzone({
   const handleDataTransfer = (dt) => {
     if (!dt) return;
     if (multiple && onFiles && dt.files && dt.files.length) {
-      onFiles(dt.files);
+      takeFiles(dt.files);
       return;
     }
     const src = extractImageSource(dt);
@@ -187,7 +236,7 @@ export function Dropzone({
       }
       if (files.length) {
         e.preventDefault();
-        onFiles(files);
+        takeFiles(files);
         return;
       }
     }
@@ -206,7 +255,7 @@ export function Dropzone({
     if (!injectNonce) return;
     const src = inst.inject.src || (inst.inject.file ? { type: 'file', file: inst.inject.file } : null);
     if (!src) return;
-    if (src.type === 'file' && multiple && onFiles) onFiles([src.file]);
+    if (src.type === 'file' && multiple && onFiles) takeFiles([src.file]);
     else loadFromSource(src);
   }, [injectNonce]);
 
@@ -221,7 +270,6 @@ export function Dropzone({
   // CRITICAL: Only process events if this specific dropzone is currently visible (not hidden in an inactive mission slot)
   useEffect(() => {
     let dragDepth = 0;
-    let internalDrag = false;
 
     const isVisible = () => {
       const el = containerRef.current;
@@ -232,19 +280,16 @@ export function Dropzone({
       return rect.width > 0 && rect.height > 0;
     };
 
-    const handleDragStart = () => {
-      internalDrag = true;
-    };
-
+    // a drag that started on this page (selected text, a thumbnail) is not a new image
     const isDroppable = (dt) => {
       if (!dt) return false;
       const types = Array.from(dt.types || []);
-      return types.includes('Files') || !internalDrag;
+      return types.includes('Files') || !isInternalDrag(dt);
     };
 
     const inGroup = () => Boolean(latest.current.inst && latest.current.inst.multi);
     const handleWindowDragEnter = (e) => {
-      if (dragHasLink(e.dataTransfer) && !internalDrag) warmImageHosts();
+      if (dragHasLink(e.dataTransfer)) warmImageHosts();
       if (!isVisible() || inGroup()) return;
       if (!isDroppable(e.dataTransfer)) return;
       e.preventDefault();
@@ -272,7 +317,6 @@ export function Dropzone({
 
     const handleWindowDragEnd = () => {
       dragDepth = 0;
-      internalDrag = false;
       setIsDrag(false);
     };
 
@@ -280,11 +324,9 @@ export function Dropzone({
       if (!isVisible() || inGroup()) return;
       if (!isDroppable(e.dataTransfer)) {
         dragDepth = 0;
-        internalDrag = false;
         setIsDrag(false);
         return;
       }
-      internalDrag = false;
       e.preventDefault();
       e.stopImmediatePropagation();
       dragDepth = 0;
@@ -317,10 +359,23 @@ export function Dropzone({
       }
     };
 
+    // A manual pasted into a box instead of "in air" (airPaste.js): taken like a Ctrl+V with nothing
+    // focused — by this card when it was pasted in this card, else by the selected card.
+    const handleAirPaste = (e) => {
+      const d = e.detail;
+      if (!d || d.taken || !isVisible()) return;
+      const inst = latest.current.inst;
+      if (inGroup()) {
+        if (d.card != null ? inst.index !== d.card : !inst.selected) return;
+      }
+      d.taken = true;
+      e.stopImmediatePropagation();
+      latest.current.loadFromSource(d.src, d.done);
+    };
+
     // coming back to the page (from Discord) usually comes right before a Ctrl+V of a link
     const handleWindowFocus = () => { if (isVisible()) warmImageHosts(); };
 
-    document.addEventListener('dragstart', handleDragStart);
     window.addEventListener('focus', handleWindowFocus);
     window.addEventListener('dragenter', handleWindowDragEnter);
     window.addEventListener('dragover', handleWindowDragOver);
@@ -328,9 +383,9 @@ export function Dropzone({
     window.addEventListener('dragend', handleWindowDragEnd);
     window.addEventListener('drop', handleWindowDrop);
     window.addEventListener('paste', handleWindowPaste);
+    window.addEventListener(AIR_PASTE_EVENT, handleAirPaste);
 
     return () => {
-      document.removeEventListener('dragstart', handleDragStart);
       window.removeEventListener('focus', handleWindowFocus);
       window.removeEventListener('dragenter', handleWindowDragEnter);
       window.removeEventListener('dragover', handleWindowDragOver);
@@ -338,6 +393,7 @@ export function Dropzone({
       window.removeEventListener('dragend', handleWindowDragEnd);
       window.removeEventListener('drop', handleWindowDrop);
       window.removeEventListener('paste', handleWindowPaste);
+      window.removeEventListener(AIR_PASTE_EVENT, handleAirPaste);
     };
   }, []);
 
@@ -369,7 +425,8 @@ export function Dropzone({
         onDrop={handleDrop}
       >
         <div className="dz-icon">{loading ? '⏳' : icon}</div>
-        <div className="dz-title">{loading === 'url' ? 'Downloading image…' : loading ? 'Processing image…' : title}</div>
+        <div className="dz-title">{loading === 'url' ? 'Downloading image…' : loading ? 'Processing image…' : touch ? phoneTitle(title) : title}</div>
+        {touch && !loading && <div className="dz-touch">long-press the box → <b>Paste</b> · or tap here to pick a saved picture</div>}
         {loadError && <div className="dz-error">{loadError}</div>}
         <div className="dz-sub">
           {sub || (

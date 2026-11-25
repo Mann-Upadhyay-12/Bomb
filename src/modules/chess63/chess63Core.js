@@ -1,13 +1,14 @@
 // Chess batch solver for the 5-Chess level (6.4), ported from public/chess63.html.
-// The original page's logic, unchanged apart from: element lookups are scoped to `root`,
-// the paste listener / timers / Stockfish worker are removed on destroy(), and pasted
-// links / the phone paste box go through the app's image loader.
-import { extractImageFromPaste, loadImageSource } from '../../utils/image.js';
-import { INLINE_ENGINE, loadStockfishSource } from '../chess/stockfishSource.js';
+// The original page's logic, apart from: element lookups are scoped to `root`, the paste
+// listener / timers are removed on destroy(), pasted links / the phone paste box go through the
+// app's image loader, and every answer comes from Stockfish (the CSV answer book is gone, 2026-11-24)
+// through the engine shared with the Chess module (chess/chessEngine.js).
+import { extractImageFromPaste, extractImageSource, dragHasLink, warmImageHosts, loadImageSource, isInternalDrag } from '../../utils/image.js';
+import { kingInCheck, startEngine as startSharedEngine, stopEngineListener, askEngine as askSharedEngine, cancelSearch, legalSan, SUPERSEDED } from '../chess/chessEngine.js';
 
 /**
  * @param {HTMLElement} root  element holding the Chess63 markup
- * @param {{ onSolved?: (answers) => void }} opts
+ * @param {{ onSolved?: (lines: string[]) => void }} opts  lines = "Ans N : move" for COPY ALL
  * @returns {{ loadSource(src, target?), destroy() }}
  */
 export function mountChess63(root, { onSolved } = {}) {
@@ -19,90 +20,6 @@ export function mountChess63(root, { onSolved } = {}) {
     k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟'
   };
   const CYCLE = ['', 'P', 'N', 'B', 'R', 'Q', 'K', 'p', 'n', 'b', 'r', 'q', 'k'];
-  const ENGINE_URLS = [
-    INLINE_ENGINE,
-    '/stockfish.js',
-    'stockfish.js',
-    'https://cdn.jsdelivr.net/npm/stockfish.js@10.0.2/stockfish.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js'
-  ];
-
-  const CHESS_SOL_CSV = `Ans, Arangment, color
-Bh6+, rn3k1N/p1pn3p/8/3b2B1/3p4/N7/PP4PP/4R1K1,w
-Bxb6, 1k1r1r2/2p5/pp3p2/3qn2p/B4np1/1RQ2N2/PP3B2/5R1K,w
-Bxd5, r5k1/ppp2pp1/4b2p/3n4/2B5/P3rR1P/NPP3P1/5RK1,w
-Bxd5+,r1b2rk1/5p1p/p3pq2/1p1p4/7n/1P5P/P1P1QPB1/1K1R2R1,w
-Bxd5+,r4rk1/1pp3pp/p1n5/3q3P/3p1Rb1/P2P2P1/1PPK2B1/RN6,w
-Bxe7, 1r1q1rk1/p2bbpp1/2ppp2p/8/3Nn2B/2N3R1/PPP2PPP/R2Q2K1,w
-Bxf5, rn3rk1/pp3ppp/4p3/3p1b2/2PP3P/q1PB1N2/P1QB1nP1/1K1R3R,w
-Bxf6, 3rr1k1/1pq2pp1/2p2n1p/p1b1n3/4p2B/P1N1N2P/RPP1QPP1/5RK1,w
-Bxg7, r1b2rk1/pp3ppp/4p3/3p4/2qB4/2P5/P1PQ1PPP/R4RK1,w
-Bxh7+,r4rk1/ppqb2pp/3bpp2/3p2P1/7P/1PnBPQ2/PBP2P2/R3K1NR,w
-Nc6,  2k5/2pq1bb1/p2p3p/B1nP1p2/2PNr1p1/5N2/5PPP/1R1Q2K1,w
-Ne6+, 3k4/1RR3pp/2p5/p1N1p2n/P7/1P5P/2nr4/3r1NK1,w
-Ne7+, 2kr3r/ppp2pp1/3p1n1p/3Np2b/2B1P2q/2PPPP1P/PP2K3/R2Q3R,w
-Nh6+, r2q1rk1/1p2n2p/1npBPb2/5Np1/pP1P4/P7/3Q2PP/4RRK1,w
-Nxc6, 3r3k/ppp3pp/2n5/5p1b/2QN3q/8/PPP1P1P1/3R1BK1,w
-Nxe5, 2r2rk1/pbqn1pbp/1p2p1p1/2p1n3/2P5/1P3NPP/PBQN1PB1/R3R1K1,w
-Nxe5, r6k/ppp2Qpp/3b4/4n1B1/8/2P2N2/Pq3PPP/4R1K1,w
-Nxf5+,2r2r2/2q2pk1/5n1p/p1p1pp2/1pb1P2N/3PQ3/PP3PPP/5RK1,w
-Qb6,  1k1r2r1/1pNq1p2/p7/Q2p3p/4n1p1/1P2P2P/P4PP1/2R2RK1,w
-Qc7,  1r4k1/p2Q1ppp/b3r1q1/B1p5/2P1pnB1/P7/3P1PPP/R4RK1,w
-Qd7,  4r1kb/Q6p/2p1p3/5ppN/1q6/2NnP3/Pr3PPP/2R2RK1,w
-Qd8+, 2r3k1/p4ppp/qp3b2/3Q4/5PN1/P5P1/1Pr4P/3RR1K1,w
-Qe7+, r1b2k1r/5pp1/2qP3p/3p4/p7/1B6/PP2Q1PP/5R1K,w
-Qe7+, r2k1r2/p2p2p1/7n/1Bp5/6p1/2PP1nqp/PP2Q3/R1B1R2K,w
-Qf3,  r1q1r1k1/1b1pnp1p/p2Bp1p1/1p4P1/4B2P/2PQ2P1/P1P5/R4RK1,w
-Qf7+, r1b1r3/7k/p2p2p1/1ppP4/4P1pq/1P1N1Q1P/P7/3B1R1K,w
-Qg5,  3r1rk1/5ppp/b1p2P2/p7/1p1qP3/4QR2/PP4PP/5R1K,w
-Qh3,  r2q1r2/ppp2p2/3p1nk1/4p1p1/2B1P3/2NP2Q1/PPP5/2K4R,w
-Qh5+, r2qk2r/1Np3p1/4p2p/3pn3/P7/2P5/1P3nPP/R1BQ2K1,w
-Qxc2, 2kr3r/pp1q1p2/1Bn4p/4p1p1/4P1n1/3P2P1/2b2NBP/R2Q1RK1,w
-Qxe4, 3rr1k1/ppp2p1p/6p1/7P/4qQ2/P4N2/1bP2PP1/3R1RK1,w
-Qxf5+,2rqr3/1p2N1bk/p1b1Q2p/5p2/8/2Pp4/PP3PPP/R3R1K1,w
-Rd1,  rn1q1rk1/pp3ppp/8/3b4/4p3/4P3/PP1QNPPP/R3KB1R,w
-Rf5,  4rrk1/ppp2ppp/3p2n1/4n1q1/3pP3/1B4BP/PPPNb1P1/R3QRK1,w
-Rg3,  6rk/5prn/2n2B1Q/p3pP1P/Pp1pq3/1P1R4/2P3PK/8,w
-Rxa6, 2k4r/2q3p1/p2rpn1p/8/1RQP4/2P1P3/1P4PP/R5K1,w
-Rxc8+,2r3k1/1b3ppp/8/p1Rp4/n2PpP2/2N1B1P1/5P1P/1r1B2K1,w
-Rxd1, 1kb5/rp6/1p3n1P/1Bp5/2P2P2/2B5/1P6/1K1r3R,w
-Rxe4, 4rrk1/p4pp1/3q3p/2p5/2Ppb1Q1/1P3N1P/P5P1/4RRK1,w
-Rxe5, 5rk1/5p1p/1qp2p2/p2pb2Q/P7/1r5P/4R1P1/4RN1K,w
-Rxg6+,r5kr/pp3p1p/2n3pQ/2p5/4B2R/1PP5/P2P1q2/2K3R1,w
-Rxg7+,3r1rk1/q3bppp/2p1p3/1p2B3/3P4/3n1P2/PPP2P1P/R5RK,w
-Rxg7+,r4rk1/p4pp1/4b2p/2bp4/5B1Q/6R1/PP2qPPP/5RK1,w
-b7+,  k2r3r/2B2ppp/pPP2n2/3p4/3q4/8/P4PPP/R3R1K1,w
-dxe5, 2kr3r/1p3p2/pb1q3p/3pn1pn/B2Pp3/P3Q2P/1PPBNP1P/2KR3R,w
-e5,   r5k1/2p2ppp/1pPp1qn1/2nP4/2N1P3/5PP1/2B1Q2P/r1R2RK1,w
-f3,   r2q1rk1/ppb3pp/4p3/2Pp1p2/3Pb3/2N5/PP1Q1PPP/R1B2RK1,w
-gxh3, r4rk1/p1p2ppp/2pp4/2b3B1/3Nq3/2P4b/PP3PP1/R2Q1RK1,w`;
-
-  const chessSolDb = {};
-  CHESS_SOL_CSV.split('\n').slice(1).forEach(line => {
-    line = line.trim();
-    if (!line) return;
-    const parts = line.split(',').map(s => s.trim());
-    if (parts.length < 2) return;
-    const [ans, arr] = parts;
-    const wRanks = arr.split('/').map(r => {
-      let row = '';
-      for (const ch of r) {
-        if (ch >= '1' && ch <= '8') row += ' '.repeat(+ch);
-        else if (ch >= 'A' && ch <= 'Z') row += ch;
-        else row += ' ';
-      }
-      let res = '', empty = 0;
-      for (const c of row) {
-        if (c === ' ') empty++;
-        else { if (empty) { res += empty; empty = 0; } res += c; }
-      }
-      if (empty) res += empty;
-      return res;
-    }).join('/');
-    chessSolDb[wRanks] = { ans, arr };
-    chessSolDb[arr] = { ans, arr };
-  });
-
   const $ = id => root.querySelector('#' + id);
 
   // Application State for 5 Bombs
@@ -112,7 +29,12 @@ gxh3, r4rk1/p1p2ppp/2pp4/2b3B1/3Nq3/2P4b/PP3PP1/R2Q1RK1,w`;
     merged: Array.from({ length: NB }, () => Array(64).fill(''))
   };
   const conflicts = Array.from({ length: NB }, () => new Set());
-  const answers = Array.from({ length: NB }, () => ({ san: '', uci: '', ok: false }));
+  // Each bomb asks for White's OR Black's move, so both are solved and shown side by side
+  const blankAns = () => ({ san: '', uci: '', ok: false });
+  const answers = { w: Array.from({ length: NB }, blankAns), b: Array.from({ length: NB }, blankAns) };
+  const picked = Array(NB).fill(null); // the side last clicked (copied) for each bomb — COPY ALL uses it
+  const SIDE_NAME = { w: 'White', b: 'Black' };
+  const SIDE_ICON = { w: '♔', b: '♚' };
   let activeBomb = 0;
 
   function copyText(text) {
@@ -465,7 +387,7 @@ gxh3, r4rk1/p1p2ppp/2pp4/2b3B1/3Nq3/2P4b/PP3PP1/R2Q1RK1,w`;
     updateBombCardPill(bombIdx);
   }
 
-  function toFen(bombIdx) {
+  function toFen(bombIdx, side = 'w') {
     const boardState = boards.merged[bombIdx];
     const ranks = [];
     for (let row = 0; row < 8; row++) {
@@ -481,25 +403,7 @@ gxh3, r4rk1/p1p2ppp/2pp4/2b3B1/3Nq3/2P4b/PP3PP1/R2Q1RK1,w`;
       if (empty) text += empty;
       ranks.push(text);
     }
-    return ranks.join('/') + ' w - - 0 1';
-  }
-
-  function getWhiteRanks(bombIdx) {
-    const ranks = [];
-    for (let row = 0; row < 8; row++) {
-      let text = '';
-      let empty = 0;
-      for (let col = 0; col < 8; col++) {
-        const p = boards.white[bombIdx][row * 8 + col] || (boards.merged[bombIdx][row * 8 + col] && boards.merged[bombIdx][row * 8 + col] === boards.merged[bombIdx][row * 8 + col].toUpperCase() ? boards.merged[bombIdx][row * 8 + col] : '');
-        if (!p) { empty++; continue; }
-        if (empty) text += empty;
-        empty = 0;
-        text += p;
-      }
-      if (empty) text += empty;
-      ranks.push(text);
-    }
-    return ranks.join('/');
+    return ranks.join('/') + (side === 'b' ? ' b' : ' w') + ' - - 0 1';
   }
 
   function updateFenInput() {
@@ -507,7 +411,8 @@ gxh3, r4rk1/p1p2ppp/2pp4/2b3B1/3Nq3/2P4b/PP3PP1/R2Q1RK1,w`;
   }
 
   function loadFen() {
-    const placement = $('fen').value.trim().split(/\s+/)[0] || '';
+    const fields = $('fen').value.trim().split(/\s+/);
+    const placement = fields[0] || '';
     const rows = placement.split('/');
     if (rows.length !== 8) return;
     const targetBoard = boards.merged[activeBomb];
@@ -607,17 +512,49 @@ gxh3, r4rk1/p1p2ppp/2pp4/2b3B1/3Nq3/2P4b/PP3PP1/R2Q1RK1,w`;
     updateFenInput();
   }
 
+  // The answer for one bomb when it is clear which side: the one clicked, or the only side that can move
+  function chosenSide(i) {
+    if (picked[i]) return picked[i];
+    const possible = ['w', 'b'].filter(sd => !answers[sd][i].impossible);
+    return possible.length === 1 ? possible[0] : null;
+  }
+  function answerLine(i) {
+    const sd = chosenSide(i);
+    if (sd) return `Ans ${i + 1} : ${answers[sd][i].ok ? answers[sd][i].san : ''}`;
+    const w = answers.w[i], b = answers.b[i];
+    return `Ans ${i + 1} : ${w.ok || b.ok ? `${SIDE_ICON.w} ${w.ok ? w.san : '—'} / ${SIDE_ICON.b} ${b.ok ? b.san : '—'}` : ''}`;
+  }
+  const allLines = () => Array.from({ length: NB }, (_, i) => answerLine(i));
+  const reportLines = () => { if (onSolved) onSolved(allLines()); };
+
   function updateBombCardPill(i) {
     const pill = $(`bpill${i}`);
     if (!pill) return;
-    const ans = answers[i];
-    if (ans.ok) {
-      pill.textContent = `Ans ${i + 1}: ${ans.san}`;
+    const w = answers.w[i], b = answers.b[i];
+    const sd = picked[i];
+    if (sd ? answers[sd][i].ok : (w.ok || b.ok)) {
+      pill.textContent = sd
+        ? `Ans ${i + 1}: ${SIDE_ICON[sd]} ${answers[sd][i].san}`
+        : `Ans ${i + 1}: ${SIDE_ICON.w} ${w.ok ? w.san : '—'} · ${SIDE_ICON.b} ${b.ok ? b.san : '—'}`;
       pill.classList.remove('bad');
     } else {
       pill.textContent = `Ans ${i + 1}: —`;
       pill.classList.add('bad');
     }
+  }
+
+  // one half of an answer row: that side's best move (click = copy it and use it for COPY ALL)
+  function sideHtml(i, sd) {
+    const a = answers[sd][i];
+    const body = a.ok
+      ? `<span class="aside-move">${a.san}</span><span class="aside-uci">${a.uci}</span>`
+      : `<span class="aside-none">${a.san && a.san.startsWith('⚠') ? a.san : '(not solved yet)'}</span>`;
+    return `
+      <div class="aside ${sd}${picked[i] === sd ? ' picked' : ''}${a.ok ? '' : ' empty'}" id="aside${sd}${i}" role="button" tabindex="0" title="Click to copy">
+        <div class="aside-lab"><span>${SIDE_ICON[sd]} ${SIDE_NAME[sd].toUpperCase()} TO MOVE</span><span class="aside-hint">${picked[i] === sd ? 'COPIED ✓' : a.ok ? 'CLICK TO COPY' : ''}</span></div>
+        <div class="aside-ans">${body}</div>
+        ${a.uci ? `<div class="aside-foot"><span></span><button class="ghost aside-ucibtn" id="uci${sd}${i}">Copy UCI</button></div>` : ''}
+      </div>`;
   }
 
   function buildAnswersSummary() {
@@ -626,17 +563,24 @@ gxh3, r4rk1/p1p2ppp/2pp4/2b3B1/3Nq3/2P4b/PP3PP1/R2Q1RK1,w`;
     for (let i = 0; i < NB; i++) {
       const row = document.createElement('div');
       row.className = 'arow';
-      const ans = answers[i];
-      row.innerHTML = `
-        <span class="alab">Ans ${i + 1} :</span>
-        <span class="atxt ${ans.ok ? '' : 'none'}">${ans.ok ? `${ans.san} (${ans.uci})` : '(not solved yet)'}${ans.book ? `<span class="c63-book">CSV${ans.engine === undefined ? '' : ans.agrees ? ' · engine agrees ✓' : ans.engine ? ` · engine: ${ans.engine}` : ''}</span>` : ''}</span>
-        <div class="abtn-group">
-          <button class="ghost" id="copySan${i}">Copy SAN</button>
-          <button class="ghost" id="copyUci${i}">Copy UCI</button>
-        </div>
-      `;
-      row.querySelector(`#copySan${i}`).onclick = () => { if (ans.san) { copyText(ans.san); toast(`Copied Ans ${i + 1} SAN!`); } };
-      row.querySelector(`#copyUci${i}`).onclick = () => { if (ans.uci) { copyText(ans.uci); toast(`Copied Ans ${i + 1} UCI!`); } };
+      row.innerHTML = `<span class="alab">Ans ${i + 1} :</span><div class="aduo">${sideHtml(i, 'w')}${sideHtml(i, 'b')}</div>`;
+      for (const sd of ['w', 'b']) {
+        const a = answers[sd][i];
+        const half = row.querySelector(`#aside${sd}${i}`);
+        const take = () => {
+          if (!a.ok) return;
+          copyText(a.san);
+          picked[i] = sd;
+          toast(`Copied Ans ${i + 1}: ${SIDE_NAME[sd]} ${a.san}`);
+          updateBombCardPill(i);
+          buildAnswersSummary();
+          reportLines();
+        };
+        half.onclick = take;
+        half.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); take(); } };
+        const ub = row.querySelector(`#uci${sd}${i}`);
+        if (ub) ub.onclick = e => { e.stopPropagation(); copyText(a.uci); toast(`Copied Ans ${i + 1} UCI (${SIDE_NAME[sd]})`); };
+      }
       list.appendChild(row);
     }
   }
@@ -648,75 +592,39 @@ gxh3, r4rk1/p1p2ppp/2pp4/2b3B1/3Nq3/2P4b/PP3PP1/R2Q1RK1,w`;
     buildAnswersSummary();
   }
 
-  // --- Stockfish Engine Integration ---
-  let worker = null;
-  let engineReady = null;
+  // --- Stockfish (shared with the Chess module) ---
+  const onEngineStatus = (text) => { if (!destroyed) $('engineStatus').textContent = text; };
+  const startEngine = () => startSharedEngine(onEngineStatus);
+  const OWNER = 'chess63';
+  const askEngine = (fen, ms, onInfo) => askSharedEngine(fen, ms, onInfo, OWNER, { settle: true });
+  // Each ANALYZE ALL run has a number; a newer run (another batch picture, or the button) replaces
+  // the older one, which stops writing answers
+  let runId = 0;
 
-  function startEngine() {
-    if (engineReady) return engineReady;
-    engineReady = (async () => {
-      $('engineStatus').textContent = 'Loading Stockfish engine…';
-      for (const url of ENGINE_URLS) {
-        try {
-          const source = url === INLINE_ENGINE ? await loadStockfishSource() : await (await fetch(url)).text();
-          const blobUrl = URL.createObjectURL(new Blob([source], { type: 'application/javascript' }));
-          worker = new Worker(blobUrl);
-          await new Promise(resolve => {
-            worker.onmessage = event => {
-              if (String(event.data).includes('readyok')) resolve();
-            };
-            worker.postMessage('uci');
-            worker.postMessage('isready');
-          });
-          $('engineStatus').textContent = 'Stockfish ready ✓';
-          worker.postMessage('setoption name Hash value 64');
-          return true;
-        } catch (error) {}
-      }
-      $('engineStatus').textContent = '⚠ Could not load Stockfish (check internet connection)';
-      return false;
-    })();
-    return engineReady;
+  async function analyzeBomb(i, thinkMs, run) {
+    for (const sd of ['w', 'b']) {
+      if (run !== runId || destroyed) return;
+      await analyzeSide(i, sd, thinkMs, run);
+    }
   }
 
-  function askEngine(fen, milliseconds, onInfo) {
-    return new Promise(resolve => {
-      let lastMove = '', stable = 0, done = false;
-      const finish = mv => { if (!done) { done = true; resolve(mv); } };
-      const start = () => {
-        worker.onmessage = event => {
-          const line = String(event.data);
-          if (line.startsWith('info') && line.includes(' score ')) {
-            const depth = +((line.match(/ depth (\d+)/) || [])[1] || 0);
-            const cp    = (line.match(/score cp (-?\d+)/) || [])[1] || '';
-            const mate  = (line.match(/score mate (-?\d+)/) || [])[1] || '';
-            const pv    = (line.match(/ pv (\S+)/) || [])[1] || '';
-            if (onInfo) onInfo({ depth, cp, mate });
-            if (pv) { stable = pv === lastMove ? stable + 1 : 0; lastMove = pv; }
-            if (mate && +mate > 0 && depth >= Math.min(12, +mate * 2 + 2)) worker.postMessage('stop'); // forced mate found
-            else if (depth >= 14 && stable >= 6) worker.postMessage('stop');                           // best move has settled
-          }
-          if (line.startsWith('bestmove')) finish(line.split(' ')[1]);
-        };
-        worker.postMessage('ucinewgame');
-        worker.postMessage('position fen ' + fen);
-        worker.postMessage('go movetime ' + milliseconds);
-      };
-      // flush any previous search first so its stale 'bestmove' can't answer this one
-      worker.onmessage = e => { if (String(e.data).includes('readyok')) start(); };
-      worker.postMessage('stop');
-      worker.postMessage('isready');
-    });
-  }
-
-  async function analyzeBomb(i, thinkMs) {
-    const fen = toFen(i);
+  async function analyzeSide(i, side, thinkMs, run) {
+    const fen = toFen(i, side);
     const bState = boards.merged[i];
     const whiteKings = bState.filter(p => p === 'K').length;
     const blackKings = bState.filter(p => p === 'k').length;
 
     if (whiteKings !== 1 || blackKings !== 1) {
-      answers[i] = { san: '⚠ King missing', uci: '', ok: false };
+      answers[side][i] = { san: '⚠ King missing', uci: '', ok: false };
+      updateBombCardPill(i);
+      buildAnswersSummary();
+      return;
+    }
+
+    // the side not to move can't be in check
+    const other = side === 'w' ? 'b' : 'w';
+    if (kingInCheck(bState, other)) {
+      answers[side][i] = { san: `⚠ not possible — ${SIDE_NAME[other]} is in check`, uci: '', ok: false, impossible: true };
       updateBombCardPill(i);
       buildAnswersSummary();
       return;
@@ -725,7 +633,7 @@ gxh3, r4rk1/p1p2ppp/2pp4/2b3B1/3Nq3/2P4b/PP3PP1/R2Q1RK1,w`;
     const cnt = p => bState.filter(x => x === p).length;
     const badPawn = bState.some((p, idx) => (p === 'P' || p === 'p') && (idx < 8 || idx >= 56));
     if (cnt('P') > 8 || cnt('p') > 8 || badPawn) {
-      answers[i] = { san: '⚠ Bad Pawns', uci: '', ok: false };
+      answers[side][i] = { san: '⚠ Bad Pawns', uci: '', ok: false };
       updateBombCardPill(i);
       buildAnswersSummary();
       return;
@@ -734,74 +642,38 @@ gxh3, r4rk1/p1p2ppp/2pp4/2b3B1/3Nq3/2P4b/PP3PP1/R2Q1RK1,w`;
     if (typeof window.Chess !== 'undefined') {
       const check = new window.Chess().validate_fen(fen);
       if (!check.valid) {
-        answers[i] = { san: '⚠ Invalid FEN', uci: '', ok: false };
+        answers[side][i] = { san: '⚠ Invalid FEN', uci: '', ok: false };
         updateBombCardPill(i);
         buildAnswersSummary();
         return;
       }
     }
 
-    // Check pre-configured solutions from chess_sol.csv first
-    const wRanks = getWhiteRanks(i);
-    const placement = (fen.split(' ')[0] || '').trim();
-    const csvMatch = chessSolDb[wRanks] || chessSolDb[placement];
-    if (csvMatch) {
-      const san = csvMatch.ans;
-      let uci = '';
-      if (typeof window.Chess !== 'undefined') {
-        try {
-          const game = new window.Chess(fen);
-          const m = game.move(san);
-          if (m) uci = m.from + m.to + (m.promotion || '');
-        } catch (e) {}
-      }
-      answers[i] = { san, uci, ok: true, book: true };
-      updateBombCardPill(i);
-      buildAnswersSummary();
-      // The CSV answer stays the answer (it's right ~99% of the time for that White position);
-      // Stockfish still looks at the position afterwards, as a second opinion shown next to it.
-      const engUci = await askEngine(fen, thinkMs, ({ depth, cp, mate }) => {
-        $('engineStatus').textContent = `Bomb ${i + 1} (book) checking with Stockfish… depth ${depth} · ` + (mate ? `mate in ${mate}` : `eval ${(Number(cp) / 100).toFixed(2)}`);
-      });
-      let engSan = engUci;
-      if (typeof window.Chess !== 'undefined' && engUci) {
-        try {
-          const g2 = new window.Chess(fen);
-          const mv = g2.move({ from: engUci.slice(0, 2), to: engUci.slice(2, 4), promotion: engUci[4] });
-          if (mv) engSan = mv.san;
-        } catch (e) {}
-      }
-      answers[i] = { ...answers[i], engine: engSan || engUci || '', agrees: Boolean(engUci) && (engUci === uci || engSan === san) };
-      buildAnswersSummary();
-      return;
-    }
-
     const uci = await askEngine(fen, thinkMs, ({ depth, cp, mate }) => {
-      $('engineStatus').textContent = `Bomb ${i + 1} thinking… depth ${depth} · ` + (mate ? `mate in ${mate}` : `eval ${(Number(cp) / 100).toFixed(2)}`);
+      if (run === runId) $('engineStatus').textContent = `Bomb ${i + 1} (${SIDE_NAME[side]} to move) thinking… depth ${depth} · ` + (mate ? `mate in ${mate}` : `eval ${(Number(cp) / 100).toFixed(2)}`);
     });
-    let san = uci;
-    if (typeof window.Chess !== 'undefined' && uci) {
-      try {
-        const game = new window.Chess(fen);
-        const move = game.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
-        if (move) san = move.san;
-      } catch(e) {}
-    }
-
-    answers[i] = { san: san || uci, uci: uci || '', ok: true };
+    if (uci === SUPERSEDED || run !== runId || destroyed) return; // a newer run took over
+    // the move must be legal on this board (an answer from another search is never shown)
+    const san = uci && uci !== '(none)' ? legalSan(fen, uci) : null;
+    answers[side][i] = san
+      ? { san, uci, ok: true }
+      : { san: uci === null ? '⚠ Engine unavailable / timed out' : uci === '(none)' ? '⚠ No legal move' : '⚠ Engine answer did not fit — ANALYZE again', uci: '', ok: false };
     updateBombCardPill(i);
     buildAnswersSummary();
   }
 
   async function analyzeAll() {
+    const run = ++runId;
     if (!(await startEngine())) return;
     const thinkMs = Number($('thinkTime').value);
     for (let i = 0; i < NB; i++) {
+      if (run !== runId || destroyed) return;
       $('engineStatus').textContent = `Analyzing Bomb ${i + 1} / ${NB}…`;
-      await analyzeBomb(i, thinkMs);
+      await analyzeBomb(i, thinkMs, run);
     }
-    $('engineStatus').textContent = 'Done! Solved all 5 bombs ✓';
-    if (onSolved) onSolved(answers.map(a => ({ ...a })));
+    if (run !== runId || destroyed) return;
+    $('engineStatus').textContent = 'Done! Solved all 5 bombs for White and Black ✓ — click the side each bomb asks for';
+    reportLines();
   }
 
   // --- Event Handlers & Drag & Drop ---
@@ -815,18 +687,58 @@ gxh3, r4rk1/p1p2ppp/2pp4/2b3B1/3Nq3/2P4b/PP3PP1/R2Q1RK1,w`;
     e.target.value = '';
   });
 
+  // Drag & drop. A screenshot dragged from Discord is a link, not a file, so both go through the
+  // app's image loader; a drop anywhere else on the page is routed by its shape like a paste.
+  const visible = () => !destroyed && root.offsetParent !== null;
+  // dragging something that is already on this page (a thumbnail, selected text): not a new image
+  const droppable = dt => Boolean(dt) && (Array.from(dt.types || []).includes('Files') || !isInternalDrag(dt));
+  const dropStatus = text => { const el = $('batchStatus'); if (el) el.textContent = text; };
+  const dropSource = (dt, target) => {
+    const src = extractImageSource(dt);
+    if (!src) { dropStatus('Drop an image file or an image link.'); return; }
+    if (src.type === 'url') dropStatus('Downloading image…');
+    loadSource(src, target);
+  };
   const setupDropzone = (el, targetColor) => {
-    el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('active'); });
-    el.addEventListener('dragleave', () => el.classList.remove('active'));
-    el.addEventListener('drop', async e => {
+    const on = e => {
+      if (!droppable(e.dataTransfer)) return;
       e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+      el.classList.add('active');
+    };
+    el.addEventListener('dragenter', on);
+    el.addEventListener('dragover', on);
+    el.addEventListener('dragleave', e => { if (!el.contains(e.relatedTarget)) el.classList.remove('active'); });
+    el.addEventListener('drop', e => {
       el.classList.remove('active');
-      const file = e.dataTransfer.files[0];
-      if (file) routeImage(await loadImg(file), targetColor);
+      if (!droppable(e.dataTransfer)) return;
+      e.preventDefault(); // also tells the page-wide handler below that this drop is taken
+      dropSource(e.dataTransfer, targetColor);
     });
   };
   setupDropzone($('zoneWhite'), 'white');
   setupDropzone($('zoneBlack'), 'black');
+
+  const onWinEnter = e => {
+    if (!visible()) return;
+    if (dragHasLink(e.dataTransfer)) warmImageHosts(); // start the Discord connection early
+    if (droppable(e.dataTransfer)) e.preventDefault();
+  };
+  const onWinOver = e => {
+    if (!visible() || !droppable(e.dataTransfer)) return;
+    e.preventDefault(); // without this the browser opens the dropped image instead
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  };
+  const onWinDrop = e => {
+    if (!visible()) return;
+    const ok = droppable(e.dataTransfer);
+    if (!ok || e.defaultPrevented) return;
+    e.preventDefault();
+    dropSource(e.dataTransfer); // tall strip → Black, otherwise White
+  };
+  window.addEventListener('dragenter', onWinEnter);
+  window.addEventListener('dragover', onWinOver);
+  window.addEventListener('drop', onWinDrop);
 
   // Ctrl+V anywhere while this view is on screen (outside text boxes): image, or an image link
   const onPaste = e => {
@@ -855,9 +767,8 @@ gxh3, r4rk1/p1p2ppp/2pp4/2b3B1/3Nq3/2P4b/PP3PP1/R2Q1RK1,w`;
 
   $('analyzeAll').addEventListener('click', analyzeAll);
   $('copyAll').addEventListener('click', () => {
-    const allText = answers.map((a, idx) => `Ans ${idx + 1} : ${a.ok ? a.san : ''}`).join('\n');
-    copyText(allText);
-    toast('Copied all 5 answers!');
+    copyText(allLines().join('\n'));
+    toast(picked.every(Boolean) ? 'Copied all 5 answers!' : 'Copied — bombs with no side clicked show both moves');
   });
 
   // Initialization
@@ -878,9 +789,13 @@ gxh3, r4rk1/p1p2ppp/2pp4/2b3B1/3Nq3/2P4b/PP3PP1/R2Q1RK1,w`;
     destroy() {
       destroyed = true;
       document.removeEventListener('paste', onPaste, true);
+      window.removeEventListener('dragenter', onWinEnter);
+      window.removeEventListener('dragover', onWinOver);
+      window.removeEventListener('drop', onWinDrop);
       clearTimeout(batchTimer);
       try { (window.cancelIdleCallback || clearTimeout)(idle); } catch (e) {}
-      if (worker) { try { worker.terminate(); } catch (e) {} }
+      cancelSearch(OWNER); // the engine is shared: stop this solver's search, keep the worker
+      stopEngineListener(onEngineStatus);
     }
   };
 }

@@ -20,6 +20,13 @@ export function setSharedSetting(key, value) {
   (listeners.get(key) || []).forEach(l => l());
 }
 
+/** Forgets a saved setting: every window shows its default again (New game). */
+export function resetSharedSetting(key) {
+  values.delete(key);
+  try { localStorage.removeItem(key); } catch (e) {}
+  (listeners.get(key) || []).forEach(l => l());
+}
+
 export function useSharedSetting(key, fallback) {
   const subscribe = useCallback((l) => {
     if (!listeners.has(key)) listeners.set(key, new Set());
@@ -35,6 +42,19 @@ export function useSharedSetting(key, fallback) {
 // Button window on the bomb uses. `initial` is used the first time a key is read.
 const memValues = new Map();
 const memListeners = new Map();
+const memInitials = new Map(); // each key's `initial`, so New game can put it back
+
+/** Puts in-memory state back to its first value (New game). */
+export function resetSharedState(key) {
+  if (memInitials.has(key)) {
+    const initial = memInitials.get(key);
+    memValues.set(key, typeof initial === 'function' ? initial() : initial);
+  } else memValues.delete(key);
+  (memListeners.get(key) || []).forEach(l => l());
+}
+
+/** In-memory state's value now, outside React (the ⚑ report); undefined when nothing used it yet. */
+export const peekSharedState = (key) => memValues.get(key);
 
 export function useSharedState(key, initial) {
   const subscribe = useCallback((l) => {
@@ -42,6 +62,7 @@ export function useSharedState(key, initial) {
     memListeners.get(key).add(l);
     return () => memListeners.get(key).delete(l);
   }, [key]);
+  if (!memInitials.has(key)) memInitials.set(key, initial);
   if (!memValues.has(key)) memValues.set(key, typeof initial === 'function' ? initial() : initial);
   const value = useSyncExternalStore(subscribe, () => memValues.get(key));
   const set = useCallback((next) => {

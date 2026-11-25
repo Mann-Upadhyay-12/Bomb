@@ -1,0 +1,114 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Captcha labeler</title></head>
+<body>
+<h3>Captcha labeler</h3>
+<p>Drag captcha images onto this page (files, or straight from Discord), press Ctrl+V, or
+<input type="file" id="pick" accept="image/*" multiple>.
+Check the label, fix it, press Enter or Save. Dataset: <b id="total">__TOTAL__</b> images.
+Allowed characters (case matters): <code>__CHARSET__</code></p>
+
+<p id="queue"></p>
+<img id="img" alt="">
+<p id="info"></p>
+<p>
+  <input id="label" size="12" autocomplete="off" spellcheck="false">
+  <button id="save">Save</button>
+  <button id="skip">Skip</button>
+</p>
+<p id="msg"></p>
+<ul id="log"></ul>
+
+<script>
+const $ = id => document.getElementById(id);
+const queue = [];   // File objects waiting
+let cur = null;     // { file, pred }
+
+function addFiles(files) {
+  for (const f of files) queue.push(f);
+  if (!cur) next(); else showQueue();
+}
+
+// Discord (and most sites) give a dragged image as a LINK, not a file: find it and let the server download it
+function findUrl(dt) {
+  const uri = (dt.getData('text/uri-list') || '').split(/[\r\n]+/).map(s => s.trim()).find(s => /^https?:/i.test(s));
+  if (uri) return uri;
+  const html = dt.getData('text/html') || '';
+  const m = html.match(/<img[^>]+src=["']([^"']+)["']/i) || html.match(/<a[^>]+href=["'](https?:[^"']+)["']/i);
+  if (m) return m[1].replace(/&amp;/g, '&');
+  const text = (dt.getData('text/plain') || '').trim();
+  return /^https?:\/\//i.test(text) ? text : null;
+}
+
+async function addUrl(url) {
+  if (/discord(app)?\.com\/channels\//i.test(url)) { $('msg').textContent = '⚠ that is a message link — drag the image itself'; return; }
+  $('msg').textContent = 'downloading ' + url.slice(0, 80) + '…';
+  const r = await fetch('/fetch', { method: 'POST', body: url });
+  if (r.status === 404) { $('msg').textContent = '⚠ the running label_captcha.py is an older version without link downloads — stop it (Ctrl+C) and start it again'; return; }
+  if (!r.ok) { $('msg').textContent = '⚠ ' + ((await r.json()).error || 'download failed'); return; }
+  $('msg').textContent = '';
+  addFiles([new File([await r.blob()], 'dropped.png', { type: 'image/png' })]);
+}
+
+function takeTransfer(dt) {
+  const files = [...(dt.files || [])].filter(f => !f.type || f.type.startsWith('image/'));
+  if (files.length) { addFiles(files); return true; }
+  const url = findUrl(dt);
+  if (url) { addUrl(url); return true; }
+  $('msg').textContent = '⚠ no image in what was dropped/pasted (got: ' + ([...dt.types].join(', ') || 'nothing') + ')';
+  return false;
+}
+
+function showQueue() { $('queue').textContent = queue.length ? `${queue.length} more waiting` : ''; }
+
+async function next() {
+  cur = null;
+  $('img').src = ''; $('info').textContent = ''; $('label').value = ''; $('label').placeholder = '';
+  showQueue();
+  const file = queue.shift();
+  if (!file) { $('info').textContent = 'Drop or paste a captcha.'; return; }
+  $('img').src = URL.createObjectURL(file);
+  $('info').textContent = 'reading…';
+  const pred = await (await fetch('/predict', { method: 'POST', body: file })).json();
+  cur = { file, pred };
+  showQueue();
+  if (!pred.ok) { $('info').textContent = '⚠ ' + pred.error; return; }
+  let t = `${pred.n} characters · model: ${pred.guess} · score ${pred.score} (threshold ${pred.thresh}, ${Math.round(pred.agree * 5)}/5 reads agree)`;
+  if (pred.confident) { $('label').value = pred.guess; t += ' · CONFIDENT — check it'; }
+  else { $('label').placeholder = pred.guess; t += ' · LOW CONFIDENCE — type the label'; }
+  if (pred.duplicate) t += ` · ⚠ already in the dataset as ${pred.duplicate}`;
+  $('info').textContent = t;
+  $('label').focus(); $('label').select();
+}
+
+async function save() {
+  if (!cur || !cur.pred.ok) return;
+  const label = $('label').value.trim();
+  const r = await (await fetch('/save?label=' + encodeURIComponent(label), { method: 'POST', body: cur.file })).json();
+  if (!r.ok) { $('msg').textContent = '⚠ ' + r.error; return; }
+  $('msg').textContent = '';
+  $('total').textContent = r.total;
+  const fixed = label !== cur.pred.guess ? ` (model said ${cur.pred.guess})` : '';
+  const li = document.createElement('li'); li.textContent = `saved ${r.saved}${fixed}`;
+  $('log').prepend(li);
+  next();
+}
+
+$('save').onclick = save;
+$('skip').onclick = () => { $('msg').textContent = ''; next(); };
+$('label').addEventListener('keydown', e => { if (e.key === 'Enter') save(); });
+window.addEventListener('dragover', e => { e.preventDefault(); $('msg').textContent = 'drop it!'; });
+window.addEventListener('dragleave', e => { if (!e.relatedTarget) $('msg').textContent = ''; });
+window.addEventListener('drop', e => { e.preventDefault(); $('msg').textContent = ''; takeTransfer(e.dataTransfer); });
+window.addEventListener('paste', e => {
+  if (e.target === $('label')) {   // typing a label: only take over when an image or an image link is pasted
+    const text = (e.clipboardData.getData('text/plain') || '').trim();
+    if (![...e.clipboardData.items].some(i => i.kind === 'file') && !/^https?:\/\//i.test(text)) return;
+  }
+  e.preventDefault(); takeTransfer(e.clipboardData);
+});
+$('pick').onchange = e => { addFiles([...e.target.files]); e.target.value = ''; };
+next();
+</script>
+</body>
+</html>

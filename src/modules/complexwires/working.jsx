@@ -65,8 +65,8 @@ export function ComplexWiresWorking({
                       type="button"
                       onClick={() => onWireColor(i, c)}
                       style={{
-                        width: '24px',
-                        height: '24px',
+                        width: 'var(--cw-swatch, 24px)', // bigger on a phone (touch.css)
+                        height: 'var(--cw-swatch, 24px)',
                         borderRadius: '4px',
                         background: bg,
                         border: isSel ? '2px solid var(--brass)' : '1px solid var(--line)',
