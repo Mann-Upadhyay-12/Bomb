@@ -8,6 +8,7 @@ import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
 import { useAnswerGate } from '../../core/useAnswerGate.js';
+import { useBombSerial, serialLastDigit } from '../../core/bombSerial.js';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
 import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
@@ -16,6 +17,7 @@ import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
 import { ComplexWiresWorking } from './working.jsx';
 import { Dropzone } from '../../core/Dropzone.jsx';
 import { cwReadDiagramImage, cwReadWiresImage } from './complexwiresVision.js';
+import { useCardState } from '../../core/room/useCardState.js';
 
 const CW_PRESET_NAMES = { preset1: 'Preset 1', preset2: 'Preset 2', preset3: 'Preset 3', preset4: 'Preset 4' };
 const blankWires = () => Array.from({ length: 6 }, () => ({ active: true, color: 'white', star: false, led: false }));
@@ -26,11 +28,14 @@ export function ComplexWiresModule({ isActive = true }) {
   const { copy } = useClipboard();
   const answerChanged = useAnswerGate();
 
-  const [rules, setRules] = useState(() => ({ ...CW_PRESETS.preset1 }));
-  const [edge, setEdge] = useState({ even: false, needy: false, gte5: true });
-  const [wires, setWires] = useState(blankWires);
+  // in a room, the edge conditions, the rules and the wires are the room's (core/room/useCardState.js):
+  // a tap here shows on every teammate's Complex Wires. What a picture reads stays in each app (every
+  // app reads the same mirrored picture), and EVEN/ODD follows the shared serial in each app
+  const [rules, setRules] = useCardState('rules', () => ({ ...CW_PRESETS.preset1 }));
+  const [edge, setEdge] = useCardState('edge', { even: false, needy: false, gte5: true });
+  const [wires, setWires] = useCardState('wires', blankWires);
   const [unsure, setUnsure] = useState(() => new Set());
-  const [serial, setSerial] = useState('');
+  const [serial, setSerial] = useBombSerial(); // game-wide, also in the top bar
   const [readStatus, setReadStatus] = useState({ text: '', ok: null });
   const [thumbs, setThumbs] = useState({ diagram: '', wires: '' });
 
@@ -43,12 +48,12 @@ export function ComplexWiresModule({ isActive = true }) {
     setReadStatus({ text: `Loaded ${CW_PRESET_NAMES[k]}.`, ok: true });
   };
 
-  // Typing the serial number sets EVEN/ODD from its last digit
-  const handleSerial = (val) => {
-    setSerial(val);
-    const digits = val.match(/\d/g);
-    if (digits) setEdge(prev => ({ ...prev, even: Number(digits[digits.length - 1]) % 2 === 0 }));
-  };
+  // The serial (here or in the top bar) sets EVEN/ODD from its last digit
+  const lastDigit = serialLastDigit(serial);
+  React.useEffect(() => {
+    if (lastDigit !== null) setEdge(prev => ({ ...prev, even: lastDigit % 2 === 0 }));
+  }, [lastDigit]);
+  const handleSerial = (val) => setSerial(val);
 
   // Wide image = Venn rule diagram, tall/square = wires panel (same heuristic as the original)
   const handleImage = (img, dataUri, fileBlob) => {
@@ -191,7 +196,7 @@ export function ComplexWiresModule({ isActive = true }) {
           }
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={handleClear}>
+              <button className="reset-btn" type="button" onClick={handleClear} data-card-clear>
                 clear
               </button>
               <button

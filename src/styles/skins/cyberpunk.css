@@ -1,0 +1,166 @@
+/* Cyberpunk 2077 theme (Settings → Theme & colors). On while <html data-skin="cyberpunk">.
+   Colours: src/core/cyberpunk.js (where each one comes from). The background, accent, borders and
+   secondary text are set on <html> by ThemeContext; this file adds the game's look on top:
+   Rajdhani (stand-in for its Blender Pro), square panels with a red corner, cut-corner buttons,
+   cyan for focus and labels, and the Samurai picture as the backdrop (src/assets/cyberpunk-samurai.jpg,
+   under faint scanlines). A background picture of your own replaces the backdrop. */
+
+/* the swatch in the theme list (shown in every theme) */
+.theme-preset-dot-multi { gap: 1px; overflow: hidden; }
+.theme-preset-dot-multi > span { width: 4px; height: 12px; border-radius: 1px; }
+.theme-preset-cyberpunk { border-color: rgba(252,238,10,.55); }
+
+[data-skin="cyberpunk"] {
+  --cp-yellow: #FCEE0A;
+  --cp-cyan: #00F0FF;
+  --cp-red: #FD0130;
+  --cp-hud-red: #FF6154;
+  --cp-font: 'Rajdhani', 'Bahnschrift', 'Arial Narrow', system-ui, sans-serif;
+  --cp-cut: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  --shadow-out: 0 0 0 1px rgba(0,240,255,.03), 0 10px 28px rgba(0,0,0,.55);
+  scrollbar-color: var(--cp-hud-red) var(--paper);
+}
+[data-skin="cyberpunk"] ::selection { background: var(--cp-cyan); color: #000; }
+
+/* ── backdrop ── */
+[data-skin="cyberpunk"] body { background: var(--paper); }
+[data-skin="cyberpunk"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  /* the default backdrop: the Samurai picture the owner picked (2026-11-25; i.imgur.com/Ah1Zs1Z.jpeg,
+     bundled so it needs no imgur), under the theme's faint scanlines. Its black is the page's black. */
+  background:
+    repeating-linear-gradient(to bottom, rgba(255,255,255,.022) 0 1px, transparent 1px 3px),
+    linear-gradient(var(--bg-veil, transparent), var(--bg-veil, transparent)), /* Settings → Dim */
+    url("../../assets/cyberpunk-samurai.jpg") center / cover no-repeat,
+    #030507;
+}
+[data-skin="cyberpunk"] body.bg-picture::before { display: none; }
+
+/* ── type ── */
+[data-skin="cyberpunk"] h1 {
+  font-family: var(--cp-font);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .02em;
+  color: var(--cp-yellow);
+  text-shadow: 2px 2px 0 rgba(253,1,48,.8), -1px -1px 0 rgba(0,240,255,.45);
+}
+[data-skin="cyberpunk"] .eyebrow { color: var(--cp-cyan); font-family: var(--cp-font); font-size: 13px; font-weight: 700; }
+[data-skin="cyberpunk"] .eyebrow::before { background: var(--cp-red); height: 2px; }
+[data-skin="cyberpunk"] a { color: var(--cp-cyan); }
+[data-skin="cyberpunk"] .stamp-label,
+[data-skin="cyberpunk"] .bg-panel-title,
+[data-skin="cyberpunk"] .setting-sub,
+[data-skin="cyberpunk"] .sidebar-title,
+[data-skin="cyberpunk"] .sidebar-section-title,
+[data-skin="cyberpunk"] .working-panel-title,
+[data-skin="cyberpunk"] .mgroup-manual-name { color: var(--cp-hud-red); }
+[data-skin="cyberpunk"] .dropzone .dz-title,
+[data-skin="cyberpunk"] .sidebar-title { font-family: var(--cp-font); font-weight: 700; letter-spacing: .03em; }
+[data-skin="cyberpunk"] .dropzone .dz-title { font-size: 21px; }
+
+/* ── panels: square, dark red border, a red notch in the top-right corner ── */
+[data-skin="cyberpunk"] .stamp,
+[data-skin="cyberpunk"] .about-panel,
+[data-skin="cyberpunk"] .working-panel,
+[data-skin="cyberpunk"] .mgroup-card,
+[data-skin="cyberpunk"] .mgroup-manual-bar,
+[data-skin="cyberpunk"] .mode-toggle-main,
+[data-skin="cyberpunk"] .serial-bar,
+[data-skin="cyberpunk"] .mission-sidebar,
+[data-skin="cyberpunk"] .sidebar-mission-card {
+  border-radius: 0;
+  background-image: linear-gradient(225deg, var(--cp-red) 0 7px, transparent 7px);
+}
+/* the modules' own boxes (settings rows, stats, hints): square too, no notch */
+[data-skin="cyberpunk"] [class*="-config"],
+[data-skin="cyberpunk"] .mgroup-count,
+[data-skin="cyberpunk"] .shared-empty-state,
+[data-skin="cyberpunk"] .mines-stat-pill,
+[data-skin="cyberpunk"] .mines-history-wrap,
+[data-skin="cyberpunk"] .module-hint,
+[data-skin="cyberpunk"] .wsq-stamp,
+[data-skin="cyberpunk"] .simon-ans-col,
+[data-skin="cyberpunk"] .simon-serial-need,
+[data-skin="cyberpunk"] .wof-disp-slot,
+[data-skin="cyberpunk"] .pnst-notebox,
+[data-skin="cyberpunk"] .sy-count,
+[data-skin="cyberpunk"] .sy-empty { border-radius: 0; }
+[data-skin="cyberpunk"] .stamp { border-left: 3px solid var(--cp-yellow); }
+[data-skin="cyberpunk"] .stamp:hover { border-color: var(--cp-cyan); border-left-color: var(--cp-yellow); }
+[data-skin="cyberpunk"] .stamp-word { color: var(--cp-yellow); text-shadow: 0 0 12px rgba(252,238,10,.25); }
+[data-skin="cyberpunk"] .stamp-word .ph { color: var(--line); text-shadow: none; }
+[data-skin="cyberpunk"] .stamp-hint { color: var(--cp-cyan); }
+
+/* ── drop box: cyan, square ── */
+/* (solid underneath: the skyline must not show through the box's text) */
+[data-skin="cyberpunk"] .dropzone {
+  border-radius: 0;
+  border-color: rgba(0,240,255,.55);
+  background: repeating-linear-gradient(0deg, transparent, transparent 15px, rgba(0,240,255,.035) 15px, rgba(0,240,255,.035) 16px), var(--paper);
+}
+[data-skin="cyberpunk"] .dropzone:focus,
+[data-skin="cyberpunk"] .dropzone.drag {
+  border-color: var(--cp-cyan);
+  background:
+    repeating-linear-gradient(0deg, transparent, transparent 15px, rgba(0,240,255,.08) 15px, rgba(0,240,255,.08) 16px),
+    var(--dropzone-active);
+  box-shadow: 0 0 18px rgba(0,240,255,.18);
+}
+[data-skin="cyberpunk"] .dropzone .dz-icon { color: var(--cp-cyan); }
+[data-skin="cyberpunk"] .dz-paste-box { border-radius: 0; }
+[data-skin="cyberpunk"] .manual-paste { border-radius: 0; border-color: rgba(0,240,255,.55); background: rgba(0,240,255,.04); }
+[data-skin="cyberpunk"] .manual-paste-label { color: var(--cp-cyan); font-family: var(--cp-font); font-size: 13px; }
+[data-skin="cyberpunk"] .dz-paste-box:focus { outline-color: var(--cp-cyan); }
+
+/* ── buttons: cut corners ── */
+[data-skin="cyberpunk"] .reset-btn,
+[data-skin="cyberpunk"] .copy-btn,
+[data-skin="cyberpunk"] .upload-btn,
+[data-skin="cyberpunk"] .bg-btn,
+[data-skin="cyberpunk"] .mode-btn-main,
+[data-skin="cyberpunk"] .theme-preset,
+[data-skin="cyberpunk"] .newgame-btn,
+[data-skin="cyberpunk"] .sidebar-all-btn,
+[data-skin="cyberpunk"] .mgroup-manual-debug,
+[data-skin="cyberpunk"] .dz-paste-btn,
+[data-skin="cyberpunk"] .preview-clear-btn,
+[data-skin="cyberpunk"] .sidebar-toggle-btn,
+[data-skin="cyberpunk"] .needy-timer-btn,
+[data-skin="cyberpunk"] .about-btn,
+[data-skin="cyberpunk"] .back-btn {
+  border-radius: 0;
+  clip-path: var(--cp-cut);
+  font-family: var(--cp-font);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+[data-skin="cyberpunk"] .reset-btn:hover,
+[data-skin="cyberpunk"] .bg-btn:hover:not(:disabled),
+[data-skin="cyberpunk"] .copy-btn:hover,
+[data-skin="cyberpunk"] .theme-preset:hover,
+[data-skin="cyberpunk"] .mgroup-manual-debug:hover { border-color: var(--cp-cyan); color: var(--cp-cyan); }
+[data-skin="cyberpunk"] .mode-btn-main.active,
+[data-skin="cyberpunk"] .upload-btn { color: #000; box-shadow: none; }
+[data-skin="cyberpunk"] .upload-btn:hover { background: var(--cp-cyan); color: #000; }
+[data-skin="cyberpunk"] .theme-preset.on { color: var(--cp-yellow); border-color: var(--cp-yellow); box-shadow: none; }
+/* the cut corners clip an outside focus ring: draw it inside */
+[data-skin="cyberpunk"] button:focus-visible { outline: 2px solid var(--cp-cyan); outline-offset: -3px; }
+
+/* ── fields ── */
+[data-skin="cyberpunk"] input[type=text],
+[data-skin="cyberpunk"] input[type=number],
+[data-skin="cyberpunk"] textarea,
+[data-skin="cyberpunk"] select { border-radius: 0; }
+[data-skin="cyberpunk"] input[type=text]:focus,
+[data-skin="cyberpunk"] input[type=number]:focus,
+[data-skin="cyberpunk"] textarea:focus,
+[data-skin="cyberpunk"] select:focus { border-color: var(--cp-cyan); outline-color: var(--cp-cyan); }
+[data-skin="cyberpunk"] input[type=range] { accent-color: var(--cp-yellow); }
+[data-skin="cyberpunk"] input[type=checkbox] { accent-color: var(--cp-cyan); }

@@ -1,0 +1,15 @@
+/* MEMORY */
+.mem-row { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-end; }
+.mem-field { display: flex; flex-direction: column; gap: 6px; }
+.mem-stages { display: flex; gap: 6px; }
+.mem-dot {
+  width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); color: var(--ink-soft); font: 700 12px ui-monospace, Consolas, monospace;
+}
+.mem-dot.done { background: rgba(72,187,120,.2); border-color: var(--select-green); color: #68D391; }
+.mem-dot.now { border-color: var(--brass); color: var(--brass); box-shadow: 0 0 0 1px var(--brass) inset; }
+.mem-pick { min-width: 40px; text-align: center; cursor: pointer; background: var(--paper); color: var(--ink); border: 1px solid var(--line); }
+.mem-labels { display: flex; gap: 6px; }
+.mem-label { width: 46px !important; text-align: center; font: 700 18px ui-monospace, Consolas, monospace !important; padding: 6px 0 !important; }
+.mem-label.hit { border-color: var(--select-green) !important; box-shadow: 0 0 0 2px var(--select-green); color: #68D391; }
+.mem-label.warn { border-color: var(--brass) !important; border-style: dashed !important; }

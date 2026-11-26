@@ -5,7 +5,7 @@ import { TITLE_REFS } from './levelTitleRefs.js';
 const FP_W = 48, FP_H = 12;
 
 // orange title ink, e.g. rgb(250, 203, 130) — excludes the yellow lamps (blue ≈ 0) and red LEDs
-function isTitleInk(r, g, b) {
+export function isTitleInk(r, g, b) {
   return r > 190 && g > 140 && g < 225 && b > 80 && b < 170 && r - b > 70 && r - g > 25;
 }
 
@@ -20,7 +20,7 @@ export function imageToData(img, maxDim = 2400) {
 }
 
 // connected components of title ink (letters), 8-connected
-function letterBoxes(mask, W, H) {
+export function letterBoxes(mask, W, H) {
   const seen = new Uint8Array(W * H), stack = new Int32Array(W * H), boxes = [];
   for (let p0 = 0; p0 < W * H; p0++) {
     if (!mask[p0] || seen[p0]) continue;
@@ -44,7 +44,7 @@ function letterBoxes(mask, W, H) {
 }
 
 // merge letters that sit on the same text line and are close together into words / titles
-function mergeLines(boxes) {
+export function mergeLines(boxes) {
   const items = boxes.map(b => ({ ...b }));
   let changed = true;
   while (changed) {
@@ -115,14 +115,21 @@ function soften(v) {
   return o;
 }
 
-const REFS = TITLE_REFS.map(r => ({ name: r.name, aspect: r.aspect, v: soften(decodeFp(r.fp)) }));
+/** Title references ready to compare (a different list can be passed for tests). */
+export const prepareRefs = (list) => list.map(r => ({ name: r.name, aspect: r.aspect, v: soften(decodeFp(r.fp)) }));
+const REFS = prepareRefs(TITLE_REFS);
 
-function classify(fp) {
+function classify(fp, refs) {
   fp.soft = fp.soft || soften(fp.v);
-  let best = null, bs = -Infinity, second = -Infinity;
-  for (const r of REFS) {
+  // a name can have several references: the margin is to the best *other* name
+  const byName = new Map();
+  for (const r of refs) {
     const s = corr(fp.soft, r.v) - 0.6 * Math.abs(Math.log(fp.aspect / r.aspect));
-    if (s > bs) { second = bs; bs = s; best = r.name; }
+    if (!byName.has(r.name) || s > byName.get(r.name)) byName.set(r.name, s);
+  }
+  let best = null, bs = -Infinity, second = -Infinity;
+  for (const [name, s] of byName) {
+    if (s > bs) { second = bs; bs = s; best = name; }
     else if (s > second) second = s;
   }
   return { name: best, score: bs, margin: bs - second };
@@ -146,7 +153,33 @@ function rescale(imgData, f) {
   return g.getImageData(0, 0, W, H);
 }
 
-export function readBoard(imgData, _pass = 0) {
+// A bomb with batteries has a red board (red frame, dark red between the cards) instead of a grey one.
+const isRedFrame = (r, g, b) => r >= 90 && r > 2 * Math.max(g, b);
+const isRedGap = (r, g, b) => r >= 30 && r < 110 && r > 2.2 * Math.max(g, b);
+/** Is this a red board (→ the bomb has batteries)? → { red, frameSides, gapShare } */
+export function boardIsRed(imgData) {
+  const { data, width: W, height: H } = imgData;
+  const px = (x, y) => { const i = (y * W + x) * 4; return [data[i], data[i + 1], data[i + 2]]; };
+  const lumOf = ([r, g, b]) => 0.299 * r + 0.587 * g + 0.114 * b;
+  // the frame: walk in from the middle of each edge, past any black margin
+  let frameSides = 0;
+  const walks = [[0, H >> 1, 1, 0, W], [W - 1, H >> 1, -1, 0, W], [W >> 1, 0, 0, 1, H], [W >> 1, H - 1, 0, -1, H]];
+  for (const [x0, y0, dx, dy, n] of walks) {
+    for (let k = 0; k < n * 0.15; k++) {
+      if (lumOf(px(x0 + dx * k, y0 + dy * k)) < 25) continue;
+      const q = px(x0 + dx * (k + 2), y0 + dy * (k + 2)); // past the soft edge
+      if (isRedFrame(...q)) frameSides++;
+      break;
+    }
+  }
+  // a cropped screenshot has no frame: the dark red gaps between the cards
+  let red = 0, tot = 0;
+  for (let y = 0; y < H; y += 3) for (let x = 0; x < W; x += 3) { tot++; if (isRedGap(...px(x, y))) red++; }
+  const gapShare = red / tot;
+  return { red: frameSides >= 2 || gapShare > 0.02, frameSides, gapShare };
+}
+
+export function readBoard(imgData, { refs = REFS, pass = 0 } = {}) {
   const { data, width: W, height: H } = imgData;
   const mask = new Uint8Array(W * H);
   for (let i = 0, p = 0; p < W * H; p++, i += 4) {
@@ -160,13 +193,14 @@ export function readBoard(imgData, _pass = 0) {
   const titleH = hs[hs.length - 1 - Math.floor((hs.length - 1) / 3)];
   lines = lines.filter(l => {
     const h = l.y1 - l.y0 + 1;
-    return h > titleH * 0.78 && h < titleH * 1.3;
+    // up to 1.45×: J and Q hang below the line (BLACKJACK, QUEENS, WIRE SEQUENCES)
+    return h > titleH * 0.78 && h < titleH * 1.45;
   });
 
   // fingerprints only compare well at the reference size: rescale the screenshot once so titles match it
-  if (_pass === 0) {
+  if (pass === 0) {
     const f = REF_TITLE_H / titleH;
-    if (f < 0.85 || f > 1.15) return readBoard(rescale(imgData, f), 1);
+    if (f < 0.85 || f > 1.15) return readBoard(rescale(imgData, f), { refs, pass: 1 });
   }
 
   // board order: rows (by title y), then columns
@@ -176,13 +210,23 @@ export function readBoard(imgData, _pass = 0) {
     const row = rows.find(r => Math.abs(r.y - l.y0) < titleH * 1.5);
     if (row) row.items.push(l); else rows.push({ y: l.y0, items: [l] });
   }
-  const ordered = rows.flatMap(r => r.items.sort((a, b) => (a.x0 + a.x1) - (b.x0 + b.x1)));
+  const ordered = rows.flatMap((r, ri) => r.items.sort((a, b) => (a.x0 + a.x1) - (b.x0 + b.x1)).map(box => ({ box, row: ri })));
 
-  const titles = ordered.map(box => {
+  const titles = ordered.map(({ box, row }) => {
     const fp = fingerprint(mask, W, box);
-    const c = REFS.length ? classify(fp) : { name: null, score: 0, margin: 0 };
-    return { name: c.name, score: c.score, unsure: c.score < 0.5 || c.margin < 0.05, box, fp: encodeFp(fp), aspect: fp.aspect };
+    const c = refs.length ? classify(fp, refs) : { name: null, score: 0, margin: 0 };
+    return { name: c.name, score: c.score, unsure: c.score < 0.5 || c.margin < 0.05, box, row, fp: encodeFp(fp), aspect: fp.aspect };
   });
-  // anything that looks nothing like a title (stray orange art inside a card) is not a module
-  return { titles: REFS.length ? titles.filter(t => t.score > 0.25) : titles };
+  if (!refs.length) return { titles };
+  // Something that looks like no known title is dropped (stray orange art inside a card) — unless it
+  // sits in a row of real titles: then it is a module with no reference yet, kept as "?" to pick by
+  // hand instead of silently disappearing from the level.
+  const titleRows = new Set(titles.filter(t => t.score >= 0.5).map(t => t.row));
+  // Outside such a row only a clear match counts (the small orange READY on Morse Code can pass the
+  // size check on a resized screenshot and sit in a row of its own).
+  return {
+    titles: titles
+      .filter(t => t.score >= 0.5 || titleRows.has(t.row))
+      .map(t => (t.score > 0.25 ? t : { ...t, name: null, unsure: true, unknown: true }))
+  };
 }

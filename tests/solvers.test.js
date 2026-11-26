@@ -3,10 +3,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { decodeMorseRLE, MORSE_TABLE, MORSE_FREQUENCIES } from '../src/modules/morse/morseDecoder.js';
 import { evaluateExpression, parseManualText } from '../src/modules/logic/logicSolver.js';
-import { toFen, parseFen } from '../src/modules/chess/chessEngine.js';
+import { toFen, parseFen, kingInCheck } from '../src/modules/chess/chessEngine.js';
 import { filterPasswordCandidates, MASTER_PASSWORDS } from '../src/modules/password/passwordSolver.js';
 import { solveWordSearch } from '../src/modules/search/searchSolver.js';
-import { parseSimonRules, SIMON_DEFAULT_RULES } from '../src/modules/simons/simonsSolver.js';
+import { readPng } from './pngDecode.js';
+import { simonPresses, simonRules, siReadManual, siAnalyzeFrames } from '../src/modules/simons/simonsSolver.js';
+import { serialHasVowel, serialLastDigit, cleanSerial } from '../src/core/bombSerial.js';
 import { searchCube } from '../src/modules/cube/cubeSolver.js';
 
 // ── Morse ──────────────────────────────────────────────────────────────────
@@ -138,12 +140,32 @@ test('word search: finds words in all eight directions and nothing else', () => 
 });
 
 // ── Simon ──────────────────────────────────────────────────────────────────
-test('simon: default rules parse; incomplete rules are rejected', () => {
-  assert.deepEqual(parseSimonRules(SIMON_DEFAULT_RULES), {
-    even: { R: 'R', B: 'G', Y: 'Y', G: 'B' },
-    odd: { R: 'G', B: 'R', Y: 'B', G: 'Y' },
-  });
-  assert.equal(parseSimonRules('Even number of modules disarmed\n* If red flashes, press red.'), null);
+// The manual table picture changes every game: read it, don't assume one
+test('simon: manual table picture is read (two different games)', () => {
+  const row = (t, v, p) => ['R', 'B', 'Y', 'G'].map(c => simonRules(t, v)[p][c]).join('');
+  const a = readPng(new URL('./fixtures/simon_manual_a.png', import.meta.url));
+  const ta = siReadManual(a.data, a.width, a.height);
+  assert.equal(row(ta, false, 'odd'), 'RGYB');
+  assert.equal(row(ta, false, 'even'), 'RYBG');
+  assert.equal(row(ta, true, 'odd'), 'GBRY');
+  assert.equal(row(ta, true, 'even'), 'GRBY');
+  const b = readPng(new URL('./fixtures/simon_manual_b.png', import.meta.url));
+  const tb = siReadManual(b.data, b.width, b.height);
+  assert.equal(row(tb, false, 'odd'), 'BGYR');
+  assert.equal(row(tb, false, 'even'), 'GRBY');
+  assert.equal(row(tb, true, 'odd'), 'RGYB');
+  assert.equal(row(tb, true, 'even'), 'GBYR');
+  assert.deepEqual(simonPresses(tb, ['B', 'Y', 'G'], true, 'odd'), ['G', 'Y', 'B']);
+  // the manual is not a module frame, and a module frame is not a manual
+  assert.equal(siAnalyzeFrames([{ data: b.data }], b.width, b.height).notSimon, true);
+});
+
+test('bomb serial: vowel and last digit', () => {
+  assert.equal(cleanSerial(' e1z-qg hv1 '), 'E1ZQGHV1');
+  assert.equal(serialHasVowel('E1ZQGHV1'), true);
+  assert.equal(serialHasVowel('B7XK29'), false);
+  assert.equal(serialLastDigit('AB3C4X'), 4);
+  assert.equal(serialLastDigit('ABCD'), null);
 });
 
 // ── Rubik's cube ───────────────────────────────────────────────────────────
@@ -173,4 +195,28 @@ test('cube: partially observed stickers still give a shortest solution', async (
   const out = await searchCube(obs, 6);
   assert.equal(out.len, 1);
   assert.ok(out.sols.includes("R'"));
+});
+
+test('chess: side to move goes into the FEN; a side in check must be the one to move', () => {
+  const start = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR';
+  const p = parseFen(start).merged;
+  assert.equal(toFen(p), start + ' w - - 0 1');
+  assert.equal(toFen(p, 'b'), start + ' b - - 0 1');
+  assert.equal(kingInCheck(p, 'w'), false);
+  assert.equal(kingInCheck(p, 'b'), false);
+  // rook on the open e-file checks the black king; a piece in between blocks it
+  assert.equal(kingInCheck(parseFen('4k3/8/8/8/8/8/8/4RK2').merged, 'b'), true);
+  assert.equal(kingInCheck(parseFen('4k3/4p3/8/8/8/8/8/4RK2').merged, 'b'), false);
+  // pawn direction: a white pawn on d7 checks e8, a black pawn on d2 checks e1, not the other way round
+  assert.equal(kingInCheck(parseFen('4k3/3P4/8/8/8/8/8/K7').merged, 'b'), true);
+  assert.equal(kingInCheck(parseFen('k7/8/8/8/8/8/3p4/4K3').merged, 'w'), true);
+  assert.equal(kingInCheck(parseFen('k7/8/8/8/8/8/8/3pK3').merged, 'w'), false);
+  // knight, bishop (diagonal), queen
+  assert.equal(kingInCheck(parseFen('4k3/8/5N2/8/8/8/8/K7').merged, 'b'), true);
+  assert.equal(kingInCheck(parseFen('4k3/8/8/8/B7/8/8/K7').merged, 'b'), true);
+  assert.equal(kingInCheck(parseFen('K7/8/8/8/8/8/8/q6k').merged, 'w'), true);
+  // scholar's-mate sample: nobody in check before Qxf7
+  const sample = parseFen('r1bqkb1r/pppp1ppp/2n5/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR').merged;
+  assert.equal(kingInCheck(sample, 'b'), false);
+  assert.equal(kingInCheck(sample, 'w'), false);
 });

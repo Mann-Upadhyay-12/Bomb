@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState } from 'react';
 import { useInstance } from '../InstanceContext.jsx';
+import { ReportButton } from './ReportButton.jsx';
 
 // When a copy is laid out in two columns, ModuleInput's buttons (clear, sample …) are shown on the
 // answer side: this is the DOM node they're portalled into (null = render them in place).
@@ -16,6 +17,8 @@ export const useControlsSlot = () => useContext(ControlsSlot);
  * One of several stacked copies (Password ×4 …) is laid out like Wire Sequences instead:
  * paste area on the left, answer + copy lines + buttons on the right, the working panel
  * (collapsed) full width underneath.
+ *
+ * Under the answer: ⚑ WRONG ANSWER? for the owner and the OGs (ReportButton; nobody else sees it).
  */
 export function ModuleLayout({
   input = null,
@@ -38,6 +41,7 @@ export function ModuleLayout({
           </div>
           <div className="module-layout-right">
             {answers && <div className="module-layout-answers">{answers}</div>}
+            {answers && <ReportButton />}
             {copylines && <div className="module-layout-copylines">{copylines}</div>}
             <div className="module-layout-controls" ref={setSlot} />
           </div>
@@ -55,6 +59,7 @@ export function ModuleLayout({
 
       {/* 2. Answer section */}
       {answers && <div className="module-layout-answers">{answers}</div>}
+      {answers && <ReportButton />}
 
       {/* 3. Copy-paste section */}
       {copylines && <div className="module-layout-copylines">{copylines}</div>}

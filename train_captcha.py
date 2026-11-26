@@ -9,15 +9,18 @@ Does, in order:
   1. multi-read   — scores every held-out captcha twice: one read, and averaged over small shifts (TTA)
      cross-val    — honest accuracy on images each fold never trained on (5 folds)
   4. data curve   — the same cross-validation with 50% / 75% of the images → does more data still help?
-  3. calibrate    — picks the confidence score + threshold from the held-out results
-     final        — trains on all images, exports spec_ctc.json, puts it into src/heist/heistCore.js
+  3. calibrate    — picks the confidence score + threshold from the held-out results, and the adaptive-TTA
+                    stop (read once; only when that read is unsure, do all the shifted reads)
+     final        — trains on all images, exports spec_ctc.json (int8 weights by default, --weights),
+                    puts it into src/heist/captcha/captchaSpec.js
 
 Run with the venv that has TensorFlow (GPU strongly recommended):
-    ~/Downloads/heist_bombs/heist/.venv/bin/python train_captcha.py
+    .venv/bin/python train_captcha.py
 Quick smoke test (tiny step counts, ~minutes, does NOT touch the app):
     ... train_captcha.py --smoke
 
-Nothing in the app changes until the very last step, and the old model / heistCore.js are backed up.
+Nothing in the app changes until the very last step, and the old model / captchaSpec.js are backed up.
+Smaller student models + distillation: files(1)/compress_study.py (study/report.md has the measurements).
 Everything is logged to <files1>/runs/<time>/report.md.
 """
 import os, sys, json, time, glob, math, random, shutil, argparse, datetime, multiprocessing as mp
@@ -194,15 +197,40 @@ def calibrate(stats, target):
     return res
 
 
+def choose_stop(stats, score, target):
+    """Adaptive TTA: the lowest stop (fewest reads) at which "read once, and only if that read's confidence
+    is below stop do all the shifted reads" loses nothing against always doing them: as many captchas
+    right, and at least as many trusted at the target precision. → (stop, trust threshold) or (None, None)."""
+    conf5 = (lambda s: s['tta_prod'] * s['agree']) if score == 'prod_agree' else (lambda s: s['tta_prod'])
+    right5 = [s['tta_pred'] == s['truth'] for s in stats]
+    full = calibrate_rows([(conf5(s), r) for s, r in zip(stats, right5)], target)
+    for stop in (0.5, 0.7, 0.8, 0.9, 0.95, 0.97, 0.98, 0.99, 0.995):
+        early = [s['prod'] >= stop for s in stats]
+        right = [(s['pred'] if e else s['tta_pred']) == s['truth'] for s, e in zip(stats, early)]
+        cal = calibrate_rows([(s['prod'] if e else conf5(s), r) for s, e, r in zip(stats, early, right)], target)
+        if cal and sum(right) >= sum(right5) and cal['coverage'] >= (full['coverage'] if full else 0) - 0.005:
+            return stop, round(cal['thresh'], 4), sum(early) / len(stats)
+    return None, None, 0
+
+
+def calibrate_rows(rows, target):
+    rows = sorted(rows, key=lambda r: -r[0]); ok = 0; best = None
+    for i, (sc, right) in enumerate(rows):
+        ok += right
+        if ok / (i + 1) >= target and (i + 1 == len(rows) or rows[i + 1][0] < sc):
+            best = dict(thresh=sc, coverage=(i + 1) / len(rows), precision=ok / (i + 1))
+    return best
+
+
 def patch_app(spec, project):
-    """Write spec_ctc.json and replace the `const SPEC = {...};` line in src/heist/heistCore.js."""
-    js = os.path.join(project, 'src', 'heist', 'heistCore.js')
+    """Write spec_ctc.json and src/heist/captcha/captchaSpec.js (the model the app runs)."""
+    js = os.path.join(project, 'src', 'heist', 'captcha', 'captchaSpec.js')
     lines = open(js, encoding='utf-8').read().split('\n')
-    idx = [i for i, l in enumerate(lines) if l.startswith('const SPEC = ')]
-    if len(idx) != 1: raise RuntimeError(f'expected one "const SPEC = " line in {js}, found {len(idx)}')
+    idx = [i for i, l in enumerate(lines) if l.startswith('export const SPEC = ')]
+    if len(idx) != 1: raise RuntimeError(f'expected one "export const SPEC = " line in {js}, found {len(idx)}')
     stamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
     shutil.copyfile(js, js + f'.bak_{stamp}')
-    lines[idx[0]] = 'const SPEC = ' + json.dumps(spec) + ';'
+    lines[idx[0]] = 'export const SPEC = ' + json.dumps(spec) + ';'
     open(js, 'w', encoding='utf-8').write('\n'.join(lines))
     sp = os.path.join(project, 'spec_ctc.json')
     if os.path.exists(sp): shutil.copyfile(sp, sp + f'.bak_{stamp}')
@@ -227,6 +255,7 @@ def main():
     ap.add_argument('--hard-frac', type=float, default=0.6, help='share of real samples drawn from hard-char captchas')
     ap.add_argument('--target-precision', type=float, default=TARGET_PRECISION)
     ap.add_argument('--producers', type=int, default=max(1, min(6, (os.cpu_count() or 2) // 2)))
+    ap.add_argument('--weights', default='int8_channel', help='weight format in the app: fp16 | int8_channel | int8_tensor | int4_g32')
     ap.add_argument('--no-patch', action='store_true', help='train + report, but do not touch the app')
     ap.add_argument('--allow-cpu', action='store_true', help='run even if TensorFlow sees no GPU')
     ap.add_argument('--smoke', action='store_true', help='tiny run to check everything works (no app patch)')
@@ -339,6 +368,14 @@ def main():
         log(f'- ⚠ no threshold reaches {args.target_precision:.0%}; using {thresh}')
     tta_cfg = dict(shifts=[list(s) for s in SHIFTS], col=COL, score='prod_agree' if 'agreement' in choice else 'prod') if use_tta else None
     log(f'- chosen: {choice}, threshold {thresh}')
+    if use_tta:
+        stop, th_ad, early = choose_stop(stats, tta_cfg['score'], args.target_precision)
+        if stop is not None:
+            tta_cfg['stop'] = stop; thresh = th_ad
+            log(f'- adaptive TTA: stop {stop} — {early:.0%} of captchas answered after one read, '
+                f'{early + (1 - early) * len(SHIFTS):.2f} reads on average instead of {len(SHIFTS)}; threshold {thresh}')
+        else:
+            log('- adaptive TTA: no stop loses nothing against always reading 5×, keeping all reads')
 
     # ---- final model
     log(f'\n## Final model ({args.steps} steps on all {len(real)} images)')
@@ -346,17 +383,12 @@ def main():
     for f in ('ctc_final.weights.h5',):
         if os.path.exists(f): shutil.copyfile(f, os.path.join(run_dir, 'previous_' + f))
     out_w = os.path.join(run_dir, 'ctc_final.weights.h5'); model.save_weights(out_w)
-    # export in a fresh process: export_ctc.py finds layers by their default names ("dense",
-    # "layer_normalization"), which only exist in a process that has built a single model
-    import subprocess
+    from spec_io import model_to_spec, spec_bytes
     spec_path = os.path.join(run_dir, 'spec_ctc.json')
-    subprocess.check_call([sys.executable, '-c',
-                           'import sys; from export_ctc import export_ctc_spec; export_ctc_spec(sys.argv[1], sys.argv[2], float(sys.argv[3]))',
-                           out_w, spec_path, str(thresh)], cwd=files1)
-    spec = json.load(open(spec_path))
-    spec['thresh'] = thresh
+    spec = model_to_spec(model, cfg, thresh, args.weights)
     if tta_cfg: spec['tta'] = tta_cfg
     json.dump(spec, open(spec_path, 'w'))
+    log(f'- exported with {args.weights} weights: {spec_bytes(spec) / 1e6:.2f} MB')
     log(f'- weights + spec saved in {run_dir}')
 
     if args.no_patch:

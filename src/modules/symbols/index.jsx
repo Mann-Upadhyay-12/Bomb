@@ -5,7 +5,7 @@ import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
 import { useAnswerGate } from '../../core/useAnswerGate.js';
-import { Dropzone } from '../../core/Dropzone.jsx';
+import { Dropzone, ManualPasteBox } from '../../core/Dropzone.jsx';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
 import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
@@ -76,9 +76,12 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
   const counts = { ...rawCounts };
   for (const [k, d] of Object.entries(adj)) counts[k] = Math.max(0, (rawCounts[k] || 0) + d);
 
-  // Press order: highest occurrence count first, ties by button number
+  // Press order: highest occurrence count first, ties by button number. With no grid for this
+  // puzzle (and no counts typed by hand) every count is 0, so there is no order to give: "1 2 3 4"
+  // would just be the button numbers.
   const validButtons = buttons.map((k, i) => (k ? { n: i + 1, k, c: counts[k] || 0 } : null)).filter(Boolean);
-  const order = validButtons.length === 4
+  const hasCounts = countedGrids.length > 0 || Object.values(adj).some(d => d);
+  const order = validButtons.length === 4 && hasCounts
     ? [...validButtons].sort((a, b) => (b.c !== a.c ? b.c - a.c : a.n - b.n))
     : [];
   const copyFormatted = order.length === 4 ? order.map(r => r.n).join(' ') : '';
@@ -94,11 +97,6 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
       if (order[i].c === order[i - 1].c && order[i].k !== order[i - 1].k) {
         warnings.push(`Tie: buttons ${order[i - 1].n} & ${order[i].n} both have ${order[i].c}`);
       }
-    }
-    if (!countedGrids.length && !Object.keys(adj).length) {
-      warnings.push(grids.length
-        ? `The strip has ${groups} puzzle${groups > 1 ? 's' : ''} — there is no puzzle #${gridIdx + 1}`
-        : 'No reference grid loaded yet');
     }
   }
 
@@ -135,11 +133,13 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
     const panels = fullGrids.length ? fullGrids : pr.panels;
     if (!panels.length) { showToast('COULD NOT DETECT SYMBOLS'); return; }
 
-    const usedGroups = [...new Set(panels.map(p => p.group || 0))].sort((a, b) => a - b);
+    // Section #n of a strip belongs to puzzle #n. A single grid has no section to go by: it belongs
+    // to the puzzle of the window it was pasted into (Symbols #2's card → puzzle #2).
+    const usedGroups = panels.length === 1 ? [gridIdx] : [...new Set(panels.map(p => p.group || 0))].sort((a, b) => a - b);
     const incoming = panels.map(p => ({
       id: ++gridSeq,
       cells: p.cells,
-      group: usedGroups.indexOf(p.group || 0),
+      group: panels.length === 1 ? gridIdx : usedGroups.indexOf(p.group || 0),
       thumb: cropThumb(cv, p.x, p.y, p.w, p.h)
     }));
 
@@ -151,7 +151,7 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
     if (!fresh.length) { showToast('GRID ALREADY ADDED — NOTHING CHANGED'); return; }
     stripStore.setGrids(next);
 
-    const perPuzzle = usedGroups.map((_, gi) => next.filter(g => groupOf(g) === gi).length);
+    const perPuzzle = [...new Set(incoming.map(g => g.group))].map(gr => next.filter(g => groupOf(g) === gr).length);
     const cells = fresh.reduce((s, g) => s + g.cells.filter(Boolean).length, 0);
     showToast(perPuzzle.length > 1
       ? `STRIP ADDED · GRIDS PER PUZZLE: ${perPuzzle.join(' / ')} · ${cells} CELLS ✓`
@@ -235,7 +235,7 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
           }
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={handleClear}>
+              <button className="reset-btn" type="button" onClick={handleClear} data-card-clear>
                 clear
               </button>
               <button
@@ -248,7 +248,9 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
               </button>
             </>
           }
-        />
+        >
+          <ManualPasteBox what="Symbols helper grid" card={instanceCount > 1 ? instance : null} />
+        </ModuleInput>
       }
       answers={
         <AnswerPanel
@@ -256,7 +258,9 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
           stats={stampStats}
           answers={order.length === 4 ? order.map(r => `Button ${r.n}`) : []}
           copyValue={copyFormatted}
-          placeholder={myGrid ? 'SET ALL 4 KEYPAD BUTTONS' : 'PASTE GRID STRIP + KEYPAD'}
+          placeholder={hasCounts ? 'SET ALL 4 KEYPAD BUTTONS'
+            : grids.length ? `NO GRID FOR PUZZLE #${gridIdx + 1} YET`
+            : validButtons.length === 4 ? 'PASTE THE HELPER GRID(S)' : 'PASTE GRID STRIP + KEYPAD'}
         />
       }
       copylines={<CopyLines items={copyItems} />}

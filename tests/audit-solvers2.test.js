@@ -78,8 +78,13 @@ test('wireseq: default manual has 27 rules; occurrence counts carry across stage
   assert.equal(Object.values(R).reduce((a, o) => a + Object.keys(o).length, 0), 27);
   const st = [[{ c: 'red', d: 'C' }, { c: 'red', d: 'A' }, { c: 'blue', d: 'B' }], [{ c: 'red', d: 'C' }, { c: 'red', d: 'B' }, { c: null, d: null }]];
   const out = wsSolveAll(st, R);
-  assert.deepEqual(out[0].map(r => r.state), ['cut', 'skip', 'cut']); // red1→C cut, red2 A skip, blue1 B cut
-  assert.deepEqual(out[1].map(r => r.state), ['cut', 'cut', 'empty']); // red3 C cut, red4 B cut
+  assert.deepEqual(out[0].map(r => r.state), ['cut', 'cut', 'skip']); // red1 ABC: C cut, red2 A: A cut, blue1 A: B keep
+  assert.deepEqual(out[1].map(r => r.state), ['skip', 'skip', 'empty']); // red3 B: C keep, red4 C: B keep
+  // the universal table, row by row (image manual)
+  const row = (c) => Object.keys(R[c]).sort((a, b) => a - b).map(n => [...R[c][n]].sort().join('')).join(' ');
+  assert.equal(row('red'), 'ABC A B C ABC BC BC AB C');
+  assert.equal(row('blue'), 'A AC AB B C AC B AB AB');
+  assert.equal(row('black'), 'AB B A B AB ABC ABC AC C');
   assert.deepEqual(wsParseQuick('1RA 2BKC 3BB').panel, [{ c: 'red', d: 'A' }, { c: 'black', d: 'C' }, { c: 'blue', d: 'B' }]);
   assert.deepEqual(wsParseQuick('1 red to a, 2 blue to c').panel.filter(Boolean).length, 0); // spaced words are split into separate tokens
 });

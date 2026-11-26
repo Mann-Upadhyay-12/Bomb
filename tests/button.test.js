@@ -85,3 +85,21 @@ test('button: other wordings', () => {
   const { rules } = parseChecklist('this is button 1, 2, or 3 and button is white: 5s');
   assert.deepEqual(rules[0].clauses.map(c => c.desc), ['button # = 1 / 2 / 3', 'button = white']);
 });
+
+test('button: serial letters compared with digits ("at least as many letters as digits")', () => {
+  const ok = (clause, serial, want) => {
+    const c = compileClause(clause);
+    assert.ok(!c.unknown, `not understood: ${clause}`);
+    assert.equal(c.eval({ serial }), want, `${clause} / ${serial}`);
+  };
+  ok('serial has at least as many letters as digits', 'E1ZQGHV1', true);  // 6 letters, 2 digits
+  ok('serial has at least as many letters as digits', 'AB12', true);      // tie counts
+  ok('serial has at least as many letters as digits', '1234AB', false);
+  ok('serial has more letters than digits', 'AB12', false);
+  ok('serial has fewer digits than letters', 'ABC12', true);
+  ok('serial has no more digits than letters', 'AB12', true);
+  ok('serial has more vowels than consonants', 'AEB1', true);
+  ok('there are more odd digits than even digits in the serial', '13A2', true);
+  const { rules } = parseChecklist('serial has the same number of letters and digits and button is red: 5s');
+  assert.deepEqual(rules[0].clauses.map(c => c.desc), ['serial letters = digits', 'button = red']);
+});

@@ -3,6 +3,37 @@
 import { MINES_ROWS, MINES_COLS } from './minesSolver.js';
 import { getWorkCanvas, getWorkContext } from '../../utils/canvas.js';
 
+/** Hue in degrees (0–359) of an RGB colour; 0 for a grey. */
+function hueOf(r, g, b) {
+  const maxC = Math.max(r, g, b), minC = Math.min(r, g, b), delta = maxC - minC;
+  if (!delta) return 0;
+  let hue;
+  if (maxC === r) hue = ((g - b) / delta) % 6;
+  else if (maxC === g) hue = (b - r) / delta + 2;
+  else hue = (r - g) / delta + 4;
+  hue = Math.round(hue * 60);
+  return hue < 0 ? hue + 360 : hue;
+}
+
+/** The game's 3 is a flat brick red, #B03E39 (176, 62, 57), and its 5 a flat dark red, #863D38
+ *  (134, 61, 56): the same hue, only darker (both measured on real boards, tests/fixtures/mines_guide.png
+ *  and mines_five.png). A red stroke counts as a 5 when it is darker than halfway between the two, and
+ *  any orange / amber / brown (hue 18° and up) too, in case a theme or another game draws it that way.
+ *  `strong`: the digit's saturated pixels (the stroke itself); `fallback` when there are too few. */
+export const MINES_THREE_RED = [176, 62, 57];
+export const MINES_FIVE_RED = [134, 61, 56];
+const FIVE_BELOW_RED = (MINES_THREE_RED[0] + MINES_FIVE_RED[0]) / 2; // 155
+export function warmDigit(strong, fallback) {
+  if (!strong || strong.length < 6) return fallback;
+  const byLight = strong.slice().sort((a, b) => (a.pr + a.pg + a.pb) - (b.pr + b.pg + b.pb));
+  const core = byLight[Math.floor(byLight.length / 2)];
+  const hue = hueOf(core.pr, core.pg, core.pb);
+  if (hue >= 18 && hue <= 65) return 5;
+  if ((hue >= 340 || hue < 18) && core.pr < FIVE_BELOW_RED) return 5; // the 5's dark red
+  if (hue >= 340 || hue < 18) return 3;
+  return fallback;
+}
+
 export function parseMinesBoardFromImage(img) {
   const MAXDIM = 1200;
   let w = img.naturalWidth, h = img.naturalHeight;
@@ -113,32 +144,29 @@ export function parseMinesBoardFromImage(img) {
     }
 
     let bluePx = 0, greenPx = 0, redPx = 0, purplePx = 0, amberPx = 0, tealPx = 0;
+    const strong = []; // the stroke's own colour (not its anti-aliased edge): for telling 3 from 5
     for (const p of textPixels) {
       const { pr, pg, pb } = p;
       const maxC = Math.max(pr, pg, pb), minC = Math.min(pr, pg, pb), delta = maxC - minC;
-      let hue = 0;
-      if (delta > 0) {
-        if (maxC === pr) hue = ((pg - pb) / delta) % 6;
-        else if (maxC === pg) hue = (pb - pr) / delta + 2;
-        else hue = (pr - pg) / delta + 4;
-        hue = Math.round(hue * 60);
-        if (hue < 0) hue += 360;
-      }
+      const hue = hueOf(pr, pg, pb);
       const sat = maxC > 0 ? delta / maxC : 0;
+      if (sat > 0.4) strong.push(p);
 
-      if ((hue >= 245 && hue <= 305 && sat > 0.16) || (pb > pg + 15 && pr > pg + 10)) {
-        purplePx++;
-      } else if ((hue >= 185 && hue <= 242 && sat > 0.16) || (pb > pr + 20 && pg >= pr - 8 && pb > pg + 8)) {
-        bluePx++;
-      } else if ((hue >= 85 && hue <= 165 && sat > 0.16) || (pg > pr + 15 && pg > pb + 5)) {
-        greenPx++;
-      } else if (((hue >= 340 || hue <= 20) && sat > 0.20) || (pr > pg + 25 && pr > pb + 25)) {
-        redPx++;
-      } else if ((hue >= 20 && hue <= 50 && sat > 0.25) || (pr > pg + 15 && pg > pb + 15)) {
-        amberPx++;
-      } else if ((hue >= 165 && hue <= 188 && sat > 0.16) || (pg > pr + 15 && pb > pr + 15)) {
-        tealPx++;
-      }
+      // By hue first. The RGB rules below only catch pale edge pixels whose hue is unreliable; they used
+      // to come first, and "R well above G and B" took every orange / amber / brown pixel for red, so a
+      // 5 always read as a 3.
+      if (sat > 0.16 && hue >= 245 && hue <= 305) purplePx++;
+      else if (sat > 0.16 && hue >= 185 && hue < 245) bluePx++;
+      else if (sat > 0.16 && hue >= 165 && hue < 185) tealPx++;
+      else if (sat > 0.16 && hue >= 85 && hue < 165) greenPx++;
+      else if (sat > 0.25 && hue >= 18 && hue <= 65) amberPx++;
+      else if (sat > 0.20 && (hue >= 340 || hue < 18)) redPx++;
+      else if (pb > pg + 15 && pr > pg + 10) purplePx++;
+      else if (pb > pr + 20 && pg >= pr - 8 && pb > pg + 8) bluePx++;
+      else if (pg > pr + 15 && pb > pr + 15) tealPx++;
+      else if (pg > pr + 15 && pg > pb + 5) greenPx++;
+      else if (pr > pg + 15 && pg > pb + 15) amberPx++;
+      else if (pr > pg + 25 && pr > pb + 25) redPx++;
     }
 
     const votes = { 1: bluePx, 2: greenPx, 3: redPx, 4: purplePx, 5: amberPx, 6: tealPx };
@@ -154,6 +182,7 @@ export function parseMinesBoardFromImage(img) {
       if (v > maxV) { maxV = v; winner = parseInt(k, 10); }
     }
     if (maxV < 8) return 0;
+    if (winner === 3 || winner === 5) return warmDigit(strong, winner);
     return winner;
   }
 

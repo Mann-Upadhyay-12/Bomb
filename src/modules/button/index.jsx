@@ -15,6 +15,7 @@ import { useClipboard } from '../../core/useClipboard.js';
 import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { useSharedSetting, useSharedState } from '../../core/sharedSetting.js';
 import { useInstance } from '../../core/InstanceContext.jsx';
+import { useBombSerial } from '../../core/bombSerial.js';
 import { Dropzone } from '../../core/Dropzone.jsx';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
@@ -25,7 +26,7 @@ import { ButtonWorking, COLOR_SWATCH } from './working.jsx';
 
 const KEY = 'bombvision_button_checklist';
 const FACT_KEYS = ['total', 'nonNeedy', 'needy', 'buttonMods'];
-const emptyFacts = () => ({ serial: '', total: '', nonNeedy: '', needy: '', buttonMods: '' });
+const emptyFacts = () => ({ total: '', nonNeedy: '', needy: '', buttonMods: '' });
 
 export function ButtonModule({ isActive = true }) {
   // start the OCR engine while the screenshot is being taken, so the first read doesn't wait for it
@@ -36,15 +37,15 @@ export function ButtonModule({ isActive = true }) {
   const answerChanged = useAnswerGate();
   const uid = useId(); // per-instance ids: missions show several Button windows
 
-  // The checklist and the bomb facts (serial, module counts) are the same for every Button
-  // on the bomb, so all Button windows share them
+  // The checklist and the bomb facts (module counts) are the same for every Button on the bomb,
+  // so all Button windows share them. The serial is game-wide and lives in the top bar.
   const [checklist, setChecklistShared] = useSharedSetting(KEY, '');
   const inst = useInstance();
   const grouped = Boolean(inst && inst.grouped);
+  const [serial, setSerial] = useBombSerial();
   const [facts, setFacts] = useSharedState('button-facts', () => {
     const f = emptyFacts();
     const parsed = parseChecklist((() => { try { return localStorage.getItem(KEY) || ''; } catch (e) { return ''; } })()).facts;
-    if (parsed.serial) f.serial = parsed.serial;
     FACT_KEYS.forEach(k => { if (Number.isFinite(parsed[k])) f[k] = String(parsed[k]); });
     return f;
   });
@@ -69,7 +70,7 @@ export function ButtonModule({ isActive = true }) {
   if (!Number.isFinite(total) && Number.isFinite(nonNeedy) && Number.isFinite(needy)) total = nonNeedy + needy;
   const ctx = {
     color, label,
-    serial: facts.serial.trim().toUpperCase(),
+    serial,
     total, nonNeedy, needy,
     buttonMods: num(facts.buttonMods),
     // which button of the module this is (dots in the screenshot, or typed) — "this is button 1 or 3"
@@ -124,9 +125,9 @@ export function ButtonModule({ isActive = true }) {
 
   const applyPastedFacts = (text) => {
     const pf = parseChecklist(text).facts;
+    if (pf.serial) setSerial(pf.serial);
     setFacts(prev => {
       const next = { ...prev };
-      if (pf.serial) next.serial = pf.serial;
       FACT_KEYS.forEach(k => { if (Number.isFinite(pf[k])) next[k] = String(pf[k]); });
       return next;
     });
@@ -177,7 +178,8 @@ export function ButtonModule({ isActive = true }) {
 
   const handleSample = () => {
     setChecklist(SAMPLE_CHECKLIST);
-    setFacts({ serial: 'E1ZQGHV1', total: '6', nonNeedy: '5', needy: '1', buttonMods: '3' });
+    setSerial('E1ZQGHV1');
+    setFacts({ total: '6', nonNeedy: '5', needy: '1', buttonMods: '3' });
     setColor('green');
     setLabel('WHITE');
     setStage({ total: 3, current: 3, done: 2 });
@@ -249,7 +251,7 @@ export function ButtonModule({ isActive = true }) {
           }
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={handleClear}>clear</button>
+              <button className="reset-btn" type="button" onClick={handleClear} data-card-clear>clear</button>
               <button
                 className="reset-btn"
                 type="button"
@@ -293,15 +295,15 @@ export function ButtonModule({ isActive = true }) {
 
             <div className="btn-facts">
               <label className="btn-fact btn-fact-serial">
-                <span>SERIAL</span>
+                <span>SERIAL (all bombs)</span>
                 <input
                   type="text"
                   className="search-words-field"
-                  value={facts.serial}
+                  value={serial}
                   placeholder={pastedFacts.serial || 'E1ZQGHV1'}
                   spellCheck="false"
                   autoComplete="off"
-                  onChange={(e) => setFact('serial', e.target.value.toUpperCase())}
+                  onChange={(e) => setSerial(e.target.value)}
                 />
               </label>
               {[['total', 'TOTAL MODULES'], ['nonNeedy', 'NON-NEEDY'], ['needy', 'NEEDY'], ['buttonMods', 'BUTTON MODULES']].map(([k, lbl]) => (

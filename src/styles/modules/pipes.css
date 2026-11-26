@@ -1,0 +1,20 @@
+/* ── Pipes ── */
+.pipes-status { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--ink-soft); margin-top: 8px; line-height: 1.5; }
+.pipes-status.warn { color: #F87171; font-weight: 700; }
+.pipes-presses { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.pipes-press { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--paper-raised); color: var(--ink); font-family: ui-monospace, Consolas, monospace; font-size: 13px; cursor: pointer; }
+.pipes-press.on { border-color: var(--pc); box-shadow: 0 0 0 2px var(--pc); }
+.pipes-press b { font-size: 15px; }
+.pipes-press b.pipes-ccw { color: var(--ink-soft); }
+.pipes-stamps { display: flex; gap: 14px; align-items: stretch; }
+.pipes-stamps .stamp { flex: 1 1 0; min-width: 0; margin-bottom: 0; }
+@media (max-width: 640px) { .pipes-stamps { gap: 8px; } }
+.pipes-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--pc); display: inline-block; }
+.pipes-boards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.pipes-board { margin: 0; }
+.pipes-board svg { width: 100%; max-width: 260px; height: auto; display: block; }
+.pipes-board figcaption { font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; color: var(--ink-soft); margin-top: 4px; }
+.pipes-bg { fill: #2a2f38; }
+.pipe-tile.tap { cursor: pointer; }
+.pipe-tile.tap:hover .pipes-bg { fill: #353b46; }
+[data-theme="parchment"] .pipes-status.warn { color: #B04A3A; }

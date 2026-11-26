@@ -20,7 +20,7 @@ export async function parseGIFFrames(bufferOrBlob) {
   }
   const CX = screenW >> 1, CY = screenH >> 1;
   const frames = [];
-  let pendingDelay = 100, prevBright = 128;
+  let pendingDelay = 100, prevBright = 128, prevRgb = [128, 128, 128];
 
   while (i < b.length) {
     const byte = b[i];
@@ -56,16 +56,17 @@ export async function parseGIFFrames(bufferOrBlob) {
       }
       i++;
       const px = CX - left, py = CY - top;
-      let bright = prevBright;
+      let bright = prevBright, rgb = prevRgb;
       if (ct && px >= 0 && px < fw && py >= 0 && py < fh) {
         const ci = lzwGetPixelIndex(lzw, minCS, py * fw + px);
         if (ci >= 0 && ci * 3 + 2 < ct.length) {
           const r = ct[ci * 3], g = ct[ci * 3 + 1], bv = ct[ci * 3 + 2];
           bright = 0.299 * r + 0.587 * g + 0.114 * bv;
-          prevBright = bright;
+          rgb = [r, g, bv];
+          prevBright = bright; prevRgb = rgb;
         }
       }
-      frames.push({ brightness: bright, delay: pendingDelay || 100 });
+      frames.push({ brightness: bright, rgb, delay: pendingDelay || 100 });
       pendingDelay = 100;
     } else {
       i++;
@@ -126,6 +127,21 @@ export function lzwGetPixelIndex(data, minCS, targetIdx) {
     prev = entry;
   }
   return -1;
+}
+
+/**
+ * True when the lit frames show a red light (the game's normal light is blue, 79,168,255).
+ * A red light means long and short flashes are swapped. Frames without colour → false.
+ */
+export function lightIsRed(frames) {
+  const lit = frames.filter(f => f.rgb);
+  if (!lit.length) return false;
+  const bs = lit.map(f => f.brightness);
+  const thresh = (Math.min(...bs) + Math.max(...bs)) / 2;
+  const on = lit.filter(f => f.brightness > thresh);
+  if (!on.length) return false;
+  const [r, g, b] = [0, 1, 2].map(c => on.reduce((s, f) => s + f.rgb[c], 0) / on.length);
+  return r > 100 && r >= 1.8 * Math.max(g, b);
 }
 
 export function framesToRLE(frames) {

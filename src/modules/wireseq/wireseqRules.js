@@ -1,39 +1,43 @@
+// The universal Wire Sequences table (image manual, 2026-11-22), written out in the old text format
+// so a pasted text manual still parses the same way.
+import { discordPlain } from '../../utils/discordText.js';
 export const WS_DEFAULT_MANUAL = `Red
-* first red occurrence: cut if connected to C.
-* second red occurrence: cut if connected to C.
-* third red occurrence: cut if connected to C.
-* fourth red occurrence: cut if connected to B or C.
-* fifth red occurrence: cut if connected to A.
-* sixth red occurrence: cut if connected to B.
+* first red occurrence: cut if connected to A, B or C.
+* second red occurrence: cut if connected to A.
+* third red occurrence: cut if connected to B.
+* fourth red occurrence: cut if connected to C.
+* fifth red occurrence: cut if connected to A, B or C.
+* sixth red occurrence: cut if connected to B or C.
 * seventh red occurrence: cut if connected to B or C.
-* eighth red occurrence: cut if connected to A, B or C.
-* ninth red occurrence: cut if connected to A, B or C.
+* eighth red occurrence: cut if connected to A or B.
+* ninth red occurrence: cut if connected to C.
 
 Blue
-* first blue occurrence: cut if connected to B or C.
-* second blue occurrence: cut if connected to A.
-* third blue occurrence: cut if connected to C.
-* fourth blue occurrence: cut if connected to A, B or C.
-* fifth blue occurrence: cut if connected to A or C.
-* sixth blue occurrence: cut if connected to B or C.
+* first blue occurrence: cut if connected to A.
+* second blue occurrence: cut if connected to A or C.
+* third blue occurrence: cut if connected to A or B.
+* fourth blue occurrence: cut if connected to B.
+* fifth blue occurrence: cut if connected to C.
+* sixth blue occurrence: cut if connected to A or C.
 * seventh blue occurrence: cut if connected to B.
-* eighth blue occurrence: cut if connected to A, B or C.
-* ninth blue occurrence: cut if connected to A.
+* eighth blue occurrence: cut if connected to A or B.
+* ninth blue occurrence: cut if connected to A or B.
 
 Black
-* first black occurrence: cut if connected to A, B or C.
-* second black occurrence: cut if connected to A or C.
-* third black occurrence: cut if connected to C.
-* fourth black occurrence: cut if connected to A or B.
-* fifth black occurrence: cut if connected to A or C.
+* first black occurrence: cut if connected to A or B.
+* second black occurrence: cut if connected to B.
+* third black occurrence: cut if connected to A.
+* fourth black occurrence: cut if connected to B.
+* fifth black occurrence: cut if connected to A or B.
 * sixth black occurrence: cut if connected to A, B or C.
-* seventh black occurrence: cut if connected to B or C.
-* eighth black occurrence: cut if connected to B.
+* seventh black occurrence: cut if connected to A, B or C.
+* eighth black occurrence: cut if connected to A or C.
 * ninth black occurrence: cut if connected to C.`;
 
 const WS_ORD = {first:1,second:2,third:3,fourth:4,fifth:5,sixth:6,seventh:7,eighth:8,ninth:9};
 
 export function wsParseManual(text) {
+  text = discordPlain(text); // a phone copies Discord's **markup** too
   const out = {};
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim().replace(/^[*\u2022\-]+/, '').trim().toLowerCase();

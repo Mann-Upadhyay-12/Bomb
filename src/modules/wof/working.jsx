@@ -55,7 +55,7 @@ export function WofWorking({
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(2, 1fr)',
+          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', // (1fr alone can't go narrower than its select: wider than a phone)
           gap: '12px',
           width: '100%',
           maxWidth: '440px'
@@ -88,7 +88,8 @@ export function WofWorking({
                 padding: '10px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '4px'
+                gap: '4px',
+                minWidth: 0
               }}
             >
               <div style={{ fontSize: '10px', color: isHit ? '#68D391' : 'var(--brass)', fontWeight: 700 }}>
@@ -105,7 +106,9 @@ export function WofWorking({
                   color: 'var(--ink)',
                   border: '1px solid var(--line)',
                   borderRadius: '6px',
-                  padding: '4px'
+                  padding: '4px',
+                  width: '100%',
+                  minWidth: 0
                 }}
               >
                 <option value="">— select —</option>

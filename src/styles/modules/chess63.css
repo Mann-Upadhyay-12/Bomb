@@ -2,15 +2,11 @@
 .c63 { background: radial-gradient(circle at 1px 1px, rgba(255,255,255,.04) 1px, transparent 1.6px) 0 0/16px 16px, var(--paper);
   color: var(--ink); font-family: 'IBM Plex Sans', sans-serif; border-radius: 16px; padding: 18px 16px 28px; }
 .c63 * { box-sizing: border-box; }
+/* its own names for the app's colours, so it follows the theme (it had a fixed dark palette) */
 .c63 {
-    --paper: #1A1D24;
-    --raised: #232732;
-    --ink: #F1F3F7;
-    --soft: #A0A7B5;
-    --brass: #E5B84B;
-    --brass-deep: #C4952B;
-    --line: #323846;
-    --out: 0 4px 14px rgba(0,0,0,.35);
+    --raised: var(--paper-raised);
+    --soft: var(--ink-soft);
+    --out: var(--shadow-out);
   }
 .c63 .page { width: 100%; max-width: 1100px; }
 .c63 .header-nav {
@@ -80,7 +76,7 @@
     transition: background 0.15s, border-color 0.15s;
     background: rgba(0,0,0,0.15);
   }
-.c63 .zone:hover, .c63 .zone.active { border-color: var(--brass); background: rgba(229, 184, 75, 0.08); }
+.c63 .zone:hover, .c63 .zone.active { border-color: var(--brass); background: rgba(var(--brass-rgb),0.08); }
 .c63 .zone b { font-family: 'Fraunces', serif; font-size: 17px; }
 .c63 .zone span.subtext { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--soft); }
 .c63 .zone-preview {
@@ -154,7 +150,7 @@
     cursor: pointer;
     transition: border-color 0.15s, box-shadow 0.15s;
   }
-.c63 .bombcard.active { border-color: var(--brass); box-shadow: 0 0 0 1.5px var(--brass); background: rgba(229, 184, 75, 0.04); }
+.c63 .bombcard.active { border-color: var(--brass); box-shadow: 0 0 0 1.5px var(--brass); background: rgba(var(--brass-rgb),0.04); }
 .c63 .bhead { display: flex; justify-content: space-between; align-items: center; }
 .c63 .btitle { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; font-weight: 700; color: var(--brass); }
 .c63 .bthumbs { display: flex; gap: 8px; justify-content: center; }
@@ -204,7 +200,7 @@
   .result { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
 .c63 .move {
     font-family: 'IBM Plex Mono', monospace; font-size: 26px; font-weight: 700; color: var(--brass);
-    background: rgba(229, 184, 75, 0.14); border: 1px solid rgba(229, 184, 75, 0.5); border-radius: 10px; padding: 6px 16px;
+    background: rgba(var(--brass-rgb),0.14); border: 1px solid rgba(var(--brass-rgb),0.5); border-radius: 10px; padding: 6px 16px;
   }
 .c63 .move.uci { color: #81C784; background: rgba(76, 175, 80, 0.14); border-color: rgba(76, 175, 80, 0.5); }
 .c63 /* Batch Answers Summary */
@@ -230,5 +226,23 @@
 .c63-phone { margin-bottom: 10px; }
 .c63-phone .dz-paste { max-width: none; margin: 0; }
 @media (hover: hover) and (pointer: fine) { .c63-phone { display: none; } }
-.c63 .c63-book { margin-left: 10px; font-size: 11px; font-weight: 600; letter-spacing: .04em; color: var(--soft);
-  border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; vertical-align: middle; }
+
+/* White's and Black's answer side by side for each bomb (like the heist ASC / DESC stamps) */
+.c63 .arow { align-items: stretch; }
+.c63 .alab { align-self: center; }
+.c63 .aduo { display: flex; gap: 10px; flex: 1; min-width: 0; }
+.c63 .aside { flex: 1 1 0; min-width: 0; background: var(--raised); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; cursor: pointer; transition: border-color .15s ease, background-color .15s ease; }
+.c63 .aside:hover { border-color: var(--brass); }
+.c63 .aside.picked { border-color: var(--brass); background: rgba(var(--brass-rgb),0.12); }
+.c63 .aside.empty { cursor: default; }
+.c63 .aside.empty:hover { border-color: var(--line); }
+.c63 .aside-lab { display: flex; justify-content: space-between; gap: 6px; font-size: 10.5px; font-weight: 700; letter-spacing: .08em; color: var(--soft); }
+.c63 .aside.b .aside-lab > span:first-child { color: var(--ink); }
+.c63 .aside-hint { font-weight: 500; letter-spacing: .04em; }
+.c63 .aside-ans { margin-top: 4px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.c63 .aside-move { font-size: 20px; font-weight: 700; color: var(--brass); letter-spacing: .03em; }
+.c63 .aside-uci { font-size: 12px; color: var(--soft); }
+.c63 .aside-none { font-size: 12.5px; color: var(--soft); }
+.c63 .aside-foot { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.c63 .aside-ucibtn { padding: 2px 8px; font-size: 10.5px; }
+@media (max-width: 640px) { .c63 .aduo { gap: 6px; } .c63 .aside { padding: 6px 8px; } .c63 .aside-move { font-size: 16px; } }

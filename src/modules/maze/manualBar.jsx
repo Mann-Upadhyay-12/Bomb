@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { mazeManualStore, useMazeManual } from './mazeStrip.js';
+import { useTouchScreen } from '../../utils/touch.js';
+import { ManualPasteBox } from '../../core/Dropzone.jsx';
 
 // Shown once above the Maze cards: the manual strip is one image for all of them.
 // It's pasted or dropped anywhere on the page (no box of its own); maze #n goes to card #n.
 export function MazeManualBar({ count }) {
   const { mazes } = useMazeManual();
+  const phone = useTouchScreen();
   const [open, setOpen] = useState(false);
   const loaded = mazes.filter(Boolean).length;
   const status = !loaded ? 'NOT LOADED' : `${loaded} MAZE${loaded > 1 ? 'S' : ''} ✓`;
@@ -16,7 +19,9 @@ export function MazeManualBar({ count }) {
         <span className="mgroup-manual-name">📖 MAZE MANUAL</span>
         <span className={`mgroup-manual-status ${loaded ? 'on' : 'off'}`}>{status}</span>
         <span className="mgroup-manual-tip">
-          paste (Ctrl+V) or drop the manual strip anywhere — maze #n goes to card #n{extra}
+          {phone
+            ? <>paste the manual strip or its link in the 📖 box below — maze #n goes to card #n{extra}</>
+            : <>paste (Ctrl+V) or drop the manual strip anywhere — maze #n goes to card #n{extra}</>}
         </span>
         {loaded > 0 && (
           <button type="button" className="mgroup-manual-debug" onClick={() => setOpen(o => !o)}>{open ? 'hide' : 'check walls'}</button>
@@ -25,6 +30,7 @@ export function MazeManualBar({ count }) {
           <button type="button" className="mgroup-manual-debug" style={{ marginLeft: 0 }} onClick={() => { mazeManualStore.clear(); setOpen(false); }}>clear</button>
         )}
       </div>
+      <ManualPasteBox what="Maze manual strip" />
       {open && loaded > 0 && (
         <div className="mz-thumbs">
           {mazes.map((m, i) => (

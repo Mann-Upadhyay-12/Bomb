@@ -18,8 +18,10 @@ import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
 import { CopyLines } from '../../core/components/CopyLines.jsx';
 import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
 import { SearchWorking } from './working.jsx';
+import { MASTER_SEARCH_WORDS } from './searchWords.js';
 
-export const MASTER_SEARCH_WORDS = "PALM SINK WITH SEND OKAY USER LOSS RAID DIRT LEAF WIFE YELL TELL FLAT PARK SOUP VAST BEST TORN CLAY STEM SLIP RIDE ICON CORN DOVE BIRD PLOT FOOT DESK CAPE POET LAVA JOKE MOVE JOIN FINE VEIL GAME PINE TOLD COLD BOLD GOLD HOLD SOLD FOLD MOLD";
+// The game's word bank (628 words): searchWords.js, shared with conso's app. Default for everyone; editable in the box.
+export { MASTER_SEARCH_WORDS };
 
 const MASTER_WORD_COUNT = MASTER_SEARCH_WORDS.split(/\s+/).length;
 
@@ -28,7 +30,11 @@ export const SAMPLE_SEARCH_GRIDS = [
   [['O','A','I','A','G'],['U','R','B','H','A'],['M','O','I','A','Y'],['C','N','I','O','J'],['Q','O','U','A','R']]
 ];
 
-export const SEARCH_WORDS_KEY = 'bombvision_search_words';
+// _v2: the 628-word bank replaced the old 48-word default (2026-11-24). A new key, so a list saved
+// under the old one (the old default, or an edit of it) doesn't hide the new words from anyone.
+export const SEARCH_WORDS_KEY = 'bombvision_search_words_v2';
+const OLD_SEARCH_WORDS_KEY = 'bombvision_search_words';
+try { localStorage.removeItem(OLD_SEARCH_WORDS_KEY); } catch (e) { /* no storage */ }
 
 export function SearchModule({ isActive = true }) {
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
@@ -365,7 +371,7 @@ export function SearchModule({ isActive = true }) {
           }
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={handleClear}>
+              <button className="reset-btn" type="button" onClick={handleClear} data-card-clear>
                 clear
               </button>
               <button
@@ -413,7 +419,7 @@ export function SearchModule({ isActive = true }) {
               <button type="button" className="bg-btn" onClick={handleRestoreWords}>
                 🔄 RESTORE ALL {MASTER_WORD_COUNT} WORDS
               </button>
-              <button type="button" className="bg-btn" onClick={handleClear}>
+              <button type="button" className="bg-btn" onClick={handleClear} data-card-clear>
                 🗑️ CLEAR GRID
               </button>
             </div>

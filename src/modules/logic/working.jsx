@@ -1,5 +1,19 @@
 import React from 'react';
-import { STAGE_SYMBOLS } from './logicSolver.js';
+import { STAGE_SYMBOLS, expressionTokens } from './logicSolver.js';
+
+/** The formula as the solver reads it, each letter green (true) or red (false): a misread letter shows. */
+function ColouredFormula({ expr, greek, vars }) {
+  const tokens = expressionTokens(expr, greek, vars);
+  if (!tokens.length) return null;
+  return (
+    <div className="logic-formula" aria-label="The formula with each letter coloured by its value">
+      {tokens.map((tk, i) => {
+        const val = tk.val === true ? ' t' : tk.val === false ? ' f' : '';
+        return <span key={i} className={`lf ${tk.kind}${val}`} title={tk.kind === 'bad' ? 'not understood' : undefined}>{tk.t}</span>;
+      })}
+    </div>
+  );
+}
 
 export function LogicWorking({
   vars = { P: true, Q: true, R: false, S: true, T: true },
@@ -65,7 +79,10 @@ export function LogicWorking({
           let badgeColor = 'var(--line)';
           let textColor = 'var(--ink-soft)';
           const hasError = res && res.error;
-          if (hasError) {
+          const pending = res && res.pending; // needs an earlier stage's α–δ first
+          if (pending) {
+            badgeText = '…';
+          } else if (hasError) {
             badgeText = '!';
             badgeColor = 'var(--brass)';
             textColor = 'var(--brass)';
@@ -111,9 +128,12 @@ export function LogicWorking({
                 {badgeText}
               </div>
             </div>
+            {stages[idx] && stages[idx].trim() && (
+              <ColouredFormula expr={stages[idx]} greek={(res && res.greek) || {}} vars={vars} />
+            )}
             {hasError && (
-              <div style={{ fontSize: '11px', color: 'var(--brass)', fontFamily: 'monospace', paddingLeft: '34px' }}>
-                ⚠ {res.error}
+              <div style={{ fontSize: '11px', color: pending ? 'var(--ink-soft)' : 'var(--brass)', fontFamily: 'monospace', paddingLeft: '34px' }}>
+                {pending ? `waits for ${res.error.replace(/ not solved yet/, '')}: fill in its stage first` : `⚠ ${res.error}`}
               </div>
             )}
             </div>

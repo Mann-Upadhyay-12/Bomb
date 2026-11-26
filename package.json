@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "node scripts/build-variants.mjs",
+    "build:bomb": "node scripts/build-variants.mjs bomb",
     "preview": "vite preview",
     "test": "node --test tests/",
     "build:captcha-wasm": "node scripts/build-captcha-wasm.mjs"
@@ -16,6 +17,7 @@
     "vite-plugin-singlefile": "^2.3.4"
   },
   "dependencies": {
+    "@supabase/realtime-js": "2.119.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   }

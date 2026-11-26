@@ -2,4 +2,37 @@
   /* Piano helper */
   .pn-name { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; font-size: 20px; font-weight: 700; color: var(--brass); letter-spacing: .06em; }
   [data-theme="parchment"] .pn-name { color: var(--brass-deep); }
+  /* increasing / decreasing side by side (wrap on narrow screens) */
+  .piano-key-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .piano-key-select { width: auto; min-width: 0; max-width: 100%; padding: 4px 6px; }
+  .piano-key-text { width: 9.5em; max-width: 100%; padding: 4px 6px; }
+  .piano-key-text.bad { border-color: var(--cell-mine, #e05a4f); }
+  .piano-key-tip { font-size: 12px; opacity: .8; }
 
+  /* Editable staff (working panel): tap to place notes, like public/manual_piano_solver.html */
+  .pnst { display: flex; flex-direction: column; gap: 10px; }
+  .pnst-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .pnst-staff { flex: 1 1 300px; min-width: 0; max-width: 560px; width: 100%; height: auto; overflow: visible;
+    touch-action: none; cursor: pointer; border-radius: 10px; border: 1px solid var(--line); }
+  .pnst-bg { fill: var(--paper-raised); }
+  .pnst-line { stroke: var(--ink-soft); stroke-width: 1.6; opacity: .75; }
+  .pnst-split { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 3 6; }
+  .pnst-head { fill: var(--ink); }
+  .pnst-stem { stroke: var(--ink); stroke-width: 2; }
+  .pnst-note.ghost { opacity: .3; }
+  .pnst-acc { fill: var(--brass); font: 700 24px 'Segoe UI Symbol', 'Noto Music', 'Noto Sans Symbols 2', 'DejaVu Sans', serif; }
+  .pnst-clef text { fill: var(--ink-soft); font-family: 'Segoe UI Symbol', 'Noto Music', 'Noto Sans Symbols 2', 'DejaVu Sans', serif; }
+  .pnst-clef .pnst-clef-lbl { font: 700 11px ui-monospace, 'Cascadia Code', Consolas, monospace; letter-spacing: .08em; fill: var(--brass); }
+  .pnst-pic { margin: 0; flex: 0 1 200px; min-width: 0; display: flex; flex-direction: column; gap: 4px; align-items: center; }
+  .pnst-pic img { max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--line); }
+  .pnst-pic figcaption { font-size: 11px; color: var(--ink-soft); }
+  .pnst-notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+  .pnst-notebox { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .pnst-notehead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .pnst-key { font-size: 11px; color: var(--ink-soft); }
+  .pnst-nudge { margin-left: auto; display: flex; gap: 4px; }
+  .pnst-accs { display: flex; gap: 6px; }
+  .pnst-acc-btn { flex: 1; min-width: 0; height: 40px; padding: 0; font-size: 20px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--paper); color: var(--ink); }
+  .pnst-acc-btn.on { background: var(--brass); border-color: var(--brass); color: var(--paper); }
+  .pnst-tip { font-size: 12px; color: var(--ink-soft); }

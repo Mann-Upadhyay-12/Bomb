@@ -49,8 +49,10 @@ export function BalanceModule({ isActive = true }) {
       if (!r.ok) { setStatus({ text: r.reason, ok: false }); return; }
       setEquation(r.equation);
       setStatus(r.parsed
-        ? { text: `✓ Read: ${r.equation} — check it matches the screenshot.`, ok: true }
-        : { text: `⚠ Read "${r.equation}" but it doesn't balance — fix the formula text below.`, ok: false });
+        ? { text: `✓ Read: ${r.equation}${r.repaired ? ` (${r.repaired === 1 ? 'one unclear character was' : `${r.repaired} unclear characters were`} filled in so it balances)` : ''} — check it matches the screenshot.`, ok: true }
+        : r.doubtful
+          ? { text: `⚠ Read "${r.equation}" — it balances, but part of it looks misread (a small number missing, or an element puzzles never use). Check it against the screenshot and fix the text below.`, ok: false }
+          : { text: `⚠ Read "${r.equation}" but it doesn't balance — fix the formula text below.`, ok: false });
       if (r.parsed) showToast('EQUATION READ ✓');
     } catch (e) {
       setStatus({ text: `⚠ ${e.message} — type the equation below instead.`, ok: false });
@@ -113,7 +115,7 @@ export function BalanceModule({ isActive = true }) {
           }
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={handleClear}>clear</button>
+              <button className="reset-btn" type="button" onClick={handleClear} data-card-clear>clear</button>
               <button
                 className="reset-btn"
                 type="button"

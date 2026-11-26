@@ -1,0 +1,28 @@
+/* ── Blackjack ── */
+.bj-config { gap: 10px; margin-top: 12px; }
+.bj-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.bj-q { font-family: ui-monospace, Consolas, monospace; font-size: 10px; font-weight: 700; letter-spacing: .12em; color: var(--brass); min-width: 104px; }
+.bj-status { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--ink-soft); margin-top: 8px; line-height: 1.5; }
+.bj-status.warn { color: #F87171; font-weight: 700; }
+.bj-card { display: inline-flex; align-items: center; gap: 4px; padding: 3px 5px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--paper-raised); }
+.bj-card.unsure { border-color: #F59E0B; }
+.bj-card img { height: 44px; width: auto; border-radius: 4px; display: block; }
+.bj-card select { font-family: ui-monospace, Consolas, monospace; font-weight: 800; font-size: 14px; background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 5px; padding: 2px 3px; }
+.bj-card.red select { color: #ef4444; }
+.bj-check { font-family: ui-monospace, Consolas, monospace; font-size: 10px; color: #F59E0B; font-weight: 700; }
+.bj-x { border: none; background: none; color: var(--ink-soft); cursor: pointer; font-size: 12px; padding: 0 2px; }
+.bj-ranks { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.bj-rank { min-width: 30px; padding: 4px 6px; border-radius: 6px; border: 1.5px solid var(--line); background: var(--paper-raised); color: var(--ink); font-family: ui-monospace, Consolas, monospace; font-weight: 800; font-size: 12px; cursor: pointer; }
+.bj-rank:hover { border-color: var(--brass); }
+.bj-table-wrap { overflow-x: auto; }
+.bj-table { border-collapse: collapse; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+.bj-table th, .bj-table td { padding: 3px 7px; text-align: center; border: 1px solid var(--line); }
+.bj-table th { color: var(--ink-soft); font-weight: 700; white-space: nowrap; }
+.bj-table th.on, .bj-table tr.on th { color: var(--brass); }
+.bj-table td.hit { color: #4ade80; }
+.bj-table td.stand { color: #f87171; }
+.bj-table tr.on td { background: rgba(var(--brass-rgb),0.08); }
+.bj-table td.cell { background: rgba(var(--brass-rgb),0.35) !important; color: var(--ink); font-weight: 800; }
+[data-theme="parchment"] .bj-status.warn { color: #B04A3A; }
+[data-theme="parchment"] .bj-table td.hit { color: #2f7d4a; }
+[data-theme="parchment"] .bj-table td.stand { color: #B04A3A; }

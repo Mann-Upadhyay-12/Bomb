@@ -10,16 +10,20 @@ export function SimonChip({ c, sm = false }) {
 /**
  * Stage log for one Simon module: every upload with its thumbnail, the colour read from it,
  * what it maps to (ODD | EVEN) and one-tap R/B/Y/G buttons to fix a misread.
+ * table = this game's manual table (null = not pasted yet); vowel = does the serial have a vowel
+ * (null = no serial yet). Without both, no mapping is shown.
  */
 export function SimonsWorking({
   entries = [],
-  rules = { even: {}, odd: {} },
+  table = null,
+  vowel = null,
   compact = false,
   onAddColor = () => {},
   onFixEntry = () => {},
   onRemoveEntry = () => {}
 }) {
   let stage = 0;
+  const rules = vowel === null || !table ? null : table[vowel ? 'vowel' : 'noVowel'];
   return (
     <div className={`simon-working ${compact ? 'compact' : ''}`}>
       <div className="simon-add-row">
@@ -44,7 +48,7 @@ export function SimonsWorking({
                 <div className="simon-ent-body">
                   <div className="simon-ent-read">
                     {e.color
-                      ? <><SimonChip c={e.color} sm /> <b>{SINAMES[e.color]}</b> → <span className="simon-ent-map">ODD <SimonChip c={rules.odd[e.color]} sm /> EVEN <SimonChip c={rules.even[e.color]} sm /></span></>
+                      ? <><SimonChip c={e.color} sm /> <b>{SINAMES[e.color]}</b>{rules && <> → <span className="simon-ent-map">ODD <SimonChip c={rules.odd[e.color]} sm /> EVEN <SimonChip c={rules.even[e.color]} sm /></span></>}</>
                       : <span className="simon-status warn">no glow found — pick the colour</span>}
                   </div>
                   {!compact && <div className="simon-status">{e.note}</div>}
@@ -62,17 +66,21 @@ export function SimonsWorking({
         </div>
       )}
 
-      {!compact && (
+      {!compact && table && (
         <table className="simon-rules-table">
-          <thead><tr><th>Flash</th><th>Odd → press</th><th>Even → press</th></tr></thead>
+          <thead>
+            <tr><th>Serial / disarmed</th>{['R', 'B', 'Y', 'G'].map(c => <th key={c}>{SINAMES[c]} flash</th>)}</tr>
+          </thead>
           <tbody>
-            {['R', 'B', 'Y', 'G'].map(c => (
-              <tr key={c}>
-                <td><SimonChip c={c} sm /> {SINAMES[c]}</td>
-                <td><SimonChip c={rules.odd[c]} sm /></td>
-                <td><SimonChip c={rules.even[c]} sm /></td>
-              </tr>
-            ))}
+            {[['noVowel', 'odd'], ['noVowel', 'even'], ['vowel', 'odd'], ['vowel', 'even']].map(([v, p]) => {
+              const on = vowel !== null && (v === 'vowel') === vowel;
+              return (
+                <tr key={v + p} className={on ? 'on' : vowel === null ? '' : 'off'}>
+                  <td>{v === 'vowel' ? 'Vowel' : 'No vowel'} · {p === 'odd' ? 'Odd' : 'Even'}</td>
+                  {['R', 'B', 'Y', 'G'].map(c => <td key={c}><SimonChip c={table[v][p][c]} sm /></td>)}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}

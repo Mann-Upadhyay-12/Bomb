@@ -46,6 +46,7 @@ export function MazeModule({ isActive = true }) {
   const [startPos, setStartPos] = useState({ r: 0, c: 0 });
   const [goalPos, setGoalPos] = useState({ r: 7, c: 7 });
   const [dotsLoaded, setDotsLoaded] = useState(false);
+  const [tapSets, setTapSets] = useState('start'); // what a tap / left-click on the board moves
   const [previewUri, setPreviewUri] = useState('');
   const [previewMeta, setPreviewMeta] = useState('');
 
@@ -158,7 +159,7 @@ export function MazeModule({ isActive = true }) {
           }
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={handleClear}>
+              <button className="reset-btn" type="button" onClick={handleClear} data-card-clear>
                 clear
               </button>
               <button
@@ -201,7 +202,9 @@ export function MazeModule({ isActive = true }) {
             startPos={startPos}
             goalPos={goalPos}
             foundPath={path}
-            onCellLeftClick={(r, c) => { setStartPos({ r, c }); setDotsLoaded(true); }}
+            tapSets={tapSets}
+            onTapSets={setTapSets}
+            onCellLeftClick={(r, c) => { (tapSets === 'goal' ? setGoalPos : setStartPos)({ r, c }); setDotsLoaded(true); }}
             onCellRightClick={(r, c) => { setGoalPos({ r, c }); setDotsLoaded(true); }}
           />
         </WorkingPanel>

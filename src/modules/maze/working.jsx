@@ -1,14 +1,18 @@
 import React from 'react';
 import { MAZE_SIZE } from './mazeSolver.js';
+import { useTouchScreen } from '../../utils/touch.js';
 
 export function MazeWorking({
   wallsGrid = [],
   startPos = { r: 0, c: 0 },
   goalPos = { r: 7, c: 7 },
   foundPath = null,
+  tapSets = 'start', // what a tap (left-click) sets; right-click always sets the goal
+  onTapSets = null,
   onCellLeftClick = () => {},
   onCellRightClick = () => {}
 }) {
+  const touch = useTouchScreen();
   const pathMap = new Map();
   if (foundPath) {
     foundPath.forEach((p, idx) => pathMap.set(`${p.r}_${p.c}`, { move: p.move, step: idx + 1 }));
@@ -18,11 +22,21 @@ export function MazeWorking({
 
   return (
     <div className="maze-board-wrap">
+      {/* A phone has no right-click (an iPhone never sends one): this picks what a tap moves */}
+      {onTapSets && (
+        <div className="maze-tapsets" role="radiogroup" aria-label="What a tap on the board sets">
+          <span className="maze-tapsets-lbl">{touch ? 'TAP' : 'CLICK'} A SQUARE TO SET</span>
+          <button type="button" role="radio" aria-checked={tapSets === 'start'} className={`bg-btn ${tapSets === 'start' ? 'active' : ''}`} onClick={() => onTapSets('start')}>🔴 START</button>
+          <button type="button" role="radio" aria-checked={tapSets === 'goal'} className={`bg-btn ${tapSets === 'goal' ? 'active' : ''}`} onClick={() => onTapSets('goal')}>🟡 GOAL</button>
+          {!touch && <span className="maze-tapsets-lbl">· right-click = goal</span>}
+        </div>
+      )}
       <div
         className="board-grid"
         style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(${N}, 44px)`,
+          // 44px squares that shrink to fit a phone
+          gridTemplateColumns: `repeat(${N}, minmax(0, 44px))`,
           gap: '2px',
           justifyContent: 'center'
         }}
@@ -62,7 +76,7 @@ export function MazeWorking({
                   e.preventDefault();
                   onCellRightClick(r, c);
                 }}
-                title={`Row ${r + 1}, Col ${c + 1} (Left-click=Start, Right-click=Goal)`}
+                title={touch ? undefined : `Row ${r + 1}, Col ${c + 1} (click = ${tapSets === 'goal' ? 'Goal' : 'Start'}, right-click = Goal)`}
               >
                 <span className="cell-coord">{r + 1},{c + 1}</span>
                 {isStart && <span>🔴 S</span>}

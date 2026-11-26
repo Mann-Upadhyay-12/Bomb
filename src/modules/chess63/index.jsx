@@ -117,7 +117,7 @@ export const Chess63Module = React.memo(function Chess63Module() {
   const api = useRef(null);
   const { setLastCopyString } = useAppState();
   const onSolved = useRef(null);
-  onSolved.current = answers => setLastCopyString(answers.map((a, i) => `Ans ${i + 1} : ${a.ok ? a.san : ''}`).join('\n'));
+  onSolved.current = lines => setLastCopyString(lines.join('\n'));
 
   useEffect(() => {
     api.current = mountChess63(ref.current, { onSolved: a => onSolved.current && onSolved.current(a) });

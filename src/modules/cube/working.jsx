@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { COLS } from './cubeVision.js';
+import { useTouchScreen, tapWord } from '../../utils/touch.js';
 
 export function CubeWorking({
   cells = { U: Array(9).fill('W'), F: Array(9).fill('G'), R: Array(9).fill('R') },
@@ -7,6 +8,7 @@ export function CubeWorking({
 }) {
   const COLOR_ORDER = ['W', 'Y', 'G', 'B', 'R', 'O'];
 
+  const touch = useTouchScreen();
   return (
     <div className="cube-working-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
       {/* 3 Visible Cube Faces (U, F, R) */}
@@ -54,7 +56,7 @@ export function CubeWorking({
         })}
       </div>
       <div style={{ fontSize: '11px', color: 'var(--ink-soft)' }}>
-        Click any square above to cycle colors (White → Yellow → Green → Blue → Red → Orange)
+        {tapWord(touch)} any square above to cycle colors (White → Yellow → Green → Blue → Red → Orange)
       </div>
     </div>
   );

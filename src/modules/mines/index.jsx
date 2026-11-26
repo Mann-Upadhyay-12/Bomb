@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MINES_ROWS, MINES_COLS, solveMinesGrid } from './minesSolver.js';
+import { MINES_ROWS, MINES_COLS, MINES_TOTAL, solveMinesGrid, finishCheck } from './minesSolver.js';
 import { parseMinesBoardFromImage } from './minesVision.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
@@ -13,7 +13,7 @@ import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
 import { MinesWorking } from './working.jsx';
 
 export function MinesModule({ isActive = true }) {
-  const { copyOnDecode, setLastCopyString, lastImg, setLastImage } = useAppState();
+  const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
 
@@ -21,6 +21,7 @@ export function MinesModule({ isActive = true }) {
   const [iteration, setIteration] = useState(0);
   const [prevSafeSet, setPrevSafeSet] = useState(new Set());
   const [currentSafeSet, setCurrentSafeSet] = useState(new Set());
+  const [countInfo, setCountInfo] = useState(null); // what the 16-mine total decided: { countOk, byCount }
   const [previewUri, setPreviewUri] = useState('');
   const [previewMeta, setPreviewMeta] = useState('');
 
@@ -47,7 +48,8 @@ export function MinesModule({ isActive = true }) {
 
   const runSolve = (grid, prevSet, currentIter) => {
     if (!grid || !grid.length) return;
-    const { safeList, mineList } = solveMinesGrid(grid);
+    // the game always hides 16 mines: that settles end-of-board 50/50s the numbers can't
+    const { safeList, countOk, byCount } = solveMinesGrid(grid, { totalMines: MINES_TOTAL });
 
     const newSafeList = safeList.filter(n => !prevSet.has(n));
     newSafeList.sort((a, b) => {
@@ -59,6 +61,7 @@ export function MinesModule({ isActive = true }) {
     setGridData([...grid]);
     setPrevSafeSet(prevSet);
     setCurrentSafeSet(newSet);
+    setCountInfo({ countOk, byCount });
     setIteration(currentIter);
 
     if (isActive) {
@@ -78,6 +81,7 @@ export function MinesModule({ isActive = true }) {
       setIteration(0);
       setPrevSafeSet(new Set());
       setCurrentSafeSet(new Set());
+      setCountInfo(null);
       setPreviewUri('');
       setPreviewMeta('');
       setLastImage(null, null);
@@ -163,10 +167,16 @@ export function MinesModule({ isActive = true }) {
   });
 
   const curRound = iteration || 1;
-  const stampTitle = curRound > 1 ? `NEW SAFE SQUARES (ROUND #${curRound})` : 'GUARANTEED SAFE SQUARES';
+  // every covered square left is a sure mine or one of the squares this input clicks → it finishes Mines
+  const finish = gridData.length ? finishCheck(gridData, currentSafeSet) : null;
+  const stampTitle = finish && finish.solves ? '✅ THIS INPUT SOLVES MINES'
+    : curRound > 1 ? `NEW SAFE SQUARES (ROUND #${curRound})` : 'GUARANTEED SAFE SQUARES';
   const stampStats = `NEW: ${newSafeArray.length} SAFE | TOTAL: ${allKnownSet.size} | MINES: ${
-    gridData.flat().filter(c => c.isMine).length
-  } (ROUND #${curRound})`;
+    gridData.flat().filter(c => c.isMine || c.state === 'F').length
+  }/${MINES_TOTAL} (ROUND #${curRound})`;
+  // new safe squares that only the 16-mine total decided (the numbers alone allow either way)
+  const countSafe = countInfo && gridData.length ? countInfo.byCount.safe.filter(n => currentSafeSet.has(n)) : [];
+  const countMines = countSafe.length ? countInfo.byCount.mines : [];
 
   // Build copy lines items
   const copyItems = [];
@@ -217,7 +227,7 @@ export function MinesModule({ isActive = true }) {
           }
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={() => resetRound(true)}>
+              <button className="reset-btn" type="button" onClick={() => resetRound(true)} data-card-clear>
                 clear
               </button>
               <button
@@ -284,7 +294,7 @@ export function MinesModule({ isActive = true }) {
               >
                 🔄 RESET ROUND (CLEAR HISTORY)
               </button>
-              <button type="button" className="bg-btn" onClick={() => resetRound(true)}>
+              <button type="button" className="bg-btn" onClick={() => resetRound(true)} data-card-clear>
                 🗑️ CLEAR BOARD
               </button>
               <button
@@ -300,13 +310,36 @@ export function MinesModule({ isActive = true }) {
         </ModuleInput>
       }
       answers={
-        <AnswerPanel
-          label={stampTitle}
-          stats={stampStats}
-          answers={newSafeArray}
-          copyValue={newSafeArray.join(' ')}
-          placeholder={gridData.length ? 'NO NEW SAFE SQUARES' : '— — —'}
-        />
+        <>
+          <AnswerPanel
+            label={stampTitle}
+            stats={stampStats}
+            answers={newSafeArray}
+            copyValue={newSafeArray.join(' ')}
+            placeholder={gridData.length ? 'NO NEW SAFE SQUARES' : '— — —'}
+          />
+          {finish && finish.solves && (
+            <div className="mines-finish">
+              ✅ <b>Next input solves Mines</b> — {finish.safeLeft.length === 1 ? 'this is the last safe square' : `these are the last ${finish.safeLeft.length} safe squares`}; every other covered square is a mine.
+            </div>
+          )}
+          {countSafe.length > 0 && (
+            <div className="mines-finish count">
+              🔢 <b>{countSafe.join(' ')}</b> {countSafe.length === 1 ? 'is' : 'are'} safe only because the board has {MINES_TOTAL} mines — the numbers alone can't tell
+              {countMines.length ? <> (<b>{countMines.join(' ')}</b> {countMines.length === 1 ? 'is a mine' : 'are mines'})</> : null}.
+            </div>
+          )}
+          {countInfo && countInfo.countOk === false && gridData.length > 0 && (
+            <div className="mines-finish warn">
+              ⚠ This board can't hold {MINES_TOTAL} mines — a square is probably misread. Check the board below (click a square to fix it).
+            </div>
+          )}
+          {finish && !finish.solves && finish.allKnown && (
+            <div className="mines-finish partial">
+              ✅ Every square is known — clicking <b>{finish.earlier.join(' ')}</b> {newSafeArray.length ? <>as well as the new ones </> : null}solves Mines (still covered from an earlier round).
+            </div>
+          )}
+        </>
       }
       copylines={<CopyLines items={copyItems} />}
       working={

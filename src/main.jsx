@@ -18,6 +18,7 @@ const BOMB_CSS_ORDER = [
   './styles/components/workingpanel.css',
   './styles/components/common.css',
   './styles/components/sidebar.css',
+  './styles/components/room.css', // 👥 ROOM bar and panel (core/room/RoomBar.jsx)
   './styles/modules/mines.css',
   './styles/modules/queens.css',
   './styles/modules/morse.css',
@@ -39,7 +40,22 @@ const BOMB_CSS_ORDER = [
   './styles/modules/button.css',
   './styles/modules/balance.css',
   './styles/modules/chess63.css',
-  './styles/modules/circuit.css'
+  './styles/modules/circuit.css',
+  './styles/modules/limbo.css',
+  './styles/modules/astrology.css',
+  './styles/modules/pipes.css',
+  './styles/modules/hangman.css',
+  './styles/modules/blackjack.css',
+  './styles/modules/batteries.css',
+  './styles/modules/wireplace.css',
+  './styles/modules/battleship.css',
+  './styles/modules/laundry.css',
+  './styles/modules/bluescreen.css',
+  './styles/modules/wires.css',
+  './styles/modules/memory.css',
+  './styles/skins/cyberpunk.css', // the Cyberpunk 2077 theme (only while <html data-skin="cyberpunk">)
+  './styles/skins/friends.css', // the Yuza and Dixie themes (data-skin="yuza" / "dixie"); Heist uses it too
+  './styles/components/touch.css' // last: phone sizes override the modules' own
 ];
 
 function addStyle(text, id) {
@@ -49,33 +65,51 @@ function addStyle(text, id) {
 }
 
 const rootEl = document.getElementById('root');
-const game = currentGame();
-// A hash edited by hand (#play=bomb ↔ #play=heist) doesn't reload the page on its own: do it, so
-// only one game's code and CSS are ever live.
-window.addEventListener('hashchange', () => { if (currentGame() !== game) location.reload(); });
-addStyle(chooserCss, 'css-chooser');
+const root = rootEl ? createRoot(rootEl) : null;
+let shown; // the game on screen: 'bomb', 'heist', or null for the chooser
 
-async function boot() {
-  if (!rootEl) return;
-  const root = createRoot(rootEl);
-  if (game === 'heist') {
+// Games switch inside this page, never by reloading it. A phone opens a downloaded .html as a
+// content:// address that the browser may not be allowed to read a second time, so the old reload
+// on every choice ended in "File couldn't be accessed". Only one game is ever live: the one being
+// left is unmounted (the heist takes its page-wide listeners with it, see HeistApp) and its CSS removed.
+// bomb.html is built with __BOMB_ONLY__ = true: no chooser, and the heist code is left out of the file.
+if (!__BOMB_ONLY__) {
+  // the chooser's links, the ⇄ link, the back button and a hash typed by hand all land here
+  window.addEventListener('hashchange', () => show(currentGame()));
+  addStyle(chooserCss, 'css-chooser');
+}
+
+// Only the shown game's CSS is in the page: both style body / :root differently.
+function keepCssOf(g) {
+  if (g !== 'bomb') document.querySelectorAll('style[id^="css-bomb-"]').forEach(s => s.remove());
+  if (g !== 'heist') document.getElementById('css-heist')?.remove();
+}
+
+async function show(g) {
+  if (!root || g === shown) return;
+  shown = g;
+  if (!__BOMB_ONLY__ && g === 'heist') {
     const [{ HeistApp }, { default: heistCss }] = await Promise.all([
       import('./heist/HeistApp.jsx'),
       import('./heist/heist.css?inline')
     ]);
-    addStyle(heistCss, 'css-heist');
+    if (shown !== 'heist') return; // another choice was made while it loaded
+    keepCssOf('heist');
+    // + the Yuza and Dixie themes, shared with the bomb app (Heist's Cyberpunk one is in heist.css)
+    if (!document.getElementById('css-heist')) addStyle(heistCss + '\n' + (BOMB_CSS['./styles/skins/friends.css'] || ''), 'css-heist');
     root.render(<HeistApp />);
     return;
   }
-  if (game === 'bomb') {
-    BOMB_CSS_ORDER.forEach((f, i) => addStyle(BOMB_CSS[f] || '', 'css-bomb-' + i));
+  keepCssOf(g);
+  if (g === 'bomb') {
+    if (!document.getElementById('css-bomb-0')) BOMB_CSS_ORDER.forEach((f, i) => addStyle(BOMB_CSS[f] || '', 'css-bomb-' + i));
     root.render(
       <React.StrictMode>
         <AppStateProvider>
           <ThemeProvider>
             <ToastProvider>
               <App />
-              <SwitchGameLink />
+              {!__BOMB_ONLY__ && <SwitchGameLink />}
             </ToastProvider>
           </ThemeProvider>
         </AppStateProvider>
@@ -86,4 +120,4 @@ async function boot() {
   document.title = 'Heist or Bombs?';
   root.render(<GameChooser />);
 }
-boot();
+show(__BOMB_ONLY__ ? 'bomb' : currentGame());

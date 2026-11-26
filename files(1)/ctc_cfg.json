@@ -1,0 +1,1 @@
+{"arch": "transformer", "d": 192, "layers": 4, "heads": 4, "ff": 768, "drop": 0.1}

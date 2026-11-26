@@ -5,7 +5,10 @@
 // request while the drag is still in the air, or when the page gets focus just before a Ctrl+V,
 // leaves a warm connection for the real fetch: ~0.25 s median. A <link rel=preconnect> did not
 // help in the same test, so this is a real HEAD request (no-cors, no cookies, nothing read back).
-const IMAGE_HOSTS = ['https://cdn.discordapp.com/', 'https://media.discordapp.net/'];
+// Each one asks for a tiny public file that answers 200: the bare host roots answer 403, which the
+// browser console showed as two red "403" errors on every drag (only the warm-up — the image
+// fetch itself was fine). Expired / broken image links answer 404, not 403.
+const IMAGE_HOSTS = ['https://cdn.discordapp.com/embed/avatars/0.png', 'https://media.discordapp.net/robots.txt'];
 let warmedAt = -Infinity;
 export function warmImageHosts() {
   if (typeof fetch !== 'function') return;
@@ -16,10 +19,28 @@ export function warmImageHosts() {
     fetch(url, { method: 'HEAD', mode: 'no-cors', credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store' }).catch(() => {});
   }
 }
+// Drags that START on this page (selected text, a thumbnail) carry this extra type, so a drop
+// handler can tell them from a screenshot or link dragged in from Discord — per drag, from the
+// drag's own data. It used to be a page-wide "a drag started here" flag, set on dragstart and
+// cleared on dragend; when the dragged element was redrawn mid-drag its dragend never reached the
+// window, the flag stayed on, and every link dropped afterwards was refused until a reload.
+export const INTERNAL_DRAG_TYPE = 'application/x-bombvision-internal';
+let tagging = false;
+function tagInternalDrags() {
+  if (tagging || typeof document === 'undefined') return;
+  tagging = true;
+  document.addEventListener('dragstart', (e) => {
+    try { if (e.dataTransfer) e.dataTransfer.setData(INTERNAL_DRAG_TYPE, '1'); } catch (_) { /* read-only: ignore */ }
+  }, true);
+}
+tagInternalDrags();
+/** The drag started on this page (not a new image from outside). */
+export const isInternalDrag = dt => Array.from((dt && dt.types) || []).includes(INTERNAL_DRAG_TYPE);
+
 // A drag that carries a link (not a file from disk) is about to need the network.
 export const dragHasLink = dt => {
   const types = Array.from((dt && dt.types) || []);
-  return !types.includes('Files') && types.some(t => t === 'text/uri-list' || t === 'text/html' || t === 'text/plain');
+  return !types.includes('Files') && !types.includes(INTERNAL_DRAG_TYPE) && types.some(t => t === 'text/uri-list' || t === 'text/html' || t === 'text/plain');
 };
 
 // fetch with a time limit: a stalled download must not leave "Downloading image…" up forever

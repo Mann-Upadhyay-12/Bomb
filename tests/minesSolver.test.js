@@ -4,7 +4,7 @@
 // squares that are safe (or mined) in every layout consistent with the clues.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { solveMinesGrid, MINES_ROWS as R, MINES_COLS as C } from '../src/modules/mines/minesSolver.js';
+import { solveMinesGrid, MINES_ROWS as R, MINES_COLS as C, MINES_TOTAL } from '../src/modules/mines/minesSolver.js';
 
 // Small deterministic PRNG so a failure can be reproduced from its seed.
 function rng(seed) {
@@ -147,4 +147,133 @@ test('contradictory clues produce no verdicts instead of wrong ones', () => {
 test('empty input', () => {
   assert.deepEqual(solveMinesGrid(null), { safeList: [], mineList: [] });
   assert.deepEqual(solveMinesGrid([]), { safeList: [], mineList: [] });
+});
+
+// ── The 16-mine total (the game always hides 16) ─────────────────────────────
+
+// Every layout that fits the clues AND puts exactly `total` mines on the board: the frontier is
+// enumerated, and the squares no number touches ("loose") take whatever is left over.
+function enumerateWithTotal(grid, total) {
+  const clues = [];
+  const frontier = new Map();
+  let flags = 0;
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+    const cell = grid[r][c];
+    if (cell.state === 'F') flags++;
+    if (typeof cell.state !== 'number') continue;
+    const around = neighbours(r, c).map(([a, b]) => grid[a][b]);
+    const covered = around.filter(n => n.state === '#');
+    covered.forEach(n => frontier.set(n.name, n));
+    clues.push({ need: cell.state - around.filter(n => n.state === 'F').length, covered: covered.map(n => n.name) });
+  }
+  const names = [...frontier.keys()];
+  if (names.length > 16) return null;
+  const loose = grid.flat().filter(n => n.state === '#' && !frontier.has(n.name)).map(n => n.name);
+  const left = total - flags;
+  const index = new Map(names.map((n, i) => [n, i]));
+  const masks = clues.map(k => ({ need: k.need, mask: k.covered.reduce((m, n) => m | (1 << index.get(n)), 0) }));
+  const popcount = x => { let n = 0; while (x) { x &= x - 1; n++; } return n; };
+  let always = (1 << names.length) - 1, ever = 0, solutions = 0, looseMine = false, looseSafe = false;
+  for (let a = 0; a < 1 << names.length; a++) {
+    if (!masks.every(k => popcount(a & k.mask) === k.need)) continue;
+    const u = left - popcount(a);
+    if (u < 0 || u > loose.length) continue;
+    solutions++; always &= a; ever |= a;
+    if (u > 0) looseMine = true;
+    if (u < loose.length) looseSafe = true;
+  }
+  return {
+    solutions,
+    mines: [...names.filter((_, i) => always >> i & 1), ...(loose.length && !looseSafe ? loose : [])],
+    safe: [...names.filter((_, i) => !(ever >> i & 1)), ...(loose.length && !looseMine ? loose : [])],
+  };
+}
+
+const boardFrom = rows => rows.map((s, r) => [...s].map((ch, c) => ({
+  r, c, name: name(r, c), isSafe: false, isMine: false, state: ch === '#' ? '#' : ch === '.' ? 0 : +ch,
+})));
+
+test('the last step of a real board: J7 or (J5 and J8) is a 50/50 until the 16-mine total settles it', () => {
+  // 24 Nov game: 15 mines are sure from the numbers; J6, I7 and I8 allow either J7 (16 mines) or
+  // J5 + J8 (17 mines). The game always has 16, so J5 and J8 are safe.
+  const rows = [
+    '#111211...',
+    '222#2#1...',
+    '1#21211122',
+    '221....2##',
+    '#311...3##',
+    '#3#211.2#3',
+    '2322#2233#',
+    '1#1112##2#',
+  ];
+  const plain = solveMinesGrid(boardFrom(rows));
+  assert.deepEqual(plain.safeList, []);
+  assert.equal(plain.mineList.length, 15);
+
+  const res = solveMinesGrid(boardFrom(rows), { totalMines: MINES_TOTAL });
+  assert.equal(MINES_TOTAL, 16);
+  assert.deepEqual(res.safeList, ['J5', 'J8']);
+  assert.ok(res.mineList.includes('J7'));
+  assert.equal(res.countOk, true);
+  assert.deepEqual(res.byCount, { safe: ['J5', 'J8'], mines: ['J7'] });
+
+  // a total that can't fit (fewer than the 15 sure mines) decides nothing extra
+  const bad = solveMinesGrid(boardFrom(rows), { totalMines: 14 });
+  assert.equal(bad.countOk, false);
+  assert.deepEqual(bad.safeList, []);
+  assert.deepEqual(bad.byCount, { safe: [], mines: [] });
+});
+
+test('with the total: never wrong on 2000 random 16-mine boards, and the real total always fits', () => {
+  let byCount = 0;
+  for (let seed = 1; seed <= 2000; seed++) {
+    const { grid, mine } = makeBoard(seed * 31, 16, 1 + seed % 14, seed % 3 ? 0 : 0.5);
+    const res = solveMinesGrid(grid, { totalMines: 16 });
+    assert.equal(res.countOk, true, `seed ${seed}: the real total was called impossible`);
+    for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+      const cell = grid[r][c];
+      if (cell.isSafe) assert.equal(mine[r][c], false, `seed ${seed}: ${cell.name} called safe but is a mine`);
+      if (cell.isMine) assert.equal(mine[r][c], true, `seed ${seed}: ${cell.name} called a mine but is safe`);
+    }
+    byCount += res.byCount.safe.length + res.byCount.mines.length;
+  }
+  assert.ok(byCount > 100, `the total decided only ${byCount} squares: not exercised`);
+});
+
+test('with the total: finds exactly the squares forced by clues + 16 mines (full enumeration)', () => {
+  let checked = 0, settledByCount = 0;
+  for (let seed = 1; seed <= 20000 && checked < 300; seed++) {
+    const { grid } = makeBoard(seed * 104729, 16, 10 + seed % 40, seed % 2 ? 0 : 0.4); // mostly late-game boards
+    const truth = enumerateWithTotal(grid, 16);
+    if (!truth || truth.solutions === 0) continue;
+    const res = solveMinesGrid(grid, { totalMines: 16 });
+    assert.deepEqual([...res.safeList].sort(), [...truth.safe].sort(), `seed ${seed}: safe squares`);
+    assert.deepEqual([...res.mineList].sort(), [...truth.mines].sort(), `seed ${seed}: mines`);
+    if (res.byCount.safe.length + res.byCount.mines.length) settledByCount++;
+    checked++;
+  }
+  assert.ok(checked >= 300, `only ${checked} boards were small enough to enumerate`);
+  assert.ok(settledByCount >= 30, `only ${settledByCount} boards needed the total`);
+});
+
+test('with the total: no mines left means every covered square no number touches is safe', () => {
+  // two mines at A1 and C1 (2 shows it), the other 14 flagged in the bottom row and J7..J2;
+  // the covered squares far from any number (E1..H2 block) can only be safe
+  const rows = [
+    '#2#1####..',
+    '1211####..',
+    '..........',
+    '..........',
+    '..........',
+    '..........',
+    '..........',
+    '..........',
+  ];
+  const grid = boardFrom(rows);
+  // 14 flags somewhere open on the board stand for the other mines
+  let placed = 0;
+  for (let r = 7; r >= 3 && placed < 14; r--) for (let c = 0; c < C && placed < 14; c++) { grid[r][c].state = 'F'; placed++; }
+  const res = solveMinesGrid(grid, { totalMines: 16 });
+  assert.equal(res.countOk, true);
+  for (const n of ['E1', 'F1', 'G1', 'H1', 'E2', 'F2', 'G2', 'H2']) assert.ok(res.safeList.includes(n), `${n} should be safe`);
 });

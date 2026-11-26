@@ -80,14 +80,16 @@ export function pnAnalyze(d, w, h) {
       const hy = ix.map(i => ys[i]);
       heads.push({ pos: Math.round((bot - hy.reduce((a, b) => a + b) / hy.length) / (s / 2)), x: c.x0, y: hy.reduce((a, b) => a + b) / hy.length, acc: 0 });
     } else if (h2 >= 0.85 * s && w2 <= 1.4 * s) {
-      let rt = 0, rb = 0, lo = 1e9, ro = 1e9;
+      let rt = 0, rb = 0, lo = 1e9, ro = 1e9, lBot = 0;
       for (const j of c.px) {
         const x = j % w, y = (j - x) / w, fx = (x - c.x0) / w2, fy = (y - c.y0) / h2;
         if (fx > 0.5) { fy < 0.5 ? rt++ : rb++; }
-        if (fx < 0.35) lo = Math.min(lo, fy);
+        if (fx < 0.35) { lo = Math.min(lo, fy); lBot = Math.max(lBot, fy); }
         if (fx > 0.65) ro = Math.min(ro, fy);
       }
-      const acc = rt < 0.25 * rb ? -1 : (ro < 0.15 ? 1 : 0);
+      // ♭: no ink top right (only the bowl). ♯: both strokes full height. ♮: the left stroke stops
+      // short of the bottom and the right one starts below the top — 'n', it cancels the key's ♯ / ♭
+      const acc = rt < 0.25 * rb ? -1 : ro < 0.15 ? 1 : (ro >= 0.15 && lBot < 0.85) ? 'n' : 0;
       accs.push({ x1: c.x1, y: (c.y0 + c.y1) / 2, acc, used: false });
     }
   }
@@ -104,3 +106,4 @@ export function pnAnalyze(d, w, h) {
   const notes = heads, stray = accs.filter(a => !a.used).length;
   return { clef, notes, spacing: s, stray };
 }
+

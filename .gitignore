@@ -58,3 +58,21 @@ public/HiTestCTC.html
 public/chess63.html
 public/simons.html
 public/wireseq.html
+public/manual_piano_solver.html
+# a copy of tests/fixtures/morse_cargo_reversed.gif
+morse.gif
+
+# Python env for the captcha scripts (uv venv; TensorFlow etc.) and the model's weights / synthetic data
+.venv/
+files(1)/*.h5
+files(1)/chunks/
+files(1)/runs/
+files(1)/**/*.h5
+files(1)/**/*.pkl
+
+# conso's site: its own git repo (conso/bomb2.0), kept here only to build bomb-logic.js for it
+conso/
+
+# Vercel CLI: the local project link, and pulled environment variables (secrets)
+.vercel
+.env*

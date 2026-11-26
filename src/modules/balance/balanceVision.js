@@ -5,7 +5,7 @@
 // which is exactly what the formula parser wants ("KNO₃" → "KNO3").
 
 import { ensureOCRWorker } from '../search/searchOCR.js';
-import { fixOcrFormulaSide, balanceEquation } from './balanceSolver.js';
+import { fixOcrFormulaSide, readsBalanced, repairEquation } from './balanceSolver.js';
 
 const isArrowPx = (r, g, b) => r > 190 && g > 140 && b < 175 && r - b > 55;
 const isTextPx = (r, g, b) => r > 150 && g > 150 && b > 150 && Math.max(r, g, b) - Math.min(r, g, b) < 45;
@@ -163,10 +163,14 @@ export function locateEquation(img) {
     }
     const med = (arr) => arr.slice().sort((a, b) => a - b)[arr.length >> 1];
     const lines = () => {
-      const maxH = Math.max(...clusters.map(c => c.y1 - c.y0 + 1));
+      // brackets reach above the capitals and below the baseline: measure from letters when there are
+      // any (a cap line taken from "(" made "Cu(NO₃)₂"'s "u" look lowered — a subscript "11")
+      const letterish = clusters.filter(c => c.x1 - c.x0 + 1 >= (c.y1 - c.y0 + 1) * 0.4);
+      const pool = letterish.length ? letterish : clusters;
+      const maxH = Math.max(...pool.map(c => c.y1 - c.y0 + 1));
       // cap line from the tallest glyphs only (x-height letters like "e" must not pull it down);
       // baseline from everything letter-sized
-      const caps = clusters.filter(c => c.y1 - c.y0 + 1 >= maxH * 0.88);
+      const caps = pool.filter(c => c.y1 - c.y0 + 1 >= maxH * 0.88);
       const lettersized = clusters.filter(c => c.y1 - c.y0 + 1 >= maxH * 0.6);
       const capTop = med(caps.map(c => c.y0));
       // baseline: bottom of letters that start at the cap line — the highest such bottom, because a
@@ -178,6 +182,81 @@ export function locateEquation(img) {
       if (refCapH) base = Math.min(base, capTop + refCapH - 1);
       return { capTop, base, capH: Math.max(4, base - capTop + 1) };
     };
+    // Bold letters also touch each other in small or blurred pictures ("Al", "i(", "CO" come out as
+    // one blob, and OCR reads a blob as one letter: "A", "H"). Between two solid strokes, a column
+    // with no solid ink (only soft edge pixels meet), or with a little solid ink only along the top
+    // or bottom edge (two serifs touching: "(N"), is the gap between two letters. Inside a real
+    // letter the thin parts sit mid-height (H's crossbar) or at both edges (the middle of O / C).
+    // Two passes: gaps with no solid ink before the subscript cut (it needs the letters' real height:
+    // "CO₂" glued whole looks taller than it is), serif joins after it (a subscript glued between
+    // two letters can look like one).
+    // Never between two strokes that both start at lowercase height: in a formula a lowercase letter
+    // follows a capital, so two of them never touch. That join is inside one letter: the bowl of "u"
+    // ("Cu", "Au") or the arch of "n" ("Mn", "Zn"), whose ink there is all along one edge.
+    const splitTouching = (serifs) => {
+      const { capTop, capH } = lines();
+      // a stroke starting in this band is a lowercase letter's; lower down, a subscript's ("₂₂" touching
+      // is still two digits to cut apart)
+      const isLower = (top) => top > capTop + capH * 0.15 && top <= capTop + capH * 0.42;
+      const SOLID = 170, strong = capH * 0.35;
+      const lumOf = (x, y) => { const i = ((by0 + y) * W + x0 + x) * 4; return 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; };
+      for (let k = clusters.length - 1; k >= 0; k--) {
+        const c = clusters[k];
+        if (c.x1 - c.x0 + 1 < capH * 0.6 || c.y1 - c.y0 + 1 < capH * (serifs ? 0.75 : 0.6)) continue;
+        const mine = (x, y) => mask[y * w + x] && c.ids.has(lab[y * w + x]) && (!c.keep || c.keep(x, y));
+        const ch = c.y1 - c.y0 + 1, edge = Math.max(2, Math.round(ch * 0.25));
+        const solid = [], gap = [];
+        for (let x = c.x0; x <= c.x1; x++) {
+          let n = 0, mid = false;
+          for (let y = c.y0; y <= c.y1; y++) if (mine(x, y) && lumOf(x, y) > SOLID) {
+            n++;
+            if (y >= c.y0 + edge && y <= c.y1 - edge) mid = true;
+          }
+          let top = false, bot = false;
+          for (let y = c.y0; y <= c.y1; y++) if (mine(x, y) && lumOf(x, y) > SOLID) { if (y < c.y0 + edge) top = true; else if (y > c.y1 - edge) bot = true; }
+          solid.push(n);
+          gap.push(n === 0 || (serifs && n <= capH * 0.2 && !mid && !(top && bot)));
+        }
+        const cuts = [];
+        for (let i = 0; i < solid.length;) {
+          if (!gap[i]) { i++; continue; }
+          let j = i;
+          while (j + 1 < solid.length && gap[j + 1]) j++;
+          // where the solid ink of the columns next to the gap starts (their stroke's top)
+          const strokeTop = (q0, q1) => {
+            let t = Infinity;
+            for (let q = Math.max(0, q0); q <= Math.min(solid.length - 1, q1); q++) {
+              for (let y = c.y0; y <= c.y1; y++) if (mine(c.x0 + q, y) && lumOf(c.x0 + q, y) > SOLID) { t = Math.min(t, y); break; }
+            }
+            return t;
+          };
+          const insideLowercase = isLower(strokeTop(i - 3, i - 1)) && isLower(strokeTop(j + 1, j + 3));
+          if (i > 0 && j < solid.length - 1 && !insideLowercase && Math.max(...solid.slice(0, i)) >= strong && Math.max(...solid.slice(j + 1)) >= strong) {
+            // the emptiest column of the gap (the middle one of a tie)
+            let best = i;
+            for (let q = i; q <= j; q++) if (solid[q] < solid[best]) best = q;
+            const ties = []; for (let q = i; q <= j; q++) if (solid[q] === solid[best]) ties.push(q);
+            cuts.push(c.x0 + ties[ties.length >> 1]);
+          }
+          i = j + 1;
+        }
+        if (!cuts.length) continue;
+        const parts = [];
+        // the cut column itself (soft edge pixels only, or a serif's edge) belongs to neither side: given
+        // to the left piece, the O's faint left edge in "₂O" made the "₂" as tall as a letter ("H₂O" → "HgO")
+        [c.x0, ...cuts.map(x => x + 1)].forEach((a, n) => {
+          const b = n < cuts.length ? cuts[n] - 1 : c.x1;
+          const keep = (x, y) => x >= a && x <= b && (!c.keep || c.keep(x, y));
+          let py0 = h, py1 = -1, px0 = w, px1 = -1;
+          for (let y = c.y0; y <= c.y1; y++) for (let x = a; x <= b; x++) if (mine(x, y)) {
+            if (y < py0) py0 = y; if (y > py1) py1 = y; if (x < px0) px0 = x; if (x > px1) px1 = x;
+          }
+          if (py1 >= 0) parts.push({ x0: px0, x1: px1, y0: py0, y1: py1, ids: c.ids, keep });
+        });
+        if (parts.length > 1) clusters.splice(k, 1, ...parts);
+      }
+    };
+    splitTouching(false);
     // The bold font is kerned tightly: a subscript often touches the letters beside it ("e₂O" is one
     // blob). Cut such blobs at the columns where ink goes below the baseline — that's the subscript.
     {
@@ -217,10 +296,48 @@ export function locateEquation(img) {
           return n / (b - a + 1) < 0.5;
         });
         // widen each run to the whole digit (the top bar of "₇" is wider than its foot): take
-        // neighbouring columns whose ink is all in the lower part of the line
+        // neighbouring columns whose ink is all in the lower part of the line. On the left, only
+        // columns starting at the subscript's own top, or crossing two strokes of it (the diagonal and
+        // the bar of "₄", which hang lower than its stem): a letter's foot glued to the subscript ("l"
+        // of this font curls right into the "₂" of "Cl₂") is one stroke by the baseline, and taking
+        // it made "₂" two digits wide ("42"). Without the "₄" rule its diagonal stayed on the H ("CH₁").
+        const strokesIn = (x, from = 0) => { let n = 0, prev = false; for (let y = from; y < h; y++) { const v = on(y * w + x); if (v && !prev) n++; prev = v; } return n; };
+        // A letter's serif can hang over the subscript's first columns (Aleo-like slabs: the H's foot
+        // and arm over the diagonal of "₄" in "CH₄"): such a column starts at cap height, but below a
+        // gap it has two strokes of the digit. That part is the digit's (split by rows, as below).
+        const underSerif = new Map(); // column → first row of the digit's part
+        const digitBelowGap = (x) => {
+          let y = 0;
+          while (y < h && !on(y * w + x)) y++;
+          if (y >= low) return -1; // nothing above to share with
+          while (y < h && on(y * w + x)) y++;
+          while (y < h && !on(y * w + x)) y++;
+          return y < h && y >= low && strokesIn(x, y) >= 2 ? y : -1;
+        };
         for (const r of subRuns) {
-          while (r[0] > 0 && topInk(c.x0 + r[0] - 1) >= low && topInk(c.x0 + r[0] - 1) < h) r[0]--;
-          while (r[1] < below.length - 1 && topInk(c.x0 + r[1] + 1) >= low && topInk(c.x0 + r[1] + 1) < h) r[1]++;
+          const tops = [];
+          for (let i = r[0]; i <= r[1]; i++) { const t = topInk(c.x0 + i); if (t < h) tops.push(t); }
+          const subTop = tops.length ? med(tops) : h;
+          const lowCol = (x) => { const t = topInk(x); return t >= low && t < h; };
+          // a diagonal ("₄" running down-left into the H's foot serif) goes on, its top a pixel or two
+          // lower each column; the curled foot of "l" sits higher than the digit's edge beside it
+          const leftCol = (x) => {
+            if (lowCol(x)) {
+              const t = topInk(x), step = t - topInk(x + 1);
+              return t <= subTop + Math.max(1, capH * 0.12) || strokesIn(x) >= 2 || (step >= 0 && step <= 2 && underDiagonal);
+            }
+            const row = digitBelowGap(x);
+            if (row < 0) return false;
+            underSerif.set(x, row);
+            return true;
+          };
+          let underDiagonal = false;
+          while (r[0] > 0 && leftCol(c.x0 + r[0] - 1)) {
+            r[0]--;
+            // inside the digit's two-stroke part: what follows can be the end of its diagonal
+            if (strokesIn(c.x0 + r[0]) >= 2) underDiagonal = true;
+          }
+          while (r[1] < below.length - 1 && lowCol(c.x0 + r[1] + 1)) r[1]++;
         }
         // widening can make neighbouring runs overlap — both digits of "O₁₁" grow over each other —
         // and an overlap would cut the same subscript out twice ("1111"): merge them into one
@@ -244,6 +361,7 @@ export function locateEquation(img) {
           while (sb > sa && tallCol(sb)) shared.set(c.x0 + sb--, base + 1);
           return [sa, sb];
         });
+        for (const [x, row] of underSerif) shared.set(x, row);
         const subKeep = (x, y) => !shared.has(x) || y >= shared.get(x);
         const letterKeep = (x, y) => !shared.has(x) || y < shared.get(x);
         const cuts = [];
@@ -265,6 +383,79 @@ export function locateEquation(img) {
           }
         }
         if (parts.length > 1) clusters.splice(k, 1, ...parts);
+      }
+    }
+    splitTouching(true);
+    // a one-pixel-wide piece against a neighbour is edge pixels left over from a cut, not a
+    // character (it read as "1": "O₂" → "O12")
+    {
+      for (let k = clusters.length - 1; k >= 0; k--) {
+        const c = clusters[k];
+        if (c.x1 !== c.x0 || clusters.length < 2) continue;
+        const near = clusters.some((o, j) => j !== k && Math.max(o.x0 - c.x1, c.x0 - o.x1) <= 1);
+        if (near) clusters.splice(k, 1);
+      }
+    }
+    // A speck of a neighbour's edge left over a glyph by a cut (a pixel or two of ")" over the "₄" of
+    // "SO₄)") made it look tall — not a subscript — and dotted like an "i": drop it. (An i's dot is
+    // bigger.) A sliver 2 px wide by a subscript is the same kind of leftover ("NH₄" → "NH14").
+    {
+      const { capTop, capH } = lines();
+      for (const c of clusters) {
+        const own = (x, y) => mask[y * w + x] && c.ids.has(lab[y * w + x]) && (!c.keep || c.keep(x, y));
+        const rowInk = (y) => { let n = 0; for (let x = c.x0; x <= c.x1; x++) if (own(x, y)) n++; return n; };
+        let n = 0, y = c.y0;
+        while (y <= c.y1 && rowInk(y)) n += rowInk(y++);
+        if (y > c.y1 || n > Math.max(3, (capH * 0.12) ** 2)) continue;
+        while (y <= c.y1 && !rowInk(y)) y++;
+        if (y <= c.y1) c.y0 = y;
+      }
+      for (let k = clusters.length - 1; k >= 0; k--) {
+        const c = clusters[k];
+        if (clusters.length < 2 || c.x1 - c.x0 > 1 || c.y1 - c.y0 + 1 > capH * 0.3 || c.y0 < capTop + capH * 0.4) continue;
+        if (clusters.some((o, j) => j !== k && Math.max(o.x0 - c.x1, c.x0 - o.x1) <= 1)) clusters.splice(k, 1);
+      }
+      // a short piece standing on the baseline (subscripts hang below it) right against a letter: that
+      // letter's foot, cut off with the stroke it touched (slab "Li": the L's foot runs into the i) —
+      // alone it read as a subscript "1" ("L1i"). Give it back.
+      const { base } = lines();
+      for (let k = clusters.length - 1; k >= 1; k--) {
+        const c = clusters[k], o = clusters[k - 1];
+        if (c.y1 - c.y0 + 1 > capH * 0.35 || c.y0 < capTop + capH * 0.55 || c.y1 > base + capH * 0.1) continue;
+        if (c.x0 - o.x1 > 2 || o.y1 - o.y0 + 1 < capH * 0.6) continue; // (the cut column between is left out)
+        const A = { ...o }, B = { ...c };
+        const inA = (x, y) => x >= A.x0 && x <= A.x1 && A.ids.has(lab[y * w + x]) && (!A.keep || A.keep(x, y));
+        const inB = (x, y) => x >= B.x0 && x <= B.x1 && B.ids.has(lab[y * w + x]) && (!B.keep || B.keep(x, y));
+        o.ids = new Set([...A.ids, ...B.ids]);
+        o.keep = (x, y) => inA(x, y) || inB(x, y);
+        o.x1 = Math.max(A.x1, B.x1); o.y0 = Math.min(A.y0, B.y0); o.y1 = Math.max(A.y1, B.y1);
+        clusters.splice(k, 1);
+      }
+    }
+    // the dot of an "i" left on its own: its stem was glued to the letter before ("Li" in a slab font:
+    // the L's foot runs into the i) and cut off there, so the dot no longer sat over a lone stem.
+    // On its own it read as "[" / "l" ("Li" → "Ldl"). Put it back on the glyph under it.
+    // Only a dot (about square) over a narrow stem standing on the baseline: a scrap of a letter's
+    // arm cut off over a subscript is small and high too, and made "₄" an "i".
+    {
+      const { capTop, base, capH } = lines();
+      for (let k = clusters.length - 1; k >= 0; k--) {
+        const c = clusters[k], cw = c.x1 - c.x0 + 1, chh = c.y1 - c.y0 + 1;
+        if (cw > capH * 0.4 || chh > capH * 0.35 || c.y1 > capTop + capH * 0.4 || cw > chh * 2 || chh > cw * 2) continue;
+        const mid = (c.x0 + c.x1) / 2;
+        let best = -1;
+        clusters.forEach((o, j) => {
+          if (j === k || o.x0 - 2 > mid || o.x1 + 2 < mid || o.y0 <= c.y1 || o.y1 - o.y0 + 1 < capH * 0.45) return;
+          if (o.x1 - o.x0 + 1 > capH * 0.65 || o.y0 > capTop + capH * 0.45 || Math.abs(o.y1 - base) > capH * 0.1) return;
+          if (best < 0 || Math.abs((o.x0 + o.x1) / 2 - mid) < Math.abs((clusters[best].x0 + clusters[best].x1) / 2 - mid)) best = j;
+        });
+        if (best < 0) continue;
+        const o = clusters[best], oIds = o.ids, oKeep = o.keep, dot = c;
+        const inDot = (x, y) => x >= dot.x0 && x <= dot.x1 && y >= dot.y0 && y <= dot.y1 && dot.ids.has(lab[y * w + x]) && (!dot.keep || dot.keep(x, y));
+        o.ids = new Set([...oIds, ...dot.ids]);
+        o.keep = (x, y) => inDot(x, y) || (oIds.has(lab[y * w + x]) && (!oKeep || oKeep(x, y)));
+        o.x0 = Math.min(o.x0, dot.x0); o.x1 = Math.max(o.x1, dot.x1); o.y0 = Math.min(o.y0, dot.y0);
+        clusters.splice(k, 1);
       }
     }
     const { capTop, base, capH } = lines();
@@ -331,7 +522,34 @@ export function locateEquation(img) {
       // and the faint anti-aliased pixels between close both bays into "loops" — an "8" stays closed
       const lumAt = (x, y) => { const i = ((by0 + c.y0 + y) * W + x0 + c.x0 + x) * 4; return 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; };
       const solidHoles = countHoles((x, y) => mine(x, y) && lumAt(x, y) > 170);
+      const rowHasInk = (y) => { for (let x = 0; x < cw; x++) if (mine(x, y)) return true; return false; };
+      // a dot over a stem, an empty row between: "i" (OCR says "1" / "l" / "d", and "Li" became "Ll")
+      let dotted = false;
+      if (!c.sub && chh >= capH * 0.6 && c.y1 <= base + capH * 0.12) {
+        let r = 0;
+        while (r < chh && rowHasInk(r)) r++;
+        if (r > 0 && r <= capH * 0.35) {
+          let r2 = r;
+          while (r2 < chh && !rowHasInk(r2)) r2++;
+          dotted = r2 < chh && chh - r2 >= capH * 0.45;
+        }
+      }
+      // a round letter glued to a full-height stem on its right, and no straight stem on its left:
+      // "Cl" touching. The C's open side meets the l and closes a loop, so OCR read the pair as one
+      // "C" — and the loop made it "O" ("HCl" → "HO", "PCl₅" → "PO₅", which balance)
+      const longestRun = (x) => { let best = 0, run = 0; for (let y = 0; y < chh; y++) { if (mine(x, y)) best = Math.max(best, ++run); else run = 0; } return best; };
+      const stemAt = (x) => longestRun(x) >= capH * 0.97;
+      let leftStem = false, rightStem = false;
+      for (let x = 0; x < cw; x++) {
+        if (x < cw * 0.4 && stemAt(x)) leftStem = true;
+        if (x >= cw * 0.65 && stemAt(x)) rightStem = true;
+      }
+      const roundStem = !c.sub && !dotted && cw > capH * 0.9 && cw <= capH * 1.6 && chh <= capH * 1.12 && rightStem && !leftStem;
       return {
+        dotted,
+        roundStem,
+        onBase: c.y1 >= base - capH * 0.08,     // sits on the baseline ("r"), unlike a raised "+"
+        xTop: c.y0 - capTop < capH * 0.4,       // starts by x-height (g / p), not lower like a subscript
         holes,
         solidHoles,
         bracketTall: chh > capH * 1.08, // brackets reach above the capitals and below the baseline
@@ -340,6 +558,8 @@ export function locateEquation(img) {
         sub: c.sub,
         wide: c.sub ? cw > chh * 0.85 : cw > capH * 1.25, // two touching letters / a 2-digit subscript ("₁₆")
         tall: (c.y0 - capTop) < capH * 0.18,    // reaches cap height (uppercase / ascender)
+        desc: c.y1 > base + capH * 0.15,         // hangs below the baseline (p, q, y, g)
+        narrow: cw < capH * 0.45,                // a single upright stroke (l, I, i, brackets)
         small: chh < capH * 0.72,               // e.g. "+", x-height letters
         spaceBefore: gapBefore > capH * 0.3
       };
@@ -384,6 +604,15 @@ export function locateEquation(img) {
   const sideHasText = (x0, x1) => { for (let x = x0; x <= x1; x++) if (colText[x] > 0) return true; return false; };
   let leftN = hasArrow && ax0 - tx0 > 4 && sideHasText(tx0, leftX1) ? normalized(tx0, leftX1) : null;
   let rightN = hasArrow && tx1 - ax1 > 4 && sideHasText(rightX0, tx1) ? normalized(rightX0, tx1) : null;
+  // Both sides sit on one line, so they share one letter height. A side whose only tall glyph is a
+  // letter glued to its subscript ("CO₂ +" before a wrap) takes the subscript's bottom for the
+  // baseline: its letters then look taller than they are and the subscript isn't cut off ("CO").
+  // The smaller height is the true one.
+  if (leftN && rightN && Math.abs(leftN.capH - rightN.capH) > Math.min(leftN.capH, rightN.capH) * 0.1) {
+    const ref = Math.min(leftN.capH, rightN.capH);
+    if (leftN.capH > ref) leftN = normalized(tx0, leftX1, ty0, ty1, ref) || leftN;
+    else rightN = normalized(rightX0, tx1, ty0, ty1, ref) || rightN;
+  }
   // wrapped lines: before the arrow line → left side, after it → right side
   for (const b of extraBands) {
     const p2 = Math.max(2, Math.round((b.y1 - b.y0) * 0.25));
@@ -418,7 +647,7 @@ const MAIN_WL = 'ABCDEFGHIKLMNOPRSTUVWXYZabcdefghiklmnoprstuy+()[]';
 // letters whose lowercase form only reaches x-height (so size tells upper from lower case)
 const XHEIGHT = new Set('acemnorsuvwxz'.split(''));
 const DIGIT_FIX = { O: '0', o: '0', D: '0', Q: '0', I: '1', l: '1', i: '1', '|': '1', Z: '2', z: '2', S: '5', s: '5', B: '8', G: '6', b: '6', g: '9', q: '9', T: '7' };
-const LETTER_FIX = { 0: 'O', 1: 'l', 5: 'S', 8: 'B', 6: 'G', 2: 'Z' };
+const LETTER_FIX = { 0: 'O', 1: 'l', 5: 'S', 8: 'B', 6: 'G', 2: 'Z', 9: 'g', 4: 'A' };
 
 function smallCopy(src, sc, pad) {
   const c = document.createElement('canvas');
@@ -442,6 +671,39 @@ function splitAtThinnest(src) {
   if (x1 - x0 < 8) return null;
   let cut = -1;
   for (let x = Math.round(x0 + (x1 - x0) * 0.3); x <= Math.round(x0 + (x1 - x0) * 0.7); x++) if (cut < 0 || col[x] < col[cut]) cut = x;
+  // a closed loop across the cut is inside one digit (the triangle of a wide "₄" — split, it read "41")
+  {
+    const bg = new Uint8Array(W * H), st = [];
+    const ink = (q) => d[q * 4] < 128;
+    for (let x = 0; x < W; x++) for (const y of [0, H - 1]) { const q = y * W + x; if (!ink(q) && !bg[q]) { bg[q] = 1; st.push(q); } }
+    for (let y = 0; y < H; y++) for (const x of [0, W - 1]) { const q = y * W + x; if (!ink(q) && !bg[q]) { bg[q] = 1; st.push(q); } }
+    while (st.length) { // the outside
+      const q = st.pop(), qx = q % W, qy = (q / W) | 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = qx + dx, ny = qy + dy;
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+        const r = ny * W + nx;
+        if (!ink(r) && !bg[r]) { bg[r] = 1; st.push(r); }
+      }
+    }
+    const minA = Math.max(4, (x1 - x0 + 1) * H * 0.01);
+    for (let q = 0; q < W * H; q++) {
+      if (ink(q) || bg[q]) continue;
+      let lx0 = W, lx1 = -1, n = 0;
+      bg[q] = 2; st.push(q);
+      while (st.length) {
+        const p = st.pop(), px = p % W, py = (p / W) | 0; n++;
+        if (px < lx0) lx0 = px; if (px > lx1) lx1 = px;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = px + dx, ny = py + dy;
+          if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+          const r = ny * W + nx;
+          if (!ink(r) && !bg[r]) { bg[r] = 2; st.push(r); }
+        }
+      }
+      if (n >= minA && lx0 < cut && lx1 > cut) return 'one';
+    }
+  }
   const piece = (a, b) => {
     const pad = 18, c = document.createElement('canvas');
     c.width = b - a + 1 + 2 * pad; c.height = H;
@@ -490,8 +752,13 @@ const DIGIT_LOOPS = { 0: 1, 1: 0, 2: 0, 3: 0, 4: 1, 5: 0, 6: 1, 7: 0, 8: 2, 9: 1
 // of a "3" closed by anti-aliasing, not the counters of an "8" / "9" — then OCR's digit stands.
 export function fixDigitByLoops(t, loops, solidLoops = null) {
   if (!/^[0-9]$/.test(t)) return t;
+  // two loops of solid ink are an 8 even when the soft edges fill one in (a small "₈" read as 6)
+  if (solidLoops != null && solidLoops >= 2) return '8';
   const n = loops.length;
   if (n >= 2) return solidLoops === null || solidLoops >= 2 ? '8' : t;
+  // an "8" whose only loop is closed by soft edge pixels has no loop of its own: a "3" (a letter's
+  // foot glued to the "₃" of "Cl₃" closed one bay, and OCR said 8)
+  if (t === '8' && n === 1 && solidLoops === 0) return '3';
   if (n === 1 && solidLoops === 0) return t; // the one "loop" is a bay closed by anti-aliasing
   if (n === 1) {
     const cy = loops[0].cy;
@@ -504,11 +771,12 @@ export function fixDigitByLoops(t, loops, solidLoops = null) {
   return t;
 }
 
-async function ocrGlyph(worker, g) {
+export async function ocrGlyph(worker, g) { // (exported for the browser checks)
   if (g.wide && g.sub) {
     // touching 2-digit subscript ("₁₆"): Tesseract reads one digit of the pair, so split it at the
     // thinnest column near the middle and read each digit on its own
     const halves = splitAtThinnest(g.canvas);
+    if (halves === 'one') return ocrGlyph(worker, { ...g, wide: false });
     if (halves) {
       let t = '';
       // (the pair's solid-loop count isn't either digit's own)
@@ -519,7 +787,7 @@ async function ocrGlyph(worker, g) {
     const { data } = await worker.recognize(g.canvas);
     return String(data.text || '').replace(/[^0-9]/g, '');
   }
-  if (g.wide) {
+  if (g.wide || g.roundStem) {
     await worker.setParameters({ tessedit_char_whitelist: g.sub ? '0123456789' : MAIN_WL, tessedit_pageseg_mode: '8', user_defined_dpi: '300' });
     const { data } = await worker.recognize(g.canvas);
     return String(data.text || '').replace(/\s+/g, '');
@@ -547,7 +815,7 @@ async function ocrGlyph(worker, g) {
  * Glyph-by-glyph reading: subscripts are read as digits, main glyphs as letters/symbols, and
  * upper/lower case is decided from the glyph's height (OCR alone often confuses c/C, o/O, s/S).
  */
-async function readSideByGlyphs(worker, glyphs) {
+export async function readSideByGlyphs(worker, glyphs) { // (exported for the browser checks)
   // every glyph is its own read: run them side by side, each with its own OCR handle (its own
   // whitelist / page mode), then put the text together in order exactly as before
   const reads = await Promise.all(glyphs.map(async g => ocrGlyph(await ensureOCRWorker(), g)));
@@ -555,14 +823,29 @@ async function readSideByGlyphs(worker, glyphs) {
   for (let i = 0; i < glyphs.length; i++) {
     const g = glyphs[i];
     let t = reads[i];
-    if (!t) t = g.sub ? '' : '?';
     if (g.sub) {
-      t = t.split('').map(ch => DIGIT_FIX[ch] || ch).join('').replace(/[^0-9]/g, '');
+      // a subscript OCR couldn't read stays a "?" for repairEquation to fill (dropped otherwise)
+      t = t.split('').map(ch => DIGIT_FIX[ch] || ch).join('').replace(/[^0-9]/g, '') || '?';
+    } else if (g.roundStem) {
+      // "Cl" glued into one glyph (OCR may still tell a "Cd")
+      t = /^C[ld]$/.test(t) ? t : 'Cl';
+    } else if (g.dotted && !g.wide) {
+      t = 'i'; // no other letter of an element symbol has a dot
+    } else if (!t) {
+      t = '?';
     } else if (!g.wide) {
+      // a narrow upright stroke no taller than a capital is an "l" (read as "[" / "|" after a split: "Al(")
+      if (/^[\[(|1I]$/.test(t) && g.narrow && !g.bracketTall && !g.holes) t = 'l';
       // a round glyph no taller than a capital: the loop decides C or O (never a bracket)
-      if (/^[\[(COco0QD]$/.test(t) && !g.bracketTall && (t !== 'D' || !g.holes)) t = g.holes ? 'O' : 'C';
+      else if (/^[\[(COco0QD]$/.test(t) && !g.bracketTall && (t !== 'D' || !g.holes)) t = g.holes ? 'O' : 'C';
+      // an upright stroke only x-height tall, standing on the baseline, is an "r" (Cr / Br / Sr read as "CI")
+      if (/^[lI1|\[]$/.test(t) && !g.tall && !g.desc && g.onBase) t = 'r';
+      // hanging below the baseline without reaching the cap line: "g" (Mg / Ag / Hg read as "9" / "8" / "s")
+      if (g.desc && !g.tall && g.xTop && /^[0-9sSBbq]$/.test(t)) t = 'g';
       if (/[0-9]/.test(t)) t = LETTER_FIX[t] || t;
       if (/[A-Za-z]/.test(t) && XHEIGHT.has(t.toLowerCase())) t = g.tall ? t.toUpperCase() : t.toLowerCase();
+      // p / q / y / g hang below the line; full height without that is the capital ("P" read as "p")
+      if (/^[pqyg]$/.test(t) && g.tall && !g.desc) t = t.toUpperCase();
       if (t === '+' || (g.small && !g.tall && /[tTxX]/.test(t))) t = ' + ';
     }
     out += (g.spaceBefore && !/^ /.test(t) && !/ $/.test(out) ? ' ' : '') + t;
@@ -584,36 +867,60 @@ export async function readEquationImage(img, onStatus = () => {}) {
   const worker = await ensureOCRWorker();
   onStatus('Reading the equation…');
 
+  // A reading that lost a subscript often still balances ("CH₄ + O₂" read as "CH4 + O" does), so
+  // a reading must keep every subscript the glyph reader saw: per side, at least as many numbers
+  // after a letter / bracket as runs of subscript glyphs.
+  const subRuns = (n) => (n ? n.glyphs.filter((g, i) => g.sub && !(i && n.glyphs[i - 1].sub)).length : 0);
+  const numbers = (side) => (String(side || '').match(/[A-Za-z)\]][0-9?]+/g) || []).length;
+  const keepsSubs = (eq) => {
+    if (!loc.leftN || !loc.rightN) return true;
+    const [l, r] = eq.split('→');
+    return numbers(l) >= subRuns(loc.leftN) && numbers(r) >= subRuns(loc.rightN);
+  };
+  const accept = (c) => readsBalanced(c) && keepsSubs(c);
   const candidates = [];
+  const lefts = [], rights = []; // each reading's sides, for repairEquation (most trusted first)
   if (loc.hasArrow && loc.leftN && loc.rightN) {
     // Most reliable: glyph by glyph
     const [l, r] = await Promise.all([readSideByGlyphs(worker, loc.leftN.glyphs), readSideByGlyphs(worker, loc.rightN.glyphs)]);
+    lefts.push(fixOcrFormulaSide(l, { keepUnknown: true })); rights.push(fixOcrFormulaSide(r, { keepUnknown: true }));
     const L = fixOcrFormulaSide(l), R = fixOcrFormulaSide(r);
     if (L && R) candidates.push(`${L} → ${R}`);
   }
-  if (loc.hasArrow && loc.leftN && loc.rightN && !candidates.some(c => balanceEquation(c).ok)) {
+  if (loc.hasArrow && loc.leftN && loc.rightN && !candidates.some(c => accept(c))) {
     // Preferred: subscripts enlarged onto the baseline
     for (const psm of ['7', '8']) {
       const L = fixOcrFormulaSide(await ocr(worker, loc.leftN.canvas, psm));
       const R = fixOcrFormulaSide(await ocr(worker, loc.rightN.canvas, psm));
+      lefts.push(L); rights.push(R);
       if (L && R) candidates.push(`${L} → ${R}`);
-      if (balanceEquation(`${L} → ${R}`).ok) break;
+      if (accept(`${L} → ${R}`)) break;
     }
   }
-  if (loc.hasArrow && !candidates.some(c => balanceEquation(c).ok)) {
+  if (loc.hasArrow && !candidates.some(c => accept(c))) {
     for (const psm of ['7', '6']) {
       const L = fixOcrFormulaSide(await ocr(worker, loc.left, psm));
       const R = fixOcrFormulaSide(await ocr(worker, loc.right, psm));
+      lefts.push(L); rights.push(R);
       if (L && R) candidates.push(`${L} → ${R}`);
       const eq = candidates[candidates.length - 1];
-      if (eq && balanceEquation(eq).ok) break;
+      if (eq && accept(eq)) break;
     }
   }
-  if (!candidates.some(c => balanceEquation(c).ok)) {
+  // Nothing balances: the readings' sides with a character or two swapped for what OCR confuses it
+  // with ("NaSPO4" → "Na3PO4", an unread "₃"), picking the version that balances with fewest changes
+  let repaired = 0;
+  if (!candidates.some(c => accept(c))) {
+    const fixed = repairEquation(lefts, rights, 2, keepsSubs);
+    if (fixed) { candidates.unshift(fixed.equation); repaired = fixed.edits; }
+  }
+  if (!candidates.some(c => accept(c))) {
     // No coloured arrow found, or the halves didn't parse: read the whole line
     const whole = await ocr(worker, loc.whole, '7');
     candidates.push(whole.replace(/\s*[-—–=]+\s*/, ' → '));
   }
-  const good = candidates.find(c => balanceEquation(c).ok);
-  return { ok: true, equation: good || candidates[0] || '', parsed: !!good, raw: candidates, debug: loc };
+  const good = candidates.find(c => accept(c));
+  // nothing passed, but a reading balances: show it, flagged — a subscript is likely missing
+  const doubtful = !good && candidates.find(c => readsBalanced(c));
+  return { ok: true, equation: good || doubtful || candidates[0] || '', parsed: !!good, doubtful: !!doubtful, repaired: good && good === candidates[0] ? repaired : 0, raw: candidates, debug: loc };
 }

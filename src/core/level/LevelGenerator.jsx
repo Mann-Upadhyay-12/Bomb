@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Dropzone } from '../Dropzone.jsx';
 import { useToast } from '../ToastContext.jsx';
 import { KNOWN_MODULE_NAMES } from '../sectionsData.js';
-import { readBoard, imageToData } from './levelVision.js';
+import { readBoard, imageToData, boardIsRed } from './levelVision.js';
 
 const ALL_NAMES = Object.keys(KNOWN_MODULE_NAMES);
 const isSolvable = n => Boolean(KNOWN_MODULE_NAMES[n] && KNOWN_MODULE_NAMES[n].isImplemented);
@@ -21,13 +21,25 @@ export function LevelGenerator({ isVisible, savedLevels = [], onStart, onSave, o
 
   const handleImage = (img, dataUri) => {
     setPreviewUri(dataUri);
-    let res;
-    try { res = readBoard(imageToData(img)); } catch (e) { showToast('COULD NOT READ THAT IMAGE'); return; }
+    let res, red = false;
+    try {
+      const data = imageToData(img);
+      res = readBoard(data);
+      red = boardIsRed(data).red;
+    } catch (e) { showToast('COULD NOT READ THAT IMAGE'); return; }
     const found = res.titles.map(t => ({ name: t.name, unsure: t.unsure }));
     if (!found.length) { showToast('NO MODULE TITLES FOUND'); return; }
-    setDraft(prev => (appendNext ? [...prev, ...found] : found));
+    // a red board means the bomb has batteries: Batteries goes first (its table and the batteries
+    // decide the order the others may be disarmed in)
+    setDraft(prev => {
+      const next = appendNext ? [...prev, ...found] : found;
+      return red && !next.some(m => m.name === 'Batteries') ? [{ name: 'Batteries', unsure: false, auto: 'red' }, ...next] : next;
+    });
     const kept = found.filter(m => isSolvable(m.name)).length;
-    showToast(`FOUND ${found.length} MODULES · ${kept} SOLVABLE ✓`);
+    const unknown = found.filter(m => !m.name).length;
+    showToast(unknown
+      ? `FOUND ${found.length} MODULES · ${unknown} NOT RECOGNISED — PICK ${unknown === 1 ? 'IT' : 'THEM'} IN THE LIST`
+      : `FOUND ${found.length} MODULES · ${kept} SOLVABLE ✓`);
   };
 
   const kept = draft.filter(m => isSolvable(m.name));
@@ -63,7 +75,8 @@ export function LevelGenerator({ isVisible, savedLevels = [], onStart, onSave, o
       <div className="sub">
         Paste a screenshot of the bomb board — every module card is read by its title, in board order
         (left → right, top → bottom) — or <b>build the level by hand</b> by clicking modules below.
-        Modules this app can't solve yet are <b>left out</b> of the level.
+        Modules this app can't solve yet are <b>left out</b> of the level. A <b>red</b> board means the
+        bomb has batteries: <b>Batteries</b> is added first.
       </div>
 
       {isVisible && (
@@ -113,6 +126,7 @@ export function LevelGenerator({ isVisible, savedLevels = [], onStart, onSave, o
         <div className="about-panel lvlgen-panel">
           <div className="bg-panel-title">
             LEVEL MODULES — {kept.length} IN LEVEL{skipped.length ? `, ${skipped.length} SKIPPED (NO SOLVER)` : ''}
+            {draft.some(m => !m.name) ? ` · ${draft.filter(m => !m.name).length} NOT RECOGNISED` : ''}
           </div>
           <ol className="lvlgen-list">
             {draft.map((m, i) => {
@@ -126,7 +140,7 @@ export function LevelGenerator({ isVisible, savedLevels = [], onStart, onSave, o
                       <option key={n} value={n}>{n}{isSolvable(n) ? '' : ' (no solver)'}</option>
                     ))}
                   </select>
-                  <span className="lvlgen-tag">{ok ? (m.unsure ? 'CHECK' : 'IN LEVEL') : 'SKIPPED'}</span>
+                  <span className="lvlgen-tag">{!m.name ? 'NOT RECOGNISED — PICK IT' : ok ? (m.unsure ? 'CHECK' : m.auto === 'red' ? 'IN LEVEL · RED BOARD' : 'IN LEVEL') : 'SKIPPED'}</span>
                   <span className="lvlgen-actions">
                     <button type="button" title="Move up" onClick={() => move(i, -1)}>↑</button>
                     <button type="button" title="Move down" onClick={() => move(i, 1)}>↓</button>

@@ -1,0 +1,22 @@
+# What `vercel` uploads from this folder: only what the build and the login functions need. Everything else stays local
+# (captcha training images and model runs, the Python env, conso's own repo, tests, docs).
+/*
+!/package.json
+!/package-lock.json
+!/index.html
+!/vite.config.js
+!/vercel.json
+!/api
+!/lib
+!/scripts
+!/src
+!/public
+
+# backups next to the sources
+*.bak_*
+
+# local reference copies of the old single-file solvers (git-ignored too, so a GitHub deploy has none)
+/public/HiTestCTC.html
+/public/chess63.html
+/public/simons.html
+/public/wireseq.html

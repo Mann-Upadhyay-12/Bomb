@@ -109,3 +109,21 @@
       background: var(--brass);
       color: #121419;
     }
+
+/* the workbench: each stage's formula with every letter green (true) or red (false) */
+.logic-formula {
+  padding-left: 34px;
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  line-height: 1.5;
+  word-break: break-all;
+}
+.logic-formula .lf.op, .logic-formula .lf.paren { color: var(--ink-soft); font-weight: 600; }
+.logic-formula .lf.t { color: #68D391; }
+.logic-formula .lf.f { color: #F87171; }
+.logic-formula .lf.greek:not(.t):not(.f) { color: var(--ink-soft); opacity: .6; }
+.logic-formula .lf.bad { color: var(--brass); text-decoration: underline wavy; }
+[data-theme="parchment"] .logic-formula .lf.t { color: var(--select-green-deep); }
+[data-theme="parchment"] .logic-formula .lf.f { color: #B04A3A; }

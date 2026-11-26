@@ -1,0 +1,26 @@
+/* Phones and tablets (no mouse): the same test as the phone paste box (moduleinput.css) and
+   src/utils/touch.js. A finger needs about 36px to hit a control without catching its neighbour,
+   and an iPhone zooms the whole page into any text box or menu whose text is under 16px (and
+   stays zoomed), so those get 16px. Loaded after every module's CSS. */
+@media not all and (hover: hover) and (pointer: fine) {
+  /* buttons */
+  .bg-btn, .reset-btn, .copy-btn, .chip-btn, .mgroup-manual-debug, .wsq-tab, .wsq-next, .simon-add,
+  .btn-swatch, .bat-add-btn, .bj-rank { min-height: 36px; }
+  .chip-btn, .bj-rank, .pnst-nudge .bg-btn, .bal-input-row .bg-btn, .mgroup-manual-debug { min-width: 40px; }
+  .mgroup-manual-debug { padding-left: 12px; padding-right: 12px; }
+  .sy-count .k button { width: 32px; height: 32px; }
+  .complexwires-working-container { --cw-swatch: 34px; }
+  .complexwires-working-container label { min-height: 36px; padding: 0 4px; }
+  .complexwires-working-container input[type="checkbox"] { width: 20px; height: 20px; }
+
+  /* text boxes and menus: 16px, so tapping one doesn't zoom the page on an iPhone */
+  input[type="text"], input[type="number"], input[type="search"], input:not([type]), select, textarea,
+  .dz-paste-box { font-size: 16px !important; }
+  select, input.bg-hex { min-height: 36px; }
+
+  /* a fold-out's heading is its button */
+  summary { padding-top: 8px; padding-bottom: 8px; }
+
+  /* the smallest labels */
+  .stamp-hint, .mgroup-manual-sub, .simon-ans-sub, .mines-stat-lbl, .maze-tapsets-lbl { font-size: 11px; }
+}

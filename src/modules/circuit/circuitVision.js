@@ -42,7 +42,7 @@ function findPanel(data, W, H) {
   return { x0: big.x0 + pad, y0: big.y0 + pad, x1: big.x1 - pad, y1: big.y1 - pad };
 }
 
-function components(mask, w, h, conn8 = true) {
+export function components(mask, w, h, conn8 = true) {
   const lab = new Int32Array(w * h), comps = [];
   for (let s = 0; s < w * h; s++) {
     if (!mask[s] || lab[s]) continue;
