@@ -14,6 +14,7 @@ import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
 import { CopyLines } from '../../core/components/CopyLines.jsx';
 import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
 import { PianoWorking } from './working.jsx';
+import { useCardState } from '../../core/room/useCardState.js';
 
 export const PN_KEY = 'bombvision_piano_codes';
 
@@ -24,7 +25,9 @@ export function PianoModule({ isActive = true }) {
   const answerChanged = useAnswerGate();
   const uid = useId(); // per-instance ids: missions can show the same module several times
 
-  const [clefSel, setClefSel] = useState('auto');
+  // in a room, the clef switch and the key signature are the room's (core/room/useCardState.js): the
+  // helper pastes the bot's key message, the defuser the staff picture
+  const [clefSel, setClefSel] = useCardState('clef', 'auto');
   const [detClef, setDetClef] = useState('bass');
   const [notes, setNotes] = useState([{ pos: 0, acc: 0 }, { pos: 0, acc: 0 }]);
   // no answer until both notes come from a picture, the sample, a tap on the staff or ▲ ▼ (two
@@ -33,9 +36,9 @@ export function PianoModule({ isActive = true }) {
   const touched = placed[0] && placed[1];
   const setTouched = (v) => setPlaced([v, v]);
   // key signature from the bot's message ("Key Signature: F Major."), '' = none / C major
-  const [keySig, setKeySig] = useState('');
+  const [keySig, setKeySig] = useCardState('keySig', '');
   // what's in the key field ("E", "E Major" or the whole bot message); a readable key sets keySig
-  const [keyText, setKeyText] = useState('');
+  const [keyText, setKeyText] = useCardState('keyText', '');
   const keyTextBad = keyText.trim() !== '' && !pnParseKeyField(keyText);
   const onKeyText = (v) => {
     setKeyText(v);
@@ -208,7 +211,7 @@ export function PianoModule({ isActive = true }) {
           }
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={handleClear}>
+              <button className="reset-btn" type="button" onClick={handleClear} data-card-clear>
                 clear
               </button>
               <button

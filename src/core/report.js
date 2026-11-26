@@ -1,5 +1,5 @@
-// The ⚑ "wrong answer?" button (components/ReportButton.jsx), for the owner and the OGs only: it sends a
-// module's answer, its pictures and its text on screen (what it read, its working) to the owner's Discord
+// The ⚑ "wrong answer?" button (components/ReportButton.jsx), for everyone on the site (logged in or
+// not): it sends a module's answer, its pictures and its text on screen (what it read, its working) to the owner's Discord
 // through api/report.js. Everything is taken from the page as it is, so no module has to do anything:
 //   - the pictures pasted into the module: each Dropzone notes them here (noteInput)
 //   - the pictures and boards it shows (<img> from a paste, <canvas>)
@@ -89,10 +89,13 @@ export function noteInput(el, src) {
   inputs.set(el, list);
 }
 
-/** Who is logged in (set by the page's unlock step, scripts/lock-site.mjs). */
+/** Who is logged in (set by the page's unlock step, scripts/lock-site.mjs); null for a guest. */
 export const account = () => (typeof window !== 'undefined' && window.__BB_ACCOUNT__) || null;
-/** The owner and the OGs get the button. */
-export const canReport = () => { const a = account(); return Boolean(a && (a.admin || a.og)); };
+/** On the website (its /api is there: the page's unlock step sets __BB_SITE__). Not the offline copy or
+ *  the dev server, which have nowhere to send a report. */
+export const onSite = () => typeof window !== 'undefined' && Boolean(window.__BB_SITE__ || window.__BB_ACCOUNT__);
+/** Everyone on the site gets the button, logged in or not. */
+export const canReport = () => onSite();
 
 const MAX_IMAGES = 6;
 const BUDGET = 3.6 * 1024 * 1024; // the site takes 4.5 MB per request
@@ -202,10 +205,9 @@ export async function collectReport(anchor) {
 
 const ERRORS = {
   setup: "reports aren't switched on yet (the owner has to add the Discord channel)",
-  login: 'log in again, then send it',
-  'not-og': 'only the owner and the OGs can send reports',
   slow: 'one report every few seconds: try again in a moment',
-  db: "the site couldn't check who you are: try again in a minute",
+  hourly: 'that’s 10 reports this hour: log in to send more, or try later',
+  busy: 'lots of reports right now: try again in a minute',
   discord: "Discord didn't take it: try again",
   'webhook-gone': 'the Discord channel for reports is gone (tell the owner)',
 };

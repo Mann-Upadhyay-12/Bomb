@@ -227,7 +227,7 @@ export function MinesModule({ isActive = true }) {
           }
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={() => resetRound(true)}>
+              <button className="reset-btn" type="button" onClick={() => resetRound(true)} data-card-clear>
                 clear
               </button>
               <button
@@ -294,7 +294,7 @@ export function MinesModule({ isActive = true }) {
               >
                 🔄 RESET ROUND (CLEAR HISTORY)
               </button>
-              <button type="button" className="bg-btn" onClick={() => resetRound(true)}>
+              <button type="button" className="bg-btn" onClick={() => resetRound(true)} data-card-clear>
                 🗑️ CLEAR BOARD
               </button>
               <button

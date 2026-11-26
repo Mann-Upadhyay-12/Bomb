@@ -7,6 +7,7 @@ import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { useSharedSetting } from '../../core/sharedSetting.js';
 import { useBombSerial } from '../../core/bombSerial.js';
 import { manualBoxPaste } from '../../core/airPaste.js';
+import { useInstance } from '../../core/InstanceContext.jsx';
 import { Dropzone } from '../../core/Dropzone.jsx';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
@@ -14,7 +15,8 @@ import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
 import { CopyLines } from '../../core/components/CopyLines.jsx';
 import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
 
-const KEY = 'bombvision_wires_manual';
+export const WIRES_MANUAL_KEY = 'bombvision_wires_manual';
+const KEY = WIRES_MANUAL_KEY;
 const ordinal = (n) => ['', '1st', '2nd', '3rd', '4th', '5th', '6th'][n] || `${n}th`;
 
 export function WiresModule({ isActive = true }) {
@@ -22,6 +24,9 @@ export function WiresModule({ isActive = true }) {
   const { copy } = useClipboard();
   const answerChanged = useAnswerGate();
   const uid = useId();
+  // a card of the multiple page: the manual is the 📖 bar above the cards (pasted once for all)
+  const inst = useInstance();
+  const grouped = Boolean(inst && inst.grouped);
   const [manual, setManual] = useSharedSetting(KEY, '');
   const [serial, setSerial] = useBombSerial();
   const [wires, setWires] = useState([]);
@@ -88,7 +93,7 @@ export function WiresModule({ isActive = true }) {
           ) : null}
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={handleClear}>clear</button>
+              <button className="reset-btn" type="button" onClick={handleClear} data-card-clear>clear</button>
               <button className="reset-btn" type="button" style={{ borderColor: 'var(--brass)', color: 'var(--brass)' }} onClick={handleSample}>⚡ SAMPLE</button>
             </>
           }
@@ -97,14 +102,17 @@ export function WiresModule({ isActive = true }) {
           <div className="btn-config">
             <div className="search-config-row">
               <div className="btn-config-head">
-                <label className="search-config-label" htmlFor={`${uid}-man`} style={{ margin: 0 }}>HELPER MANUAL (paste as-is — the 3, 4, 5 and 6 wire lists):</label>
+                {grouped ? <span className="search-config-label" style={{ margin: 0 }}>📖 MANUAL READ:</span>
+                  : <label className="search-config-label" htmlFor={`${uid}-man`} style={{ margin: 0 }}>HELPER MANUAL (paste as-is — the 3, 4, 5 and 6 wire lists):</label>}
                 <span className={`maze-status-tag ${parsed.unclear.length ? 'warn' : ''}`}>
                   {counts.length ? counts.map(n => `${n}w ×${parsed.sections[n].length}`).join(' · ') : 'no rules yet'}{parsed.unclear.length ? ` · ⚠ ${parsed.unclear.length} unclear` : ''}
                 </span>
               </div>
+              {!grouped && (
               <textarea id={`${uid}-man`} className="search-words-field manual-text" spellCheck={false}
                 placeholder={'3 wires:\nIf there are no yellow wires, cut the second wire.\nOtherwise, cut the last wire.\n\n4 wires:\n…'}
                 value={manual} onChange={(e) => setManual(e.target.value)} onPaste={manualBoxPaste()} />
+              )}
             </div>
             <div className="btn-facts wires-facts">
               <label className="btn-fact btn-fact-serial">

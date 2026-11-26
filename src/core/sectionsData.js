@@ -1,9 +1,10 @@
 // Sections and missions configuration for the Bomb Boomed sidebar
 // Each mission maps to a sequence of modules.
 // Missing/placeholder modules are flagged with isImplemented: false.
-// shared: true = every copy on a bomb uses the same manual (Password, Piano …) or the same manual-side
-// image strip (Maze, Symbols, Diagram, Chess): repeated copies are shown as ONE page with a card per copy,
-// stacked one over the other. Others get a window per copy.
+// shared: true = "multiple" mode: repeated copies are shown as ONE page with a card per copy (and a
+// "modules to solve" bar in all-modules mode). Copies with a manual share it (Password, Piano, Wires,
+// Memory …, or the manual-side image strip of Maze, Symbols, Diagram, Chess); the others are
+// independent cards (Balance, Limbo, Pipes, Blackjack …). Others get a window per copy.
 
 export const KNOWN_MODULE_NAMES = {
   // Implemented modules in bomb_boomed:
@@ -26,21 +27,21 @@ export const KNOWN_MODULE_NAMES = {
   'Morse Code': { id: 'morse', isImplemented: true, shared: true },
   'Queens': { id: 'queens', isImplemented: true },
   'The Button': { id: 'button', isImplemented: true, shared: true },
-  'Balance': { id: 'balance', isImplemented: true },
+  'Balance': { id: 'balance', isImplemented: true, shared: true },
   'Circuit': { id: 'circuit', isImplemented: true, shared: true },
-  'Limbo': { id: 'limbo', isImplemented: true },
+  'Limbo': { id: 'limbo', isImplemented: true, shared: true },
   'Astrology': { id: 'astrology', isImplemented: true, shared: true },
-  'Pipes': { id: 'pipes', isImplemented: true },
-  'Hangman': { id: 'hangman', isImplemented: true },
-  'Blackjack': { id: 'blackjack', isImplemented: true },
+  'Pipes': { id: 'pipes', isImplemented: true, shared: true },
+  'Hangman': { id: 'hangman', isImplemented: true, shared: true },
+  'Blackjack': { id: 'blackjack', isImplemented: true, shared: true },
   'Batteries': { id: 'batteries', isImplemented: true, shared: true },
   'Wire Placement': { id: 'wireplace', isImplemented: true, shared: true },
   'Laundry': { id: 'laundry', isImplemented: true },
   'Battleship': { id: 'battleship', isImplemented: true },
   'Bluescreen': { id: 'bluescreen', isImplemented: true }, // needy: answers a crash
-  'Wires': { id: 'wires', isImplemented: true },
-  'Memory': { id: 'memory', isImplemented: true },
-  'Echo': { id: 'echo', isImplemented: true },
+  'Wires': { id: 'wires', isImplemented: true, shared: true },
+  'Memory': { id: 'memory', isImplemented: true, shared: true },
+  'Echo': { id: 'echo', isImplemented: true, shared: true },
 
   // Needy modules with no Helper tab (nothing to look up): the Defuser handles them alone
   'Pressure': { id: 'pressure', isImplemented: false },

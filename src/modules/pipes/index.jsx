@@ -114,7 +114,7 @@ export function PipesModule({ isActive = true }) {
               sub={<>the <b>helper’s</b> picture has the colours · the defuser’s grey one is optional (cross-check)</>}
             />
           }
-          controls={<button className="reset-btn" type="button" onClick={handleClear}>clear</button>}
+          controls={<button className="reset-btn" type="button" onClick={handleClear} data-card-clear>clear</button>}
         >
           {status.text && <div className={`pipes-status ${status.ok === false ? 'warn' : ''}`}>{status.text}</div>}
           {mismatch && <div className="pipes-status warn">⚠ The defuser’s picture shows different pieces from the helper’s — check both are from this bomb.</div>}

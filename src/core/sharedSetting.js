@@ -5,6 +5,15 @@ import { useSyncExternalStore, useCallback } from 'react';
 const values = new Map();
 const listeners = new Map();
 
+// A room (src/core/room/roomSync.js) watches every change made here: watcher('set' | 'mem', key, value).
+// value null = a saved setting was forgotten.
+let watcher = null;
+export function watchSharedChanges(fn) {
+  watcher = fn;
+  return () => { if (watcher === fn) watcher = null; };
+}
+const told = (kind, key, value) => { if (watcher) watcher(kind, key, value); };
+
 function read(key, fallback) {
   if (!values.has(key)) {
     let v = null;
@@ -18,6 +27,15 @@ export function setSharedSetting(key, value) {
   values.set(key, value);
   try { localStorage.setItem(key, value); } catch (e) {}
   (listeners.get(key) || []).forEach(l => l());
+  told('set', key, value);
+}
+
+/** A saved setting's value now, outside React (a room's "share mine"); null when it has none. */
+export function peekSharedSetting(key) {
+  // what was pasted or typed is in localStorage; values may hold a module's built-in default instead
+  let v = null;
+  try { v = localStorage.getItem(key); } catch (e) {}
+  return typeof v === 'string' && v.trim() ? v : null;
 }
 
 /** Forgets a saved setting: every window shows its default again (New game). */
@@ -25,6 +43,7 @@ export function resetSharedSetting(key) {
   values.delete(key);
   try { localStorage.removeItem(key); } catch (e) {}
   (listeners.get(key) || []).forEach(l => l());
+  told('set', key, null);
 }
 
 export function useSharedSetting(key, fallback) {
@@ -56,6 +75,21 @@ export function resetSharedState(key) {
 /** In-memory state's value now, outside React (the ⚑ report); undefined when nothing used it yet. */
 export const peekSharedState = (key) => memValues.get(key);
 
+/** In-memory state set from outside React (a room member's Simon table …). */
+export function setSharedState(key, value) {
+  memValues.set(key, value);
+  (memListeners.get(key) || []).forEach(l => l());
+  told('mem', key, value);
+}
+
+/** Has this in-memory state changed from its first value? (a room's "share mine") */
+export function sharedStateChanged(key) {
+  if (!memValues.has(key)) return false;
+  const initial = memInitials.get(key);
+  const first = typeof initial === 'function' ? initial() : initial;
+  try { return JSON.stringify(memValues.get(key)) !== JSON.stringify(first); } catch (e) { return false; }
+}
+
 export function useSharedState(key, initial) {
   const subscribe = useCallback((l) => {
     if (!memListeners.has(key)) memListeners.set(key, new Set());
@@ -67,8 +101,7 @@ export function useSharedState(key, initial) {
   const value = useSyncExternalStore(subscribe, () => memValues.get(key));
   const set = useCallback((next) => {
     const v = typeof next === 'function' ? next(memValues.get(key)) : next;
-    memValues.set(key, v);
-    (memListeners.get(key) || []).forEach(l => l());
+    setSharedState(key, v);
   }, [key]);
   return [value, set];
 }

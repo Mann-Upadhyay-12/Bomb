@@ -6,6 +6,7 @@ import { useAppState } from '../../core/AppStateContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
 import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { useBombSerial } from '../../core/bombSerial.js';
+import { useCardState } from '../../core/room/useCardState.js';
 import { useLevel, boardOrder } from '../../core/LevelContext.js';
 import { Dropzone } from '../../core/Dropzone.jsx';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
@@ -29,8 +30,11 @@ export function BluescreenModule({ isActive = true }) {
   const [status, setStatus] = useState({ text: '', ok: null });
   const [busy, setBusy] = useState(false);
   const [previewUri, setPreviewUri] = useState('');
-  // the level's cards the Defuser has disarmed (board slots, 1-based); kept between crashes
-  const [ticked, setTicked] = useState(() => new Set());
+  // the level's cards the Defuser has disarmed (board slots, 1-based); kept between crashes. In a room
+  // they're the room's (core/room/useCardState.js): a list, since a Set isn't plain data
+  const [tickedList, setTickedList] = useCardState('ticked', []);
+  const ticked = React.useMemo(() => new Set(tickedList), [tickedList]);
+  const setTicked = (next) => setTickedList(prev => [...(typeof next === 'function' ? next(new Set(prev)) : next)].sort((a, b) => a - b));
 
   const level = useLevel();
   const cards = countableModules(boardOrder(level));
@@ -146,7 +150,7 @@ export function BluescreenModule({ isActive = true }) {
           }
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={handleClear} title="Clear everything, the ticked modules too">clear</button>
+              <button className="reset-btn" type="button" onClick={handleClear} data-card-clear title="Clear everything, the ticked modules too">clear</button>
               <button className="reset-btn" type="button" style={{ borderColor: 'var(--brass)', color: 'var(--brass)' }} onClick={handleSample}>⚡ SAMPLE</button>
               <button className="reset-btn" type="button" onClick={handleNextCrash} title="Keep the ticked modules, clear the error and counts">↻ next crash</button>
             </>

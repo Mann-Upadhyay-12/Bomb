@@ -4,6 +4,8 @@ import { useInstance } from './InstanceContext.jsx';
 import { useTouchScreen, phoneTitle } from '../utils/touch.js';
 import { AIR_PASTE_EVENT, pasteInAir } from './airPaste.js';
 import { noteInput } from './report.js';
+import { attachCardZone } from './room/roomCards.js';
+import { nameOf } from './room/roomClient.js';
 
 
 // Phones can't Ctrl+V or drag & drop. This is a real text box: long-press it → Paste works with no
@@ -146,14 +148,22 @@ export function Dropzone({
   const [isDrag, setIsDrag] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // every picture this box takes is noted for the ⚑ wrong-answer report (report.js)
-  const took = (src) => noteInput(containerRef.current, src);
-  const takeImage = (img, dataUri, fileBlob) => {
-    took(fileBlob || dataUri);
+  // every picture this box takes is noted for the ⚑ wrong-answer report (report.js), and in a room
+  // it goes to the same card in every teammate's app (room/roomCards.js) — unless it came from there
+  const roomZone = useRef(null);
+  const [roomFrom, setRoomFrom] = useState(null);
+  const took = (src, origin, remote) => {
+    noteInput(containerRef.current, src);
+    if (remote) return;
+    setRoomFrom(null);
+    if (roomZone.current) roomZone.current.took(origin, src);
+  };
+  const takeImage = (img, dataUri, fileBlob, origin, remote) => {
+    took(fileBlob || dataUri, origin || (fileBlob ? { type: 'file', file: fileBlob } : null), remote);
     if (onImage) onImage(img, dataUri, fileBlob);
   };
-  const takeFiles = (files) => {
-    for (const f of Array.from(files || []).slice(-3)) took(f);
+  const takeFiles = (files, remote) => {
+    for (const f of Array.from(files || []).slice(-3)) took(f, { type: 'file', file: f }, remote);
     onFiles(files);
   };
 
@@ -175,7 +185,7 @@ export function Dropzone({
       { type: 'file', file },
       (img, dataUri, fileBlob) => {
         setLoading(false);
-        takeImage(img, dataUri, fileBlob);
+        takeImage(img, dataUri, fileBlob, { type: 'file', file });
       },
       () => setLoading(false)
     );
@@ -183,16 +193,17 @@ export function Dropzone({
 
   const [loadError, setLoadError] = useState('');
   // done(ok): told when the picture has loaded or failed (a manual link box waiting on it)
-  const loadFromSource = (srcObj, done = null) => {
+  // remote: it came from the room (a teammate pasted it), so it isn't sent back
+  const loadFromSource = (srcObj, done = null, remote = false) => {
     // a pasted file goes through onFiles when the module takes several at once
-    if (srcObj.type === 'file' && multiple && onFiles) { setLoadError(''); takeFiles([srcObj.file]); if (done) done(true); return; }
+    if (srcObj.type === 'file' && multiple && onFiles) { setLoadError(''); takeFiles([srcObj.file], remote); if (done) done(true); return; }
     setLoading(srcObj.type === 'url' ? 'url' : true);
     setLoadError('');
     loadImageSource(
       srcObj,
       (img, dataUri, fileBlob) => {
         setLoading(false);
-        takeImage(img, dataUri, fileBlob);
+        takeImage(img, dataUri, fileBlob, srcObj, remote);
         if (done) done(true);
       },
       () => {
@@ -266,6 +277,18 @@ export function Dropzone({
   // handled per card (the card you drop on), not window-wide.
   latest.current = { handleDataTransfer, loadFromSource, inst };
 
+  // In a room: this box is one card's drop box (its module window + card number); the room's
+  // pictures for it are loaded here, in order (room/roomCards.js)
+  useEffect(() => {
+    const zone = attachCardZone(
+      containerRef.current,
+      (src, done) => latest.current.loadFromSource(src, (ok) => done(ok), true),
+      (who) => setRoomFrom(who)
+    );
+    roomZone.current = zone;
+    return () => { zone.detach(); roomZone.current = null; };
+  }, []);
+
   // Window-wide drag and drop & paste listeners
   // CRITICAL: Only process events if this specific dropzone is currently visible (not hidden in an inactive mission slot)
   useEffect(() => {
@@ -322,7 +345,8 @@ export function Dropzone({
 
     const handleWindowDrop = (e) => {
       if (!isVisible() || inGroup()) return;
-      if (!isDroppable(e.dataTransfer)) {
+      // e.defaultPrevented: something on the page (a module card) already took this drop
+      if (e.defaultPrevented || !isDroppable(e.dataTransfer)) {
         dragDepth = 0;
         setIsDrag(false);
         return;
@@ -428,6 +452,7 @@ export function Dropzone({
         <div className="dz-title">{loading === 'url' ? 'Downloading image…' : loading ? 'Processing image…' : touch ? phoneTitle(title) : title}</div>
         {touch && !loading && <div className="dz-touch">long-press the box → <b>Paste</b> · or tap here to pick a saved picture</div>}
         {loadError && <div className="dz-error">{loadError}</div>}
+        {roomFrom && <div className="dz-room-from">👥 FROM {nameOf(roomFrom).toUpperCase()}</div>}
         <div className="dz-sub">
           {sub || (
             <>

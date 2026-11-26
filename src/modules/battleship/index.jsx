@@ -8,6 +8,7 @@ import { ModuleInput } from '../../core/components/ModuleInput.jsx';
 import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
 import { CopyLines } from '../../core/components/CopyLines.jsx';
 import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
+import { useCardState } from '../../core/room/useCardState.js';
 
 const WAIT = 20; // seconds between shots
 const BOARD = { cols: 6, rows: 6 };
@@ -20,12 +21,13 @@ export function BattleshipModule({ isActive = true }) {
   const { copy } = useClipboard();
   const answerChanged = useAnswerGate();
 
-  const [text, setText] = useState('');
-  const [fleet, setFleet] = useState([]); // [{ len, status }]
-  const [fleetHits, setFleetHits] = useState(0); // hits marked when the fleet list was last pasted
+  // in a room, the fleet list and the hit / miss marks are the room's (core/room/useCardState.js)
+  const [text, setText] = useCardState('text', '');
+  const [fleet, setFleet] = useCardState('fleet', []); // [{ len, status }]
+  const [fleetHits, setFleetHits] = useCardState('fleetHits', 0); // hits marked when the fleet list was last pasted
   const size = BOARD; // the bomb's 6×6 module grid (A–F × 1–6)
-  const [shots, setShots] = useState([]); // [{ i, result }] in the order fired
-  const [lastShotAt, setLastShotAt] = useState(0);
+  const [shots, setShots] = useCardState('shots', []); // [{ i, result }] in the order fired
+  const [lastShotAt, setLastShotAt] = useCardState('lastShotAt', 0);
   const [now, setNow] = useState(() => Date.now());
 
   const shotMap = useMemo(() => Object.fromEntries(shots.map(s => [s.i, s.result])), [shots]);
@@ -118,7 +120,7 @@ export function BattleshipModule({ isActive = true }) {
             <>
               <button className="reset-btn" type="button" onClick={undo} disabled={!shots.length}>↶ undo shot</button>
               <button className="reset-btn" type="button" onClick={newBoard} disabled={!shots.length}>new board</button>
-              <button className="reset-btn" type="button" onClick={clearAll}>clear</button>
+              <button className="reset-btn" type="button" onClick={clearAll} data-card-clear>clear</button>
               <button className="reset-btn" type="button" style={{ borderColor: 'var(--brass)', color: 'var(--brass)' }} onClick={sample}>⚡ SAMPLE</button>
             </>
           }
@@ -157,6 +159,9 @@ export function BattleshipModule({ isActive = true }) {
       answers={
         <>
           <AnswerPanel label="FIRE AT" stats={stats} answers={answers} copyValue={answer && !res.done ? answer : null} placeholder={placeholder} />
+          {/* the shot report and the board in one panel, like the other modules' boards */}
+          {((res.ok && !res.done && target >= 0) || fleet.length > 0) && (
+          <div className="btn-config bs-panel">
           {res.ok && !res.done && target >= 0 && (
             <div className="bs-report">
               <span>{targetName} was a</span>
@@ -202,6 +207,8 @@ export function BattleshipModule({ isActive = true }) {
               Click a cell to mark it: once = <b>miss</b> •, twice = <b>hit</b> ✕, three times = clear. Numbers are each cell's chance (%) of holding a ship.
               {' '}{shots.length} shot{shots.length === 1 ? '' : 's'} · {hits} hit{hits === 1 ? '' : 's'} of {fleetCells} ship cells.
             </div>
+          )}
+          </div>
           )}
         </>
       }

@@ -4,6 +4,8 @@ import { useToastFlash } from '../ToastContext.jsx';
 import { useInstance } from '../InstanceContext.jsx';
 import { useClip } from '../AppStateContext.jsx';
 import { useTouchScreen, tapWord } from '../../utils/touch.js';
+import { useRoomCardId } from '../room/RoomCard.jsx';
+import { noteAnswer } from '../room/roomBoard.js';
 
 const DEFAULT_HINT = 'CLICK TO COPY';
 
@@ -28,6 +30,12 @@ export function AnswerPanel({
   React.useEffect(() => {
     if (report && inst && inst.report) inst.report(summary);
   }, [summary]);
+
+  // In a room: the answers board lists this card's answer next to the teammates' (core/room/roomBoard.js)
+  const card = useRoomCardId();
+  const panelId = React.useId();
+  React.useEffect(() => { noteAnswer(card, panelId, summary); }, [card, summary]);
+  React.useEffect(() => () => noteAnswer(card, panelId, null), [card]);
 
   // Is this answer what the page last copied, and did that work? (auto-copy can fail on a phone)
   const mine = summary ? formatClipboardText(summary) : '';

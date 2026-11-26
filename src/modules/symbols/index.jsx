@@ -235,7 +235,7 @@ export function SymbolsModule({ isActive = true, instance = 0, instanceCount = 1
           }
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={handleClear}>
+              <button className="reset-btn" type="button" onClick={handleClear} data-card-clear>
                 clear
               </button>
               <button

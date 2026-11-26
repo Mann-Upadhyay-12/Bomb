@@ -4,6 +4,188 @@ Newest first. Dates are when the work was committed. Both games also show a shor
 players under About → CHANGELOG: Heist's in `src/heist/heistMarkup.html` (its v1.27 is this
 session's), the bomb app's in `src/core/bombChangelog.js`. Add a line there when a change ships.
 
+## 2026-11-26 — Rooms: the fast way; module settings shared
+
+- **Asked:** "if I update a setting from my end for stuff like complex (the "EDGE CONDITIONS") it should
+  update for other too" and "I need to improve speed as I am playing from india, 2nd friend is america and
+  3rd is in mecadonia".
+- **The fast way** (`src/core/room/roomClient.js`): each change is also sent by the app itself on the
+  room's live channel, so teammates get it from the nearest Supabase Realtime server instead of after a
+  trip through the site's server in Tokyo. The server still checks and saves everything and sends its
+  own copy; both carry one id (`mid`) and each app applies one. Pictures up to 135 KB travel inside the
+  message. `api/room.js` passes `mid` on. Changes go out at once (typing: every 300 ms).
+- **Shared module settings** (`useCardState`): Complex Wires (EDGE CONDITIONS, rules / RULE PRESET, wire
+  switches), Knobs (lights, disarmed count), Bluescreen (ticked modules).
+- Measured: the live site now answers from `hnd1`; Realtime messages up to 240 KB get through.
+- Tests: `tests/roomFast.test.js` (5) and a `mid` test in `tests/rooms.test.js`; 336 pass.
+
+## 2026-11-26 — "# " prefix off by default
+
+- **Asked:** "Keep the # setting off by default unless they have selected it from menu. Then it will
+  remain that way forever till they change that"
+- `AppStateContext.jsx`: `prefixHash` is on only when `bomb_prefix_hash` is saved as `'true'` (it was on
+  when nothing was saved). Only the Settings checkbox writes that key (checked in the git history too),
+  so anyone who picked on or off keeps their pick; everyone else starts off. The checkbox says so.
+  The old standalone `public/bombs.html` (its own key, `bombvision_prefix_hash`) is unchanged.
+
+## 2026-11-26 — Rooms play the host's level; why rooms are slow
+
+- **Asked:** "if I make a 'level' and start a lobby in it, the people who join should be greeted with
+  that level as the lobby rather than all the modules (unless I make it in all modules section)" · "tell
+  me all the tech stack multiplayer is using and design decisions as currently it is slow … Only few
+  players use it no need to design scalable software for thousands"
+- **Level:** new room item `level` (`src/core/room/roomLevel.js`, `levelOk` / `levelValue` /
+  `levelSig` / `levelName` in `roomKeys.js`). Host only (`api/room.js` → 403 `host-only`, 400 for a bad
+  value), kept across New games (game 0, `roomKeyKept`). `createRoom` now tells the parts the room was
+  just `created`, and the host's app sends its level then; afterwards only the host's own level change
+  is sent (an App effect on `activeMission`). Every app opens the room's level on joining / reload, and
+  when it changes; re-reads of the same level move nobody. The panel shows LEVEL (and GO TO IT for a
+  member on another level), and before a room is made, which level it will play. No SQL change.
+- **Checked:** `tests/rooms.test.js` (19, one new) and a 3-player headless run of the real app with the
+  real `api/room.js` on the fake Supabase and an SSE stand-in for Realtime: 20 / 20 (join on 1.2, follow
+  to 2.1, wander + GO TO IT, a generated level, host reload, New game, late joiner, ALL MODULES, a
+  member's pick moving nobody).
+- **Why rooms are slow (measured):** `x-vercel-id` says `bom1::iad1` (Mumbai edge, functions in
+  Washington); the Supabase database's address is in AWS ap-northeast-1 (Tokyo). Each room action makes
+  3–11 PostgREST / broadcast calls in a row from Washington to Tokyo (~150 ms each), so a picture takes
+  ~2.5–3 s to reach a teammate and a manual ~1–1.4 s. Fix (the owner said yes): `"regions": ["hnd1"]` in
+  `vercel.json`, so the functions run in Tokyo next to the database (~2 ms a call). The write-up (stack, decisions, per-action table, ranked fixes) is the "Bomb Rooms
+  Internals" artifact; `docs/rooms-plan.md` has the summary.
+
+## 2026-11-26 — One drop read as two stages (Memory, Simon)
+
+- **Asked:** "Check memory module … it thought this was stage 3 while it was stage 2. This bug is in
+  simons too where one drag drop gets considered as 2 sometimes. Fix it"
+- **Cause:** Memory and Simon open in a `ModuleGroup` window even with one copy. A drop on the card
+  but outside the Dropzone box went to the card's `onDrop` (→ `inject` → the box loads it) and then
+  bubbled to the box's own window-wide drop listener, which loaded it again (`inGroup()` is false for
+  one card). Memory's second `handleImage` was an older copy from before the first was saved: it
+  still had stage 1's answer on screen, saw a different picture and saved stage 1 a second time.
+  With the game's manual that made display 3 "stage 3 → label 4 → 2nd button" instead of "stage 2 →
+  label 3 → 3rd button".
+- **Fix:** `ModuleGroup` `dropOn` stops the drop's propagation; `Dropzone`'s window drop skips a drop
+  something already took (`e.defaultPrevented`, as ModuleGroup's own window listener does). Checked
+  in headless Chromium on level 1.2 Memory and 3.3 Simon: 2 loads per drop before, 1 after.
+- **Memory:** the stage lights decide the stage (`stageAfterPicture` in `memorySolver.js`): one more
+  lit than saved = the answered stage was pressed, fewer = back to that stage. The same picture again
+  (display, buttons, lights) changes nothing; one picture is read at a time; the saved presses live
+  in a ref so an older handler reads the latest. Test: the user's manual and stage 2 picture
+  (`tests/fixtures/memory_stage2.png`, 1 light lit).
+- **Simon:** a GIF whose stage lights agree with its flash count carries its stage; a GIF of a stage
+  already in the list replaces that entry instead of adding one.
+
+## 2026-11-26 — Login optional (rooms only), reports for everyone, Mines 5, rooms phases 4–6
+
+- **Asked:** "Make login optional but lock the lobbies behind it … mines misreads 5 as 3 but I don't
+  have report of it, make reports global for everyone … everyone can do everything without login
+  now, login is just needed if you wanna play lobbies. Continue making the lobbies yourself after."
+- **Login optional:** `middleware.js` deleted; `/api/unlock` gives the page key to every visit from
+  the site and says who is logged in (`__BB_ACCOUNT__`: null for a guest, else name / admin / og /
+  state). The loader no longer sends anyone to /login. The Discord callback always returns to the
+  page the login started from. /login and /admin now talk about rooms: /admin decides who may use
+  rooms (waiting / allowed / blocked / expired), not who may use the solver.
+- **Rooms need a login:** `api/room.js` → 401 `login` without a session, 403 `not-allowed` with the
+  account's state. The room panel shows LOG IN WITH DISCORD (back to the same page, invite kept) or
+  "the owner has to let your account into rooms" with ↻ CHECK AGAIN.
+- **⚑ WRONG ANSWER? for everyone:** `api/report.js` takes reports from guests as "Guest #3fa9c2 (not
+  logged in)" (a tag from a hash of the IP, never the IP). Limits: one report per 5 s each, 10 an
+  hour per guest, 20 a minute for the whole site.
+- **Mines read a 5 as a 3:** the game's 5 is a dark red, #863D38 (134, 61, 56), with the same hue as
+  the brick-red 3, #B03E39 (176, 62, 57); every warm digit was counted as a 3. Now a red digit darker
+  than halfway between the two (red < 155) is a 5, and orange / amber / brown count as 5 too (hue is
+  checked before the red rule). The user's real board with a 5 is `tests/fixtures/mines_five.png`: the
+  old reader read H2 as 3 and called G1, H1, I1, I2 safe (they touch the 5); it now reads 5 and gives
+  C1 D1 E1 I4 J6. Plus 9 recoloured shades in `tests/minesGuide.test.js`.
+- **Rooms phase 4 (answers board):** every card's answer from every app; "✓ 2 agree", or each
+  member's answer in red when they differ; a row opens that module.
+- **Rooms phase 5:** kick (host; kicked members can't rejoin; the room moves to a new secret topic),
+  hourly clean-up on the first room request (no Vercel schedule: beta, and the local CLI 59.x
+  rejects the `schedules` key), New game deletes the old games' items and pictures.
+- **Rooms phase 6 (`useCardState`):** typed / tapped inputs shared per card; only changes a person
+  makes are sent (never a module's own reaction to a picture). Battleship, Piano (clef, key),
+  Diagram (SHADED / UNSHADED), Laundry (counts, load, message, timer). Picture-built inputs
+  (Hangman guesses, Simon, Complex Wires, Batteries) stay in step through their mirrored pictures.
+- **Tests:** 326 pass (rooms 18, auth 28). Headless (two Discord users, a guest and a waiting
+  account through the real API, stand-in for Realtime): 25 of 25 checks. No new SQL.
+- **To do by hand:** `vercel --prod`.
+
+## 2026-11-26 — Rooms: play one bomb together (colab mode, phases 1–3)
+
+- **Asked:** "work on the coop mode (the party system)" — "YOU implement and I will review". Built
+  phases 1–3 of `docs/rooms-plan.md`; its new "Built so far" section has the setup steps and where
+  the build differs from the plan.
+- **👥 ROOM** in the top bar (logged in only; not in `bomb.html`):
+  - create a room for 2, 3 or 4 (the host picks; the code `K7QX-2M` and 📋 COPY INVITE are the
+    host's only);
+  - join by code, invite link (`#play=bomb&room=…`, taken out of the address bar after) or a pasted
+    invite line;
+  - members with avatar, online dot, the module they have open and a 💣 / 📖 tag;
+  - "shared this game" with FROM …;
+  - SHARE MY MANUALS, LEAVE, LOCK and END ROOM (host).
+  - On phones the panel is a sheet from the bottom.
+- **Shared in a room:**
+  - every per-game manual / table / list (`GAME_SAVED`, `GAME_MEMORY`) and the three kept word
+    lists, through `sharedSetting.js` (300 ms debounce, no echo);
+  - the "modules to solve" counts;
+  - every picture a module card takes (a link as is, a file uploaded), replayed in order into the
+    same card in every app, so each app works out the answer itself;
+  - a card's CLEAR;
+  - the host's New game (everyone else's button says HOST STARTS NEW GAMES, and theirs flashes
+    "✓ NEW GAME STARTED (by Mann)").
+- **Server:** `api/room.js` (one function, `?action=`), `lib/rooms.js`, `supabase/bomb_rooms.sql`
+  (4 tables, RLS closed). Live updates through Supabase Realtime (`@supabase/realtime-js` 2.119.0,
+  broadcast from the server with the secret key, presence from the apps); without a live
+  connection the apps read the room every 4 s.
+- `lib/users.js`: `rest()` and `supabase()` exported. `rest()` now takes an empty reply: an insert
+  without `return=representation` answers 201 with no body.
+- `sharedSetting.js`: `watchSharedChanges`, `setSharedState`, `peekSharedSetting`,
+  `sharedStateChanged`.
+- `scripts/check-setup.mjs`: optional notes for the room tables and `SUPABASE_PUBLISHABLE_KEY`.
+- **Tests:** `tests/rooms.test.js` (14 tests, `tests/helpers/fakeSupabase.js`); 319 pass in all.
+  Headless with three Chrome profiles through the real API and a stand-in for Realtime: 26 of 26
+  checks.
+- **To do by hand:** run the SQL, add `SUPABASE_PUBLISHABLE_KEY`, `vercel --prod`.
+
+## 2026-11-25 — Multiple mode for the new modules, Switches solves in any order, tidier layouts
+
+- **Asked:** several Wires / Memory on a bomb share one manual; several Balance are independent;
+  several Limbo, Pipes and Astrology each have their own picture — "add the multiple mode"; the new
+  modules "don't fit well" next to the old ones; Switches doesn't answer when the manual is pasted
+  after the picture. "For all new things added in my bombs do stuff like these."
+- **Multiple mode** (`shared: true` in `sectionsData.js`: one page, a card per copy, the 1–9
+  "modules to solve" bar in all-modules mode, the level's count in a level): Wires, Memory, Echo,
+  Balance, Limbo, Pipes, Blackjack, Hangman. Astrology already had it (each card its own sky map
+  and screenshot, the star list shared).
+  - `ModuleGroup` MANUALS: `wires`, `memory`, `echo` — the 📖 bar, pasted anywhere once for every
+    card. In a card these modules hide their own manual box and show a one-line "MANUAL READ" status
+    (rules per section / 20 rules / pairs, ⚠ unclear lines).
+  - Not grouped: Laundry (its load-by-load flow and manual-picture boxes aren't card-aware),
+    Battleship and Bluescreen (one per bomb), Switches and Logic (not asked).
+  - Checked headless: each of the 8 opens with 2 cards and no errors; the Wires manual pasted once
+    reaches both cards and a picture in card 2 answers only card 2 (Cut wire 4); Balance reads a
+    different equation per card (1 1 1, 2 1 2); Limbo, Pipes and Memory answer only the card given
+    the picture; level 4.1 shows WIRES ×2 as one page with 2 cards.
+- **Switches:** the path is derived from start, goal and forbidden list, so it re-solves whenever
+  any of them changes (the picture and the manual in either order); the SOLVE button is gone.
+  `swParseForbidden` takes the U/D states out of any wording (commas, bullets, ↑↓ arrows), and the
+  list pasted anywhere on the page (outside a text box) loads. "No path" / "start is forbidden" /
+  "couldn't read" show in the module (they were toasts, which the bomb app no longer shows).
+  `tests/switchesParse.test.js`.
+- **Layout:** the settings of Batteries, Wire Placement, Battleship and Laundry sit in the raised
+  panel the older modules use (`.btn-config` look); Blackjack's rows too, with brass labels and a
+  SAMPLE (7 + 5 against a 6 → STAND); Battleship's shot report and board share one panel; Laundry's
+  manual folds into the one-line 📖 MANUAL bar once loaded (edit reopens the box).
+- Player changelog: three 25 Nov items.
+
+## 2026-11-25 — Battleship taken out of conso's app
+
+- **Asked:** "Remove battleship solver from his bot".
+- Conso's `solver.html`: the Battleship tab, its section, script tag, init hook, paste-guard check
+  and help card are gone (help "All (25)" → "All (24)"); `battleship-module.js` deleted.
+- `scripts/build-conso-logic.mjs` no longer bundles `battleship/battleshipSolver`; `bomb-logic.js`
+  rebuilt without it (cache tag `20261125_v2`). This app's Battleship module is unchanged.
+- Checked headless: 31 tabs, each opens, no page errors, no `BombLogic.battleship`.
+
 ## 2026-11-25 — Conso's Mines: the 16-mine total; modules checked against the guide
 
 - **Asked:** "conso's mines are not working, copy my logic into that".

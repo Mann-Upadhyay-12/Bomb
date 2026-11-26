@@ -229,7 +229,7 @@ onImage={(img, dataUri, fileBlob) => {
               <button
                 className="reset-btn"
                 type="button"
-                onClick={handleClear}
+                onClick={handleClear} data-card-clear
               >
                 clear
               </button>

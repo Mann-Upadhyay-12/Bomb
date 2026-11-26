@@ -1,5 +1,6 @@
 // /admin (vercel.json rewrites it here): the owner's page. Lists everyone who has logged in and lets you
-// allow them (no limit, or for 1 / 7 / 30 days) or block them. Only Discord IDs in ADMIN_IDS can change
+// allow them into rooms (no limit, or for 1 / 7 / 30 days) or block them from rooms. The solver itself
+// is open to everyone, logged in or not; these only decide who can use 👥 ROOM. Only Discord IDs in ADMIN_IDS can change
 // anything; the OGs (OG_IDS) can open it to look. Nobody can block or time-limit the owner or an OG.
 import { readSession, sessionSecret } from '../lib/session.js';
 import { ACCESS_MEMORY_MS, accessOf, adminChange, avatarUrl, isAdmin, isLockProof, isOg, listUsers, updateUser } from '../lib/users.js';
@@ -93,13 +94,13 @@ export async function GET(request) {
   const count = (st) => users.filter((u) => !isLockProof(u.discord_id) && accessOf(u, now) === st).length;
   const q = new URL(request.url).searchParams;
   const note = viewOnly
-    ? `<p class="note og">View only: you can see who uses the site. Only the owner can change who gets in.</p>`
+    ? `<p class="note og">View only: you can see who uses the site. Only the owner can change who can use rooms.</p>`
     : q.get('done') && DONE[q.get('done')]
-    ? `<p class="note ok">${esc(q.get('who'))} ${DONE[q.get('done')]}. It applies to their next page load (within ${ACCESS_MEMORY_MS / 1000} s).</p>`
+    ? `<p class="note ok">${esc(q.get('who'))} ${DONE[q.get('done')]}. It applies to their next room action (within ${ACCESS_MEMORY_MS / 1000} s).</p>`
     : q.get('err') === 'protected' ? `<p class="note no">The owner and the OGs can't be blocked or time-limited.</p>`
     : q.get('err') ? `<p class="note no">That didn't save (${esc(q.get('err'))}). Try again.</p>` : '';
 
-  const body = `<h1>ADMIN · WHO CAN USE THE SITE</h1>
+  const body = `<h1>ADMIN · WHO CAN USE ROOMS</h1>
 ${note}
 <div class="stats">
 <div><b>${count('allowed')}</b>allowed</div><div><b>${count('waiting')}</b>waiting</div>
@@ -109,9 +110,9 @@ ${note}
 <tbody>${users.map((u) => row(u, now, s.id, viewOnly)).join('') || '<tr><td colspan="5" class="dim">Nobody has logged in yet.</td></tr>'}</tbody>
 </table></div>
 <p class="dim foot">${viewOnly
-    ? `New logins <b>${/^wait/i.test(process.env.NEW_USERS || '') ? 'wait here until the owner allows them' : 'get in straight away'}</b>.`
-    : `New logins: <b>${/^wait/i.test(process.env.NEW_USERS || '') ? 'wait here until you allow them' : 'get in straight away'}</b>
-(Vercel setting <code>NEW_USERS</code>: <code>allow</code> or <code>wait</code>). Blocking someone stops their next page load; a page they already have open keeps working until they close it.`}
+    ? `The solver is open to everyone; logging in is only for rooms. New logins <b>${/^wait/i.test(process.env.NEW_USERS || '') ? 'wait here until the owner allows them into rooms' : 'can use rooms straight away'}</b>.`
+    : `The solver is open to everyone; logging in is only for rooms. New logins: <b>${/^wait/i.test(process.env.NEW_USERS || '') ? 'wait here until you allow them into rooms' : 'can use rooms straight away'}</b>
+(Vercel setting <code>NEW_USERS</code>: <code>allow</code> or <code>wait</code>). Blocking someone takes rooms away from them at their next room action; the host can kick them out of a room straight away.`}
 · <a href="/">Solver</a> · <a href="/api/auth/logout">Log out</a></p>
 <style>
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:0 0 14px}

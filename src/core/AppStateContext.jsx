@@ -28,12 +28,13 @@ export function AppStateProvider({ children }) {
   // can say "COPIED ✓" or "NOT COPIED". A phone (iPhones above all) refuses a copy that doesn't
   // come straight from a tap, so an auto-copy there can fail, and toasts are off in the bomb app.
   const [clip, setClip] = useState({ text: '', ok: true });
+  // "# " before copied answers: off until the player ticks it in Settings. Their pick (on or off) is
+  // saved and kept on this device until they change it; nothing else writes it.
   const [prefixHash, setPrefixHashState] = useState(() => {
     try {
-      const saved = localStorage.getItem(PREFIX_HASH_KEY);
-      return saved !== null ? saved === 'true' : true;
+      return localStorage.getItem(PREFIX_HASH_KEY) === 'true';
     } catch (e) {
-      return true;
+      return false;
     }
   });
 

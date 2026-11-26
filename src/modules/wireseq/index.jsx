@@ -347,7 +347,7 @@ export function WireseqModule({ isActive = true }) {
             <button type="button" className="wsq-next" onClick={handleNextPanel}>Next Stage →</button>
             <button type="button" className="bg-btn" disabled={active === 0} onClick={handleUndo}>← Prev</button>
             <button type="button" className="bg-btn" onClick={handleClearStage}>Clear Stage</button>
-            <button type="button" className="bg-btn" onClick={handleClear}>Reset</button>
+            <button type="button" className="bg-btn" onClick={handleClear} data-card-clear>Reset</button>
           </div>
 
           <details className="wsq-fix">

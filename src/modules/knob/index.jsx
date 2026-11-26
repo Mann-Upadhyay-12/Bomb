@@ -8,6 +8,7 @@ import {
 import { detectKnobStateFromImage } from './knobVision.js';
 import { readKnobManual, knobManualText } from './knobManual.js';
 import { useSharedSetting } from '../../core/sharedSetting.js';
+import { useCardState } from '../../core/room/useCardState.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
@@ -45,8 +46,10 @@ export function KnobModule({ isActive = true }) {
   const rules = React.useMemo(() => parseKnobRules(rulesText), [rulesText]);
   const readAt = stampedAt(rulesText);
   const [manualProblem, setManualProblem] = useState('');
-  const [knobState, setKnobState] = useState([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-  const [disarmedCount, setDisarmedCount] = useState(0);
+  // in a room, the lights and the disarmed count are the room's (core/room/useCardState.js); lights a
+  // picture reads stay in each app (every app reads the same mirrored picture)
+  const [knobState, setKnobState] = useCardState('lights', [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  const [disarmedCount, setDisarmedCount] = useCardState('disarmed', 0);
   const [previewUri, setPreviewUri] = useState('');
   const [previewMeta, setPreviewMeta] = useState('');
 
@@ -177,7 +180,7 @@ export function KnobModule({ isActive = true }) {
           }
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={handleClear}>
+              <button className="reset-btn" type="button" onClick={handleClear} data-card-clear>
                 clear
               </button>
               <button

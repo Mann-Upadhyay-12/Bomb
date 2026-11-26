@@ -58,24 +58,27 @@ vercel --prod      # the live one
 `vercel` uploads this folder as it is, uncommitted work included. The project is also connected to the
 GitHub repo, so a push to `main` deploys that commit to production.
 
-### Login and who can use the site
+### Login: optional, needed for rooms
 
-- **Log in with Discord.** Every page and file of the site needs a logged-in user who is allowed in
-  (`middleware.js`); anyone else gets `/login`. Discord only tells the site your ID, name and avatar.
+- **No login needed to use the solver.** Every page works for everyone. Logging in with Discord is
+  only needed for **👥 ROOM** (playing one bomb together). Discord only tells the site your ID, name
+  and avatar.
 - **`/admin`**, for the Discord IDs in `ADMIN_IDS`: everyone who has logged in, with Allow (no limit),
-  Allow for 1 / 7 / 30 days, or Block. A first login gets in straight away (`NEW_USERS=wait` makes it
-  wait for you instead). A change applies to that person's next page load.
-- **The OGs** (`OG_IDS`: Yuza and Dixie, the first two players): always let in like the owner, also
-  while Supabase is paused. Nobody can block or time-limit them (or the owner). They can open `/admin`
-  to see who uses the site, but not change anything. They get an **OG** badge by their name and a
-  **⚑ WRONG ANSWER?** button under every answer: it sends the answer, the module's pictures and its text
-  on screen (what it read), with their note, to your Discord channel (`REPORT_WEBHOOK`). You get the
-  button too. Nobody else sees it.
+  Allow for 1 / 7 / 30 days, or Block. These now decide who can **use rooms**, nothing else. A first
+  login can use rooms straight away (`NEW_USERS=wait` makes it wait for you instead). A change applies
+  to that person's next room action (within 20 s).
+- **The OGs** (`OG_IDS`: Yuza and Dixie, the first two players): always allowed in rooms like the owner,
+  also while Supabase is paused. Nobody can block or time-limit them (or the owner). They can open
+  `/admin` to see who uses the site, but not change anything. They get an **OG** badge by their name.
+- **⚑ WRONG ANSWER?** under every answer, for everyone (logged in or not): it sends the answer, the
+  module's pictures and its text on screen (what it read), with the note, to your Discord channel
+  (`REPORT_WEBHOOK`). A logged-in sender shows by name; a guest as `Guest #a1b2c3` (a tag made from
+  their address, the same for every report they send). Guests can send 10 an hour each.
 - **Locked code.** On Vercel the app pages keep their HTML and CSS, but their code is encrypted; the
-  page asks `/api/unlock` for the key, which only an allowed user on this site gets. A Ctrl+S copy, a
-  copy opened from a file or put on another site shows "this copy doesn't run here". Someone who is
-  logged in and knows the browser's developer tools can still dig the running code out: no website can
-  stop that; what you control is who gets in.
+  page asks `/api/unlock` for the key, which any page on this site gets. A Ctrl+S copy, a copy opened
+  from a file or put on another site shows "this copy doesn't run here". It's a lock against saved
+  copies, not against a determined person: the browser's developer tools (or a script that pretends to
+  be the site) can still get the running code.
 - Only the app pages, `/login` and `stockfish.js` are published; the old pages in `public/` (bombs,
   maze, …) are not.
 - A local `npm run build` stays unlocked, as before.
@@ -138,8 +141,7 @@ src/
 └── utils/           canvas, image, GIF and thresholding helpers
 tests/               solver tests, and the website login (auth.test.js)
 public/              stockfish.js, login.html, and the original single-file version of the app
-api/, lib/           the website's login, /admin and unlock functions (Vercel)
-middleware.js        lets only allowed, logged-in users reach the site's pages and files
+api/, lib/           the website's login, /admin, unlock, ⚑ reports and rooms (Vercel)
 scripts/lock-site.mjs  encrypts the app pages' code on Vercel
 supabase/            the users table
 ```

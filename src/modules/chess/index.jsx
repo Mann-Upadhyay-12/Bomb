@@ -334,7 +334,7 @@ export function ChessModule({ isActive = true }) {
           }
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={handleClear}>
+              <button className="reset-btn" type="button" onClick={handleClear} data-card-clear>
                 clear
               </button>
               <button
@@ -375,7 +375,7 @@ export function ChessModule({ isActive = true }) {
             >
               NEXT PICTURE GOES TO: {activeTarget.toUpperCase()} BOARD
             </button>
-            <button type="button" className="bg-btn" onClick={handleClear}>
+            <button type="button" className="bg-btn" onClick={handleClear} data-card-clear>
               🗑️ CLEAR BOARD
             </button>
           </div>

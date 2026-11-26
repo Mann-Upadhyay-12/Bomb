@@ -40,7 +40,9 @@ async function readSimonFile(blob, img) {
         let note = `GIF ${g.frames.length} fr, ${secs}s · ${r.flashes.length} flash${r.flashes.length === 1 ? '' : 'es'}: ${r.flashes.join(' ') || 'none'}`;
         if (r.stage) note += ` · stage ${r.stage}`;
         const warn = (r.stage && r.flashes.length !== r.stage) ? `expected ${r.stage} flashes` : (r.warn ? 'colours look unusual — different crop?' : '');
-        return { name, color: r.color, thumb: thumbFrom(g.frames[r.thumbIndex].data, g.w, g.h), note, warn };
+        // stage: known when the stage lights and the flash count agree
+        const stage = r.stage && r.flashes.length === r.stage ? r.stage : 0;
+        return { name, color: r.color, thumb: thumbFrom(g.frames[r.thumbIndex].data, g.w, g.h), note, warn, stage };
       }
     }
   }
@@ -82,6 +84,9 @@ export function SimonsModule({ isActive = true }) {
   const [autoCopy, setAutoCopy] = useSharedSetting('bombvision_simon_autocopy', 'odd');
   const [entries, setEntries] = useState([]);
   const [busy, setBusy] = useState(false);
+  // the latest entries, for a picture handler that is an older copy of this function
+  const entriesRef = React.useRef(entries);
+  entriesRef.current = entries;
 
   const counted = entries.filter(e => e.color);
   // No manual or no serial yet → no answer (it would be a guess)
@@ -120,12 +125,26 @@ export function SimonsModule({ isActive = true }) {
       else if (skipped) showToast('NOT A SIMON MODULE OR MANUAL — IGNORED');
       return;
     }
-    setEntries(prev => [...prev, ...kept]);
+    // a GIF of a stage already in the list (one drop taken twice, or the GIF sent again) replaces
+    // that stage instead of adding one
+    const add = (list) => {
+      const out = [...list];
+      for (const k of kept) {
+        const at = k.stage ? out.findIndex(e => e.stage === k.stage) : -1;
+        if (at >= 0) out[at] = k; else out.push(k);
+      }
+      return out;
+    };
+    const before = entriesRef.current;
+    const after = add(before);
+    setEntries(add);
     const got = kept.filter(f => f.color);
+    const again = kept.filter(k => k.stage && before.some(e => e.stage === k.stage)).map(k => k.stage);
     const skipNote = (manuals.length ? ' · manual read' : '')
-      + (skipped ? ` · ${skipped} non-Simon image${skipped === 1 ? '' : 's'} ignored` : '');
+      + (skipped ? ` · ${skipped} non-Simon image${skipped === 1 ? '' : 's'} ignored` : '')
+      + (again.length ? ` · stage ${again.join(', ')} was already in — replaced` : '');
     showToast((got.length
-      ? `STAGE ${counted.length + got.length}: ${got.map(f => SINAMES[f.color]).join(' → ')} ✓`
+      ? `STAGE ${after.filter(e => e.color).length}: ${got.map(f => SINAMES[f.color]).join(' → ')} ✓`
       : 'NO GLOW FOUND — PICK THE COLOUR ON THE ENTRY') + skipNote);
   };
 
@@ -220,7 +239,7 @@ export function SimonsModule({ isActive = true }) {
           }
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={handleClear}>clear</button>
+              <button className="reset-btn" type="button" onClick={handleClear} data-card-clear>clear</button>
               <button className="reset-btn" type="button" onClick={removeLast} disabled={!entries.length}>↶ remove last</button>
               <span className="simon-autocopy">
                 <span className="simon-status">copies:</span>

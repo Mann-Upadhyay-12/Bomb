@@ -24,8 +24,11 @@ const goTo = (g) => (e) => {
   location.hash = g ? 'play=' + g : '';
 };
 
-// On the website, the page's unlock step leaves who is logged in here (scripts/lock-site.mjs).
+// On the website, the page's unlock step leaves who is logged in here (scripts/lock-site.mjs): null for a
+// guest. Logging in is optional; it's only needed for 👥 ROOM.
 const account = () => (typeof window !== 'undefined' && window.__BB_ACCOUNT__) || null;
+const onSite = () => typeof window !== 'undefined' && Boolean(window.__BB_SITE__ || window.__BB_ACCOUNT__);
+const loginHref = () => `/api/auth/login?next=${encodeURIComponent(location.pathname + location.search + location.hash)}`;
 
 export function GameChooser() {
   const me = account();
@@ -54,9 +57,14 @@ export function GameChooser() {
         <div className="gc-account">
           Logged in as <b>{me.name}</b>
           {me.admin && <span className="gc-owner" title="The site's owner">OWNER</span>}
-          {me.og && <span className="gc-og" title="One of the first two players: always let in, with the ⚑ wrong-answer button">OG</span>}
+          {me.og && <span className="gc-og" title="One of the first two players">OG</span>}
           {me.admin ? <> · <a href="/admin">Admin</a></> : me.og ? <> · <a href="/admin">Who uses the site</a></> : null}
           {' · '}<a href="/api/auth/logout">Log out</a>
+        </div>
+      )}
+      {!me && onSite() && (
+        <div className="gc-account">
+          Not logged in: everything works. <a href={loginHref()}>Log in with Discord</a> to play 👥 rooms with friends.
         </div>
       )}
     </div>

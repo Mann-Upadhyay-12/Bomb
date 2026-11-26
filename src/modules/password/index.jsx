@@ -139,7 +139,7 @@ export function PasswordModule({ isActive = true }) {
           }
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={handleClear}>clear</button>
+              <button className="reset-btn" type="button" onClick={handleClear} data-card-clear>clear</button>
               <button
                 className="reset-btn"
                 type="button"

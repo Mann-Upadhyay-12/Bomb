@@ -6,6 +6,11 @@ import { MissionSidebar } from './core/components/MissionSidebar.jsx';
 import { NeedyTimer, playBeep } from './core/components/NeedyTimer.jsx';
 import { SerialBar } from './core/components/SerialBar.jsx';
 import { NewGameButton } from './core/components/NewGameButton.jsx';
+import { RoomBar } from './core/room/RoomBar.jsx';
+import { RoomCard } from './core/room/RoomCard.jsx';
+import { useRoomCounts } from './core/room/roomCards.js';
+import { setOpenModule } from './core/room/roomClient.js';
+import { useRoomLevel } from './core/room/roomLevel.js';
 import { ThemeSettings } from './core/components/ThemeSettings.jsx';
 import { useGameEpoch, GAME_ITEMS } from './core/newGame.js';
 import { useSetting, hiddenSet, shownModules, NEEDY_LEADS, needyLeadSeconds } from './core/settings.js';
@@ -182,10 +187,12 @@ function renderModule(id, isActive = true, instance = 0, instanceCount = 1) {
 // data-module(-name): which module a ⚑ wrong-answer report is about (core/report.js)
 const moduleName = (id) => (MODULE_META[id] && MODULE_META[id].tabLabel) || id;
 
+// data-card: which copy this window is (a level with two of a module that isn't grouped); a room's
+// pictures and CLEAR go by module + card (core/room/roomCards.js)
 const ModuleWindow = React.memo(function ModuleWindow({ id, active, instance = 0, instanceCount = 1 }) {
   return (
-    <div className="mission-module-window" data-module={id} data-module-name={moduleName(id)} style={{ display: active ? 'block' : 'none' }}>
-      {renderModule(id, active, instance, instanceCount)}
+    <div className="mission-module-window" data-module={id} data-card={instance} data-module-name={moduleName(id)} style={{ display: active ? 'block' : 'none' }}>
+      <RoomCard module={id} card={instance}>{renderModule(id, active, instance, instanceCount)}</RoomCard>
     </div>
   );
 });
@@ -197,7 +204,7 @@ const GroupWindow = React.memo(function GroupWindow({ id, label, count, active, 
     () => (setCounts ? (n) => setCounts(prev => ({ ...prev, [id]: n })) : null),
     [id, setCounts]
   );
-  const renderInstance = useCallback((i, a) => renderModule(id, a, i, count), [id, count]);
+  const renderInstance = useCallback((i, a) => <RoomCard module={id} card={i}>{renderModule(id, a, i, count)}</RoomCard>, [id, count]);
   return (
     <div className="mission-module-window" data-module={id} data-module-name={moduleName(id)} style={{ display: active ? 'block' : 'none' }}>
       <ModuleGroup
@@ -256,6 +263,8 @@ export function App() {
   const [visitedModes, setVisitedModes] = useState(() => [appMode]);
   // "Same manual" modules (Password, Simon …) in all-modules mode: how many copies to solve at once
   const [groupCounts, setGroupCounts] = useState({});
+  // in a room, the counts are the room's (core/room/roomCards.js)
+  useRoomCounts(groupCounts, setGroupCounts);
   React.useEffect(() => {
     setVisitedModes(prev => (prev.includes(appMode) ? prev : [...prev, appMode]));
   }, [appMode]);
@@ -273,7 +282,7 @@ export function App() {
   // Settings: remember the module in use (the app opens on it next time) …
   const [, setLastModule] = useSetting('lastModule');
   const [openLast, setOpenLast] = useSetting('openLast');
-  React.useEffect(() => { setLastModule(appMode); }, [appMode]);
+  React.useEffect(() => { setLastModule(appMode); setOpenModule(appMode); }, [appMode]);
   // … and the modules the picker shows: hiding the one on screen moves to the first one shown
   const [hiddenValue, setHiddenValue] = useSetting('hiddenModules');
   const hidden = hiddenSet(hiddenValue);
@@ -319,6 +328,36 @@ export function App() {
     setActiveSlotIndex(0);
     setIsSidebarOpen(false);
   }, []);
+
+  // In a room the host's level is the room's: everyone who joins opens it, and follows the host's next
+  // pick (core/room/roomLevel.js). A room made in ALL MODULES opens all modules.
+  useRoomLevel(activeMission, handleSelectMission, handleSelectAll);
+
+  // The room's answers board opens a module card (core/room/roomBoard.js openCard): switch to the
+  // module (its slot on a level), then bring the card into view with a short outline
+  React.useEffect(() => {
+    const open = (e) => {
+      const { module, card = 0 } = (e && e.detail) || {};
+      if (!module) return;
+      setView('main');
+      if (activeMission && Array.isArray(activeMission.modules)) {
+        const slots = activeMission.modules
+          .map((name, i) => ({ i, id: KNOWN_MODULE_NAMES[name] && KNOWN_MODULE_NAMES[name].id }))
+          .filter((x) => x.id === module);
+        if (slots.length) handleSelectSlot((slots[card] || slots[0]).i, module);
+      } else setAppMode(module);
+      setTimeout(() => {
+        const wins = [...document.querySelectorAll(`[data-module="${module}"]`)].filter((w) => w.getClientRects().length);
+        const target = wins.map((w) => (w.dataset.card === String(card) ? w : w.querySelector(`[data-card="${card}"]`))).find(Boolean) || wins[0];
+        if (!target) return;
+        target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        target.classList.add('card-flash');
+        setTimeout(() => target.classList.remove('card-flash'), 1400);
+      }, 80);
+    };
+    window.addEventListener('bb:open-card', open);
+    return () => window.removeEventListener('bb:open-card', open);
+  }, [activeMission, handleSelectSlot, setAppMode]);
 
   const closeSidebar = useCallback(() => setIsSidebarOpen(false), []);
   const openGenerator = useCallback(() => { setView('generate'); setIsSidebarOpen(false); }, []);
@@ -374,6 +413,8 @@ export function App() {
             <SerialBar />
             {/* New game: forgets the serial, this game's manuals and every screenshot at once */}
             <NewGameButton />
+            {/* Rooms: play one bomb together (needs a Discord login; not in bomb.html) */}
+            <RoomBar />
             </div>
           </div>
 
@@ -542,6 +583,7 @@ export function App() {
                 />
                 <span className="setting-check-text">
                   Prefix copied message with <code># </code> (e.g. <code># A5 C4</code>)
+                  <span className="setting-note">Off unless you tick it. Remembered on this device until you change it.</span>
                 </span>
               </label>
             </div>

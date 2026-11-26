@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { InstanceContext } from '../InstanceContext.jsx';
 import { useSharedSetting } from '../sharedSetting.js';
+import { useRoomFrom } from '../room/roomSync.js';
+import { nameOf, myId } from '../room/roomClient.js';
 import { useToast } from '../ToastContext.jsx';
 import { useAppState } from '../AppStateContext.jsx';
 import { PASSWORD_WORDS_KEY, PASSWORD_DEFAULT_WORDS } from '../../modules/password/index.jsx';
@@ -20,6 +22,10 @@ import { discordPlain } from '../../utils/discordText.js';
 import { isTouchScreen, useTouchScreen } from '../../utils/touch.js';
 import { ManualPasteBox } from '../Dropzone.jsx';
 import { manualBoxPaste } from '../airPaste.js';
+import { WIRES_MANUAL_KEY } from '../../modules/wires/index.jsx';
+import { MEMORY_MANUAL_KEY } from '../../modules/memory/index.jsx';
+import { ECHO_PAIRS_KEY } from '../../modules/echo/index.jsx';
+import { parseEchoPairs } from '../../modules/echo/echoSolver.js';
 
 // Modules whose manual is an image strip shared by every copy (pasted / dropped anywhere on the page)
 const IMAGE_MANUALS = { maze: MazeManualBar };
@@ -64,7 +70,20 @@ const MANUALS = {
     key: ASTRO_STARS_KEY, fallback: '', label: 'CONSTELLATIONS BY NUMBER OF STARS (this game)', rows: 10,
     looks: looksLikeStarList
   },
-  morse: null
+  morse: null,
+  // the field-guide modules: every copy on a bomb reads the same Helper text
+  wires: {
+    key: WIRES_MANUAL_KEY, fallback: '', label: 'WIRES MANUAL (THE 3, 4, 5 AND 6 WIRE LISTS)', rows: 10,
+    looks: t => /\b[3-6]\s*wires?\b/i.test(t) && /\bcut\b/i.test(t)
+  },
+  memory: {
+    key: MEMORY_MANUAL_KEY, fallback: '', label: 'MEMORY MANUAL (A RULE PER STAGE AND DISPLAY)', rows: 10,
+    looks: t => /\bstage\s*[1-5]\b/i.test(t) && /\bdisplay\b/i.test(t) && /\b(position|label(l)?ed)\b/i.test(t)
+  },
+  echo: {
+    key: ECHO_PAIRS_KEY, fallback: '', label: 'ECHO WORD LIST (SHOWN WORD → WORD TO ENTER)', rows: 8,
+    looks: t => !/^https?:\/\//i.test(t.trim()) && parseEchoPairs(t).pairs.length >= 3
+  }
 };
 
 const isTextField = el => el && (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && el.type !== 'file' && el.type !== 'checkbox'));
@@ -75,6 +94,7 @@ const isTextField = el => el && (el.tagName === 'TEXTAREA' || (el.tagName === 'I
 // it opens by itself while no manual is loaded, and its button says so.
 function SharedManual({ cfg, count, visible }) {
   const [text, setText] = useSharedSetting(cfg.key, cfg.fallback);
+  const roomFrom = useRoomFrom(`set:${cfg.key}`); // in a room: who pasted the manual in use
   const { showToast } = useToast();
   const phone = useTouchScreen();
   const [open, setOpen] = useState(() => isTouchScreen() && !cfg.picture && !String(text || '').trim());
@@ -113,6 +133,7 @@ function SharedManual({ cfg, count, visible }) {
       <div className="mgroup-manual-line">
         <span className="mgroup-manual-name">📖 MANUAL</span>
         <span className={`mgroup-manual-status ${bad ? 'off' : 'on'}`}>{status}</span>
+        {roomFrom && !bad && <span className="mgroup-manual-from">👥 FROM {roomFrom.from === myId() ? 'YOU' : nameOf(roomFrom.from).toUpperCase()}</span>}
         <span className="mgroup-manual-tip">{cfg.picture
           ? phone
             ? <>paste this game's <b>{cfg.picture}</b> or its link in the 📖 box below{count > 1 ? ' — one paste loads it for every card' : ''}</>
@@ -182,6 +203,9 @@ export function ModuleGroup({ id, label, count, isActive, renderInstance, onCoun
   };
   const dropOn = (i, e) => {
     e.preventDefault();
+    // this card took it: the page-wide drop listeners (the card's own Dropzone when it is the only
+    // card) must not load it a second time — one drop was read as two stages in Memory and Simon
+    e.stopPropagation();
     setDragOver(-1);
     setSelected(i);
     injectInto(i, e.dataTransfer);
@@ -260,6 +284,7 @@ export function ModuleGroup({ id, label, count, isActive, renderInstance, onCoun
       {Array.from({ length: count }, (_, i) => (
         <section
           key={i}
+          data-card={i}
           className={`mgroup-card ${count > 1 && i === sel ? 'selected' : ''} ${dragOver === i ? 'drag' : ''}`}
           onMouseDownCapture={() => setSelected(i)}
           onFocusCapture={() => setSelected(i)}

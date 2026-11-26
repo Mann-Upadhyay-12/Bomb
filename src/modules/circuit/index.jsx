@@ -166,7 +166,7 @@ export function CircuitModule({ isActive = true }) {
               sub={<>the <b>legend</b> (colour → Ω) changes every game — paste it once · then each <b>circuit</b></>}
             />
           }
-          controls={<button className="reset-btn" type="button" onClick={handleClear}>clear</button>}
+          controls={<button className="reset-btn" type="button" onClick={handleClear} data-card-clear>clear</button>}
         >
           <ol className="cir-steps">
             <li className={manualCount ? 'ok' : 'todo'}>

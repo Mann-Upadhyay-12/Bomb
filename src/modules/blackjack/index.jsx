@@ -125,6 +125,12 @@ export function BlackjackModule({ isActive = true }) {
     setLastCopyString('');
   };
 
+  // the fixtures' hand: 7 and 5 against a dealer's 6
+  const handleSample = () => {
+    setPlayer([{ rank: '7' }, { rank: '5' }]); setDealer({ rank: '6' });
+    setStatus({ text: '', ok: null });
+  };
+
   const rows = React.useMemo(() => tableRows(), []);
   const dv = dealer && dealer.rank ? rankValue(dealer.rank) : null;
   const rowOf = a => {
@@ -138,7 +144,12 @@ export function BlackjackModule({ isActive = true }) {
     <ModuleLayout
       input={
         <ModuleInput
-          controls={<button className="reset-btn" type="button" onClick={handleClear}>clear</button>}
+          controls={
+            <>
+              <button className="reset-btn" type="button" onClick={handleClear} data-card-clear>clear</button>
+              <button className="reset-btn" type="button" style={{ borderColor: 'var(--brass)', color: 'var(--brass)' }} onClick={handleSample}>⚡ SAMPLE</button>
+            </>
+          }
           dropzone={
             <Dropzone
               onImage={handleImage}
@@ -149,6 +160,7 @@ export function BlackjackModule({ isActive = true }) {
           }
         >
           {status.text && <div className={`bj-status ${status.ok === false ? 'warn' : ''}`}>{status.text}</div>}
+          <div className="btn-config bj-config">
           <div className="bj-row">
             <span className="bj-q">DEALER SHOWS</span>
             {dealer
@@ -164,6 +176,7 @@ export function BlackjackModule({ isActive = true }) {
           <div className="bj-row">
             <span className="bj-q">{player.length ? '+ ADD A CARD' : 'OR TAP THEM'}</span>
             <RankButtons label="add a card" onPick={r => setPlayer(p => [...p, { rank: r }])} />
+          </div>
           </div>
         </ModuleInput>
       }

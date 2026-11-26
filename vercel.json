@@ -4,6 +4,7 @@
   "installCommand": "npm ci",
   "buildCommand": "node scripts/check-setup.mjs && npm run build && node scripts/lock-site.mjs dist",
   "outputDirectory": "dist",
+  "regions": ["hnd1"],
   "cleanUrls": true,
   "rewrites": [
     { "source": "/", "destination": "/dixie" },

@@ -6,7 +6,6 @@
 !/index.html
 !/vite.config.js
 !/vercel.json
-!/middleware.js
 !/api
 !/lib
 !/scripts

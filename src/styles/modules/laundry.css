@@ -1,5 +1,6 @@
 /* LAUNDRY Mode Styles (the count fields reuse .btn-fact from button.css) */
-.ld-config { display: flex; flex-direction: column; gap: 8px; margin: 12px 0 4px; }
+.ld-config { display: flex; flex-direction: column; gap: 8px; margin: 12px 0 4px; padding: 16px 18px; background: var(--paper-raised); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-out); }
+@media (max-width: 600px) { .ld-config { padding: 12px; } }
 .ld-msg { height: 74px; resize: vertical; font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.45; }
 .ld-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) 1.6fr auto; gap: 10px; align-items: end; }
 

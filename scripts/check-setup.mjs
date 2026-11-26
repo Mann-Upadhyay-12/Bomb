@@ -2,7 +2,7 @@
 // Checks the website's login settings at the start of a Vercel build (vercel.json runs it first). The
 // settings are marked Sensitive in Vercel, so the build is the only place that can see them. Prints
 // ✓ / ✗ per setting (never a value) and stops the build when logging in couldn't work, so a typo never
-// replaces the live site with one nobody can get into.
+// replaces the live site with one where nobody can log in (rooms and /admin need it; the solver doesn't).
 //
 //   SESSION_SECRET          32+ characters
 //   SUPABASE_URL            answers, and the table bomb_users exists (supabase/bomb_users.sql)
@@ -10,6 +10,7 @@
 //   DISCORD_CLIENT_ID/SECRET accepted by Discord (a client-credentials token request)
 //   ADMIN_IDS               holds a Discord user ID
 //   OG_IDS, REPORT_WEBHOOK  optional (the OGs; where ⚑ reports go): a note when one is set but unusable
+//   rooms                   optional: the room tables (supabase/bomb_rooms.sql) and SUPABASE_PUBLISHABLE_KEY
 //
 // SKIP_SETUP_CHECK=1 skips it.
 import { pathToFileURL } from 'node:url';
@@ -63,7 +64,20 @@ export async function checkSetup(env = process.env, { timeout = 15000 } = {}) {
     } catch (e) {
       bad(`Supabase didn't answer (${e.cause?.code || e.name}): check SUPABASE_URL, or restore the project if it is paused (supabase.com)`);
     }
+    // optional: rooms (lib/rooms.js). Without them 👥 ROOM says rooms aren't set up; the rest works
+    try {
+      const r = await fetch(`${url}/rest/v1/bomb_room_items?select=key&limit=1`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}` },
+        signal: AbortSignal.timeout(timeout),
+      });
+      if (r.ok) ok('Supabase: the room tables answer');
+      else note('Supabase has no room tables: paste supabase/bomb_rooms.sql into the SQL Editor and Run, for 👥 ROOM (optional)');
+    } catch (e) { note("Supabase didn't answer about the room tables (optional)"); }
   }
+  // optional: the public key the apps listen with (Realtime). Without it rooms still work, by checking every 4 s
+  const publicKey = clean(env.SUPABASE_PUBLISHABLE_KEY || env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  if (publicKey) ok('SUPABASE_PUBLISHABLE_KEY (rooms update live)');
+  else note('SUPABASE_PUBLISHABLE_KEY is not set: rooms update every 4 s instead of live (optional; Project Settings → API Keys → Publishable key)');
 
   // Discord
   const id = clean(env.DISCORD_CLIENT_ID);

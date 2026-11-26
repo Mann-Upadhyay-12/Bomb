@@ -68,33 +68,36 @@ p{margin:0 0 16px;color:#b9bdc6}
   const who = (me) => `<div class="who"><img src="${esc(me.avatar)}" alt=""><div><b>${esc(me.name)}</b>${role(me)}</div></div>`;
   const logout = '<a class="btn" href="/api/auth/logout">Log out</a>';
 
+  const solver = (main) => `<a class="btn${main ? ' main' : ''}" href="${esc(next)}">Open the solver</a>`;
+
+  // Logging in is optional: the solver works for everyone. It's needed for 👥 ROOM (one bomb together).
   function show(me) {
     if (me.state === 'allowed') {
-      const until = me.expires_at ? `<p class="small">Your access lasts until ${esc(new Date(me.expires_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))}.</p>` : '';
-      card.innerHTML = `${who(me)}<div class="btns"><a class="btn main" href="${esc(next)}">Open the solver</a>
-        ${me.admin ? '<a class="btn" href="/admin">Admin: who can use the site</a>' : me.og ? '<a class="btn" href="/admin">Who uses the site</a>' : ''}${logout}</div>${until}`;
+      const until = me.expires_at ? `<p class="small">Rooms are yours until ${esc(new Date(me.expires_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))}.</p>` : '';
+      card.innerHTML = `${who(me)}<div class="btns">${solver(true)}
+        ${me.admin ? '<a class="btn" href="/admin">Admin: who can use rooms</a>' : me.og ? '<a class="btn" href="/admin">Who uses the site</a>' : ''}${logout}</div>${until}`;
       return;
     }
     if (me.state === 'waiting' || me.state === 'blocked' || me.state === 'expired') {
       const text = {
-        waiting: ['⏳', 'Waiting for the owner', 'You’re logged in. The owner has to let you in before you can use the solver. Come back later.'],
-        blocked: ['🔒', 'No access', 'The owner hasn’t given this account access to the solver.'],
-        expired: ['⌛', 'Your access ended', 'Your time on the solver is up. Ask the owner if you need more.'],
+        waiting: ['⏳', 'Rooms: waiting for the owner', 'You’re logged in. The solver works as always; the owner has to let you in before you can use rooms.'],
+        blocked: ['🔒', 'No rooms for this account', 'The solver works as always, but the owner hasn’t given this account rooms.'],
+        expired: ['⌛', 'Your room time ended', 'The solver works as always. Ask the owner if you need rooms again.'],
       }[me.state];
-      card.innerHTML = `<div class="icon">${text[0]}</div><h1>${text[1]}</h1>${who(me)}<p>${text[2]}</p><div class="btns">${logout}</div>`;
+      card.innerHTML = `<div class="icon">${text[0]}</div><h1>${text[1]}</h1>${who(me)}<p>${text[2]}</p><div class="btns">${solver(true)}${logout}</div>`;
       return;
     }
     if (me.state === 'error') {
-      card.innerHTML = `<div class="icon">⚠️</div><h1>Can’t check your access</h1><p>The site couldn’t reach its user list. Try again in a minute.</p>
-        <div class="btns"><a class="btn main" href="${esc(location.href)}">Try again</a>${logout}</div>`;
+      card.innerHTML = `<div class="icon">⚠️</div><h1>Can’t check your account</h1><p>The site couldn’t reach its user list, so rooms may not work right now. The solver works as always.</p>
+        <div class="btns">${solver(true)}<a class="btn" href="${esc(location.href)}">Try again</a>${logout}</div>`;
       return;
     }
     // guest
     const bye = q.get('bye') ? '<div class="ok">You’re logged out.</div>' : '';
     const setup = me.ready === false && !q.get('error') ? `<div class="err">${ERRORS.setup}</div>` : '';
-    card.innerHTML = `${bye}${errorBox}${setup}<div class="icon">💣</div><h1>Log in to use the solver</h1>
-      <p>Bomb and Heist solver. Log in with your Discord account; the site only learns your name and avatar.</p>
-      <div class="btns"><a class="btn discord" href="${esc(loginHref)}">${discordIcon}Log in with Discord</a></div>`;
+    card.innerHTML = `${bye}${errorBox}${setup}<div class="icon">💣</div><h1>Log in for rooms</h1>
+      <p>The solver works without an account. Log in with Discord to play one bomb together in a 👥 room; the site only learns your name and avatar.</p>
+      <div class="btns"><a class="btn discord" href="${esc(loginHref)}">${discordIcon}Log in with Discord</a>${solver(false)}</div>`;
   }
 
   fetch('/api/auth/me', { credentials: 'same-origin', cache: 'no-store' })
@@ -102,7 +105,7 @@ p{margin:0 0 16px;color:#b9bdc6}
     .then(show)
     .catch(() => {
       card.innerHTML = `<div class="icon">📡</div><h1>Can’t reach the site</h1><p>Check your internet connection.</p>
-        <div class="btns"><a class="btn main" href="${esc(location.href)}">Try again</a></div>`;
+        <div class="btns"><a class="btn main" href="${esc(location.href)}">Try again</a>${solver(false)}</div>`;
     });
 })();
 </script>

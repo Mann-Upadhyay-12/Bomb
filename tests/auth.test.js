@@ -1,5 +1,5 @@
-// The website's login, permissions and page lock (lib/, api/, middleware.js, scripts/lock-site.mjs),
-// against a fake Discord and a fake Supabase: no network.
+// The website's login (optional: only rooms need it), permissions and page lock (lib/, api/,
+// scripts/lock-site.mjs), against a fake Discord and a fake Supabase: no network.
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { gunzipSync } from 'node:zlib';
@@ -10,7 +10,6 @@ import { join } from 'node:path';
 import { SESSION_COOKIE, STATE_COOKIE, lockKey, newSession, readSession, safeNext, sessionSecret, signToken, verifyToken } from '../lib/session.js';
 import { accessFor, accessOf, adminChange, adminIds, publicKeyMistake } from '../lib/users.js';
 import { sealPage, lockSite, PUBLISHED } from '../scripts/lock-site.mjs';
-import middleware from '../middleware.js';
 import * as login from '../api/auth/login.js';
 import * as callback from '../api/auth/callback.js';
 import * as me from '../api/auth/me.js';
@@ -116,7 +115,6 @@ async function logIn(code, next = '/') {
 }
 
 const asUser = (session, extra = {}) => ({ cookies: { [SESSION_COOKIE]: session }, ...extra });
-const PAGE = { headers: { 'sec-fetch-dest': 'document', accept: 'text/html' } };
 const sameSite = { origin: SITE, 'content-type': 'application/json' };
 
 // ── sessions ──────────────────────────────────────────────────────────────────────────────────────
@@ -206,13 +204,23 @@ test('the deploy keeps only the site pages and refuses a build without them', as
 });
 
 // ── the whole flow ────────────────────────────────────────────────────────────────────────────────
-test('a guest is sent to /login, files are refused', async () => {
-  const page = await middleware(req('/bomb?x=1', PAGE));
-  assert.equal(page.status, 302);
-  assert.equal(page.headers.get('location'), '/login?next=%2Fbomb%3Fx%3D1');
-  assert.equal((await middleware(req('/stockfish.js'))).status, 401);
+/** POST /api/unlock for a sealed page → { status, key, account }. */
+async function unlockAs(session, { headers = sameSite } = {}) {
+  const sealed = await sealPage(HTML, SECRET, SITE);
+  const salt = /data-salt="([^"]+)"/.exec(sealed)[1];
+  const r = await unlock.POST(req('/api/unlock', { ...(session ? asUser(session) : {}), method: 'POST', headers, body: JSON.stringify({ salt }) }));
+  const data = await r.json();
+  return { status: r.status, ...data, code: data.key ? (await openSealed(sealed, data.key)).code : null };
+}
+
+test('a guest opens the solver without logging in (account null); a forged session is a guest', async () => {
+  const g = await unlockAs(null);
+  assert.equal(g.status, 200);
+  assert.equal(g.code, CODE, 'the page runs for a guest');
+  assert.equal(g.account, null);
   const forged = await signToken({ id: OWNER, name: 'x', iat: Date.now() }, 'another-secret-0123456789abcdef01234');
-  assert.equal((await middleware(req('/', { ...PAGE, cookies: { [SESSION_COOKIE]: forged } }))).status, 302);
+  const f = await unlockAs(forged);
+  assert.equal(f.account, null, 'a session signed with another secret counts for nothing');
   assert.equal((await me.GET(req('/api/auth/me'))).status, 200);
   assert.equal((await (await me.GET(req('/api/auth/me'))).json()).state, 'guest');
 });
@@ -226,35 +234,33 @@ test('a first login gets in, lands where it started, and can unlock the page', a
   assert.equal(db.get('200000000000000002').status, 'allowed');
   assert.equal(db.get('200000000000000002').username, 'Friend');
 
-  assert.equal(await middleware(req('/bomb', asUser(session, PAGE))), undefined, 'middleware lets the page through');
   const info = await (await me.GET(req('/api/auth/me', asUser(session)))).json();
   assert.equal(info.state, 'allowed');
   assert.equal(info.admin, false);
 
-  const sealed = await sealPage(HTML, SECRET, SITE);
-  const salt = /data-salt="([^"]+)"/.exec(sealed)[1];
-  const r = await unlock.POST(req('/api/unlock', asUser(session, { method: 'POST', headers: sameSite, body: JSON.stringify({ salt }) })));
-  assert.equal(r.status, 200);
-  const { key, account } = await r.json();
-  assert.equal((await openSealed(sealed, key)).code, CODE);
-  assert.deepEqual(account, { name: 'Friend', admin: false, og: false });
+  const u = await unlockAs(session);
+  assert.equal(u.status, 200);
+  assert.equal(u.code, CODE);
+  assert.deepEqual(u.account, { name: 'Friend', admin: false, og: false, state: 'allowed' });
 });
 
-test('unlock refuses guests, other sites and bad salts', async () => {
+test('unlock refuses other sites and bad salts', async () => {
   const { session } = await logIn('friend');
   const body = JSON.stringify({ salt: 'abcdefghijklmnopqrstuv' });
-  assert.equal((await unlock.POST(req('/api/unlock', { method: 'POST', headers: sameSite, body }))).status, 401);
+  assert.equal((await unlock.POST(req('/api/unlock', { method: 'POST', headers: { origin: 'https://copycat.example' }, body }))).status, 403, 'a guest on another site');
   assert.equal((await unlock.POST(req('/api/unlock', asUser(session, { method: 'POST', headers: { origin: 'https://copycat.example' }, body })))).status, 403);
   assert.equal((await unlock.POST(req('/api/unlock', asUser(session, { method: 'POST', body })))).status, 403, 'no Origin at all');
   assert.equal((await unlock.POST(req('/api/unlock', asUser(session, { method: 'POST', headers: sameSite, body: '{"salt":"../x"}' })))).status, 400);
 });
 
-test('with NEW_USERS=wait a first login waits; the owner always gets in', async () => {
+test('with NEW_USERS=wait a first login waits for rooms (the solver still opens); the owner always gets in', async () => {
   process.env.NEW_USERS = 'wait';
-  const { res, session } = await logIn('friend', '/bomb');
-  assert.equal(res.headers.get('location'), '/login');
+  const { res, session } = await logIn('friend', '/bomb#play=bomb&room=K7QX2M');
+  assert.equal(res.headers.get('location'), '/bomb#play=bomb&room=K7QX2M', 'back where the login started, invite and all');
   assert.equal(db.get('200000000000000002').status, 'waiting');
-  assert.equal((await middleware(req('/', asUser(session, PAGE)))).status, 302);
+  const u = await unlockAs(session);
+  assert.equal(u.code, CODE);
+  assert.equal(u.account.state, 'waiting');
   assert.equal((await (await me.GET(req('/api/auth/me', asUser(session)))).json()).state, 'waiting');
   const owner = await logIn('owner', '/admin');
   assert.equal(owner.res.headers.get('location'), '/admin');
@@ -307,26 +313,29 @@ test('the owner blocks and time-limits people from /admin', async () => {
   assert.equal(done.status, 303);
   assert.match(done.headers.get('location'), /done=block/);
   assert.equal(db.get('200000000000000002').status, 'blocked');
-  assert.equal((await middleware(req('/', asUser(friend.session, PAGE)))).status, 302);
-  const body = JSON.stringify({ salt: 'abcdefghijklmnopqrstuv' });
-  assert.equal((await unlock.POST(req('/api/unlock', asUser(friend.session, { method: 'POST', headers: sameSite, body })))).status, 403);
+  const blocked = await unlockAs(friend.session);
+  assert.equal(blocked.code, CODE, 'a blocked account still gets the solver');
+  assert.equal(blocked.account.state, 'blocked', '… but not rooms');
 
   await admin.POST(form('200000000000000002', 'allow_1d'));
-  assert.equal(await middleware(req('/', asUser(friend.session, PAGE))), undefined);
+  assert.equal((await accessFor('200000000000000002', { fresh: true })).state, 'allowed');
   const expires = Date.parse(db.get('200000000000000002').expires_at);
   assert.ok(Math.abs(expires - Date.now() - 864e5) < 60e3);
   const later = await accessFor('200000000000000002', { fresh: true, now: expires + 1 });
   assert.equal(later.state, 'expired');
 });
 
-test('if the database is down, the owner still gets in and others are asked to retry', async (t) => {
+test('if the database is down, the solver still opens, the owner keeps rooms and others are asked to retry', async (t) => {
   const friend = await logIn('friend');
   const owner = await logIn('owner');
   dbDown = true;
   const quiet = console.error;
   console.error = () => {}; // the expected "Access check failed" lines
   t.after(() => { console.error = quiet; });
-  assert.equal(await middleware(req('/', asUser(owner.session, PAGE))), undefined);
+  assert.equal((await unlockAs(owner.session)).account.state, 'allowed');
+  const down = await unlockAs(friend.session);
+  assert.equal(down.code, CODE);
+  assert.equal(down.account.state, 'error');
   const f = await accessFor('200000000000000002', { fresh: true }).catch((e) => e);
   assert.ok(f instanceof Error);
   const res = await me.GET(req('/api/auth/me', asUser(friend.session)));
@@ -439,15 +448,11 @@ test('OG_IDS: OGs always get in, even when blocked, out of time or with the data
   assert.equal((await accessFor(OG, { fresh: true })).state, 'allowed');
   db.set(OG, { ...db.get(OG), status: 'allowed', expires_at: new Date(Date.now() - 1000).toISOString() });
   assert.equal((await accessFor(OG, { fresh: true })).state, 'allowed');
-  assert.equal(await middleware(req('/', asUser(session, PAGE))), undefined);
 
   const info = await (await me.GET(req('/api/auth/me', asUser(session)))).json();
   assert.equal(info.og, true);
   assert.equal(info.admin, false);
-  const sealed = await sealPage(HTML, SECRET, SITE);
-  const salt = /data-salt="([^"]+)"/.exec(sealed)[1];
-  const r = await unlock.POST(req('/api/unlock', asUser(session, { method: 'POST', headers: sameSite, body: JSON.stringify({ salt }) })));
-  assert.deepEqual((await r.json()).account, { name: 'Yuki', admin: false, og: true });
+  assert.deepEqual((await unlockAs(session)).account, { name: 'Yuki', admin: false, og: true, state: 'allowed' });
 
   dbDown = true;
   const quiet = console.error;
@@ -524,14 +529,15 @@ test('a report message pings nobody and fits in Discord', () => {
   assert.match(e.title, /MORSE/);
 });
 
-test('only the owner and the OGs can send a report, to the webhook, not too often', async (t) => {
+test('anyone can send a report (logged in or not), to the webhook, not too often', async (t) => {
   process.env.OG_IDS = OG;
   const quiet = console.error;
   console.error = () => {};
   t.after(() => { console.error = quiet; });
   const friend = await logIn('friend');
   const og = await logIn('og');
-  const send = (session, { origin = SITE, images = 1 } = {}) => {
+  let n = 0;
+  const send = (session, { origin = SITE, images = 1, ip = '203.0.113.7' } = {}) => {
     const form = new FormData();
     form.append('module', '📡 MORSE (GIF)');
     form.append('answer', 'SHELL 3.505');
@@ -541,11 +547,10 @@ test('only the owner and the OGs can send a report, to the webhook, not too ofte
     form.append('game', '── the serial (bombvision_serial) ──\nAB1CD2');
     for (let i = 0; i < images; i++) form.append('image', new Blob([new Uint8Array(20)], { type: 'image/png' }), 'p.png');
     form.append('image', new Blob(['<svg/>'], { type: 'image/svg+xml' }), 'x.svg'); // not a picture type it sends
-    return report.POST(req('/api/report', { ...(session ? asUser(session) : {}), method: 'POST', headers: { origin }, body: form }));
+    n++;
+    return report.POST(req('/api/report', { ...(session ? asUser(session) : {}), method: 'POST', headers: { origin, 'x-forwarded-for': `${ip}, 10.0.0.1` }, body: form }));
   };
 
-  assert.equal((await send(null)).status, 401);
-  assert.equal((await send(friend.session)).status, 403, 'not an OG');
   assert.equal((await send(og.session, { origin: 'https://evil.example' })).status, 403);
   const off = await send(og.session);
   assert.equal(off.status, 503);
@@ -565,8 +570,59 @@ test('only the owner and the OGs can send a report, to the webhook, not too ofte
   assert.ok(names.length <= 10, "Discord's most files in one message");
   const pastedFile = [...body.entries()].find(([k, v]) => k.startsWith('files[') && v.name === 'pasted.txt');
   assert.match(await pastedFile[1].text(), /AB1CD2/);
-
   assert.equal((await send(og.session)).status, 429, 'one every few seconds');
+
+  // not an OG, not even logged in: both can send now
+  assert.equal((await send(friend.session)).status, 200, 'a logged-in player');
+  assert.match(JSON.parse(webhookCalls.at(-1).body.get('payload_json')).content, /Friend/);
+  assert.equal((await send(null)).status, 200, 'a guest');
+  const guest = JSON.parse(webhookCalls.at(-1).body.get('payload_json'));
+  const tag = /Guest #([0-9a-f]{6})/.exec(guest.content)[1];
+  assert.match(guest.embeds[0].fields[3].value, new RegExp(`Guest #${tag} \\(not logged in\\)`));
+  assert.ok(!JSON.stringify(guest).includes('203.0.113.7'), 'the address itself is never sent');
+  assert.ok(!JSON.stringify(guest).includes('<@'), 'no Discord mention for a guest');
+  const again = await send(null, { ip: '198.51.100.9' });
+  assert.equal(again.status, 200, 'another guest');
+  assert.notEqual(/Guest #([0-9a-f]{6})/.exec(JSON.parse(webhookCalls.at(-1).body.get('payload_json')).content)[1], tag, 'another tag');
+  assert.equal((await send(null)).status, 429, 'the first guest again, within seconds');
+  assert.ok(n > 0);
+});
+
+test('a guest can send 10 reports an hour; the site at most 20 a minute', async (t) => {
+  const { guestTag, GUEST_PER_HOUR, ALL_PER_MINUTE } = report;
+  assert.equal(await guestTag('1.2.3.4', SECRET), await guestTag('1.2.3.4', SECRET));
+  assert.notEqual(await guestTag('1.2.3.4', SECRET), await guestTag('1.2.3.5', SECRET));
+  process.env.REPORT_WEBHOOK = HOOK;
+  const realNow = Date.now;
+  let clock = realNow() + 3 * 3600e3; // past anything the other tests sent
+  Date.now = () => clock;
+  t.after(() => { Date.now = realNow; });
+  const send = (ip) => {
+    const form = new FormData();
+    form.append('answer', 'x');
+    return report.POST(req('/api/report', { method: 'POST', headers: { origin: SITE, 'x-forwarded-for': ip }, body: form }));
+  };
+  for (let i = 0; i < GUEST_PER_HOUR; i++) {
+    clock += 6000;
+    assert.equal((await send('192.0.2.1')).status, 200, `report ${i + 1}`);
+  }
+  clock += 6000;
+  const over = await send('192.0.2.1');
+  assert.equal(over.status, 429);
+  assert.equal((await over.json()).error, 'hourly');
+  clock += 3600e3;
+  assert.equal((await send('192.0.2.1')).status, 200, 'an hour later');
+
+  // many guests at once: the site stops at ALL_PER_MINUTE (Discord takes 30 a minute per webhook)
+  clock += 120e3;
+  let ok = 0, busy = 0;
+  for (let i = 0; i < ALL_PER_MINUTE + 5; i++) {
+    const r = await send(`198.18.0.${i}`);
+    if (r.status === 200) ok++;
+    else if ((await r.json()).error === 'busy') busy++;
+  }
+  assert.equal(ok, ALL_PER_MINUTE);
+  assert.equal(busy, 5);
 });
 
 test('a deleted webhook is reported as gone', async (t) => {

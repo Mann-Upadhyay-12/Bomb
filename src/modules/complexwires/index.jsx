@@ -17,6 +17,7 @@ import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
 import { ComplexWiresWorking } from './working.jsx';
 import { Dropzone } from '../../core/Dropzone.jsx';
 import { cwReadDiagramImage, cwReadWiresImage } from './complexwiresVision.js';
+import { useCardState } from '../../core/room/useCardState.js';
 
 const CW_PRESET_NAMES = { preset1: 'Preset 1', preset2: 'Preset 2', preset3: 'Preset 3', preset4: 'Preset 4' };
 const blankWires = () => Array.from({ length: 6 }, () => ({ active: true, color: 'white', star: false, led: false }));
@@ -27,9 +28,12 @@ export function ComplexWiresModule({ isActive = true }) {
   const { copy } = useClipboard();
   const answerChanged = useAnswerGate();
 
-  const [rules, setRules] = useState(() => ({ ...CW_PRESETS.preset1 }));
-  const [edge, setEdge] = useState({ even: false, needy: false, gte5: true });
-  const [wires, setWires] = useState(blankWires);
+  // in a room, the edge conditions, the rules and the wires are the room's (core/room/useCardState.js):
+  // a tap here shows on every teammate's Complex Wires. What a picture reads stays in each app (every
+  // app reads the same mirrored picture), and EVEN/ODD follows the shared serial in each app
+  const [rules, setRules] = useCardState('rules', () => ({ ...CW_PRESETS.preset1 }));
+  const [edge, setEdge] = useCardState('edge', { even: false, needy: false, gte5: true });
+  const [wires, setWires] = useCardState('wires', blankWires);
   const [unsure, setUnsure] = useState(() => new Set());
   const [serial, setSerial] = useBombSerial(); // game-wide, also in the top bar
   const [readStatus, setReadStatus] = useState({ text: '', ok: null });
@@ -192,7 +196,7 @@ export function ComplexWiresModule({ isActive = true }) {
           }
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={handleClear}>
+              <button className="reset-btn" type="button" onClick={handleClear} data-card-clear>
                 clear
               </button>
               <button

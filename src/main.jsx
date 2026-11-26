@@ -18,6 +18,7 @@ const BOMB_CSS_ORDER = [
   './styles/components/workingpanel.css',
   './styles/components/common.css',
   './styles/components/sidebar.css',
+  './styles/components/room.css', // 👥 ROOM bar and panel (core/room/RoomBar.jsx)
   './styles/modules/mines.css',
   './styles/modules/queens.css',
   './styles/modules/morse.css',

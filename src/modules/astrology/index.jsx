@@ -173,7 +173,7 @@ export function AstrologyModule({ isActive = true }) {
               sub={<>the defuser’s module (stars + 4 buttons) · paste the helper’s <b>sky map</b> once per game</>}
             />
           }
-          controls={<button className="reset-btn" type="button" onClick={handleClear}>clear</button>}
+          controls={<button className="reset-btn" type="button" onClick={handleClear} data-card-clear>clear</button>}
         >
           {status.text && <div className={`astro-status ${status.ok === false ? 'warn' : ''}`}>{status.text}</div>}
           <ol className="astro-steps">

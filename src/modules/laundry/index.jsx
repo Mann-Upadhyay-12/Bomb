@@ -15,6 +15,7 @@ import { ModuleInput } from '../../core/components/ModuleInput.jsx';
 import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
 import { CopyLines } from '../../core/components/CopyLines.jsx';
 import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
+import { useCardState } from '../../core/room/useCardState.js';
 
 const COUNT_FIELDS = [['remaining', 'REMAINING'], ['solved', 'SOLVED'], ['needy', 'NEEDY'], ['total', 'TOTAL']];
 const EMPTY = { remaining: '', solved: '', needy: '', total: '' };
@@ -64,16 +65,20 @@ export function LaundryModule({ isActive = true }) {
 
   // this game's manual (its formulas change every game): in memory, shared by every Laundry card
   const [manualText, setManualText] = useSharedState('laundry_manual', '');
+  // the manual's text box: open while there is no manual (to paste it), folded once it's loaded
+  const [editManual, setEditManual] = useState(false);
+  const showManual = !manualText.trim() || editManual;
   const manual = useMemo(() => parseLaundryManual(manualText), [manualText]);
-  const [counts, setCounts] = useState(EMPTY);
-  const [load, setLoad] = useState(null);
-  const [botText, setBotText] = useState('');
+  // in a room, the load's counts, number and message are the room's (core/room/useCardState.js)
+  const [counts, setCounts] = useCardState('counts', EMPTY);
+  const [load, setLoad] = useCardState('load', null);
+  const [botText, setBotText] = useCardState('botText', '');
   const [current, setCurrent] = useState(null); // symbols the tiles show now (from a picture)
   const [unsure, setUnsure] = useState([]);
   const [status, setStatus] = useState({ text: '', ok: null });
   const [busy, setBusy] = useState(false);
   const [thumb, setThumb] = useState('');
-  const [checkAt, setCheckAt] = useState(null);
+  const [checkAt, setCheckAt] = useCardState('checkAt', null);
   const [now, setNow] = useState(() => Date.now());
 
   React.useEffect(() => {
@@ -215,7 +220,7 @@ export function LaundryModule({ isActive = true }) {
           }
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={handleClear}>clear</button>
+              <button className="reset-btn" type="button" onClick={handleClear} data-card-clear>clear</button>
               <button className="reset-btn" type="button" style={{ borderColor: 'var(--brass)', color: 'var(--brass)', fontWeight: 600 }} onClick={nextLoad} title="Keep the serial, clear the counts for the next load">↻ next load</button>
               <button className="reset-btn" type="button" onClick={clearManual} disabled={!manualText} title="New game: forget this game's manual">clear manual</button>
               <button className="reset-btn" type="button" style={{ borderColor: 'var(--brass)', color: 'var(--brass)' }} onClick={handleSample}>⚡ SAMPLE</button>
@@ -224,8 +229,16 @@ export function LaundryModule({ isActive = true }) {
         >
           {status.text && <div className={`module-hint ${status.ok === false ? 'bad' : status.ok ? 'ok' : ''}`}>{status.text}</div>}
           <div className="ld-config">
-            <label className="search-config-label" htmlFor={`${uid}-man`}>HELPER MANUAL (once per game — its formulas change every game):</label>
+            <div className={`mgroup-manual-bar ${showManual ? 'open' : ''}`}>
+              <div className="mgroup-manual-line">
+                <span className="mgroup-manual-name">📖 MANUAL</span>
+                <span className={`mgroup-manual-status ${manualText.trim() ? 'on' : 'off'}`}>{manualText.trim() ? 'LOADED ✓' : 'NOT LOADED'}</span>
+                <span className="mgroup-manual-tip">once per game — its formulas change every game; paste its text or pictures (Ctrl+V)</span>
+                {manualText.trim() && <button type="button" className="mgroup-manual-debug" onClick={() => setEditManual(o => !o)}>{showManual ? 'hide' : 'edit'}</button>}
+              </div>
+            </div>
             <ManualPasteBox what="Laundry manual page" />
+            {showManual && (
             <textarea
               id={`${uid}-man`}
               className="search-words-field ld-msg ld-manual"
@@ -235,6 +248,7 @@ export function LaundryModule({ isActive = true }) {
               onChange={(e) => setManualText(e.target.value)}
               onPaste={manualBoxPaste()}
             />
+            )}
             <ManualSummary manual={manual} borrowed={res.ready ? res.borrowed : []} />
             {loadMismatch && <div className="module-hint">The manual is for load {manual.load}, the message is load {load} — if this load's manual is different, paste it.</div>}
             <label className="search-config-label" htmlFor={`${uid}-msg`}>BOT MESSAGE (each load, paste as-is):</label>

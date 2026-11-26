@@ -371,7 +371,7 @@ export function SearchModule({ isActive = true }) {
           }
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={handleClear}>
+              <button className="reset-btn" type="button" onClick={handleClear} data-card-clear>
                 clear
               </button>
               <button
@@ -419,7 +419,7 @@ export function SearchModule({ isActive = true }) {
               <button type="button" className="bg-btn" onClick={handleRestoreWords}>
                 🔄 RESTORE ALL {MASTER_WORD_COUNT} WORDS
               </button>
-              <button type="button" className="bg-btn" onClick={handleClear}>
+              <button type="button" className="bg-btn" onClick={handleClear} data-card-clear>
                 🗑️ CLEAR GRID
               </button>
             </div>

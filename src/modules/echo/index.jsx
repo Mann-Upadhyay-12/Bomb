@@ -7,6 +7,7 @@ import { useClipboard } from '../../core/useClipboard.js';
 import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { useSharedSetting } from '../../core/sharedSetting.js';
 import { manualBoxPaste } from '../../core/airPaste.js';
+import { useInstance } from '../../core/InstanceContext.jsx';
 import { Dropzone } from '../../core/Dropzone.jsx';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
@@ -14,7 +15,8 @@ import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
 import { CopyLines } from '../../core/components/CopyLines.jsx';
 import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
 
-const KEY = 'bombvision_echo_pairs';
+export const ECHO_PAIRS_KEY = 'bombvision_echo_pairs';
+const KEY = ECHO_PAIRS_KEY;
 
 export function EchoModule({ isActive = true }) {
   React.useEffect(() => { preWarmOCR(); }, []);
@@ -22,6 +24,9 @@ export function EchoModule({ isActive = true }) {
   const { copy } = useClipboard();
   const answerChanged = useAnswerGate();
   const uid = useId();
+  // a card of the multiple page: the manual is the 📖 bar above the cards (pasted once for all)
+  const inst = useInstance();
+  const grouped = Boolean(inst && inst.grouped);
   const [list, setList] = useSharedSetting(KEY, '');
   const [word, setWord] = useState('');
   const [log, setLog] = useState([]); // [{ from, to }] one per stage answered
@@ -90,7 +95,7 @@ export function EchoModule({ isActive = true }) {
           ) : null}
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={handleClear}>clear</button>
+              <button className="reset-btn" type="button" onClick={handleClear} data-card-clear>clear</button>
               <button className="reset-btn" type="button" style={{ borderColor: 'var(--brass)', color: 'var(--brass)' }} onClick={handleSample}>⚡ SAMPLE</button>
             </>
           }
@@ -99,11 +104,14 @@ export function EchoModule({ isActive = true }) {
           <div className="btn-config">
             <div className="search-config-row">
               <div className="btn-config-head">
-                <label className="search-config-label" htmlFor={`${uid}-list`} style={{ margin: 0 }}>HELPER WORD LIST (paste as-is — shown word → word to enter):</label>
+                {grouped ? <span className="search-config-label" style={{ margin: 0 }}>📖 MANUAL READ:</span>
+                  : <label className="search-config-label" htmlFor={`${uid}-list`} style={{ margin: 0 }}>HELPER WORD LIST (paste as-is — shown word → word to enter):</label>}
                 <span className={`maze-status-tag ${parsed.dupes.length ? 'warn' : ''}`}>{parsed.pairs.length} pairs{parsed.dupes.length ? ` · ⚠ ${parsed.dupes.join(', ')} twice` : ''}</span>
               </div>
+              {!grouped && (
               <textarea id={`${uid}-list`} className="search-words-field manual-text" spellCheck={false}
                 placeholder={'COYLY → CHACE\nHABIT → PLONK\n…'} value={list} onChange={(e) => setList(e.target.value)} onPaste={manualBoxPaste()} />
+              )}
             </div>
             <div className="btn-pick-row">
               <label className="search-config-label" htmlFor={`${uid}-word`} style={{ margin: 0 }}>SHOWN WORD:</label>

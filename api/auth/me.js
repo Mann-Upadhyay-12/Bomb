@@ -1,5 +1,6 @@
-// GET /api/auth/me → who this browser is logged in as and whether they may use the site (the /login
-// page shows it). { state: 'guest'|'allowed'|'waiting'|'blocked'|'expired'|'error', name, id, … }
+// GET /api/auth/me → who this browser is logged in as and whether they may use rooms (the /login page
+// and the room panel's CHECK AGAIN ask). The solver itself is open to everyone.
+// { state: 'guest'|'allowed'|'waiting'|'blocked'|'expired'|'error', name, id, … }
 import { readSession, sessionSecret } from '../../lib/session.js';
 import { discordReady } from '../../lib/discord.js';
 import { accessFor, avatarUrl, databaseReady } from '../../lib/users.js';

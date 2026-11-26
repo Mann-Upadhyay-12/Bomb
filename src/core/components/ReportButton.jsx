@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { canReport, sendReport } from '../report.js';
 
 /**
- * ⚑ WRONG ANSWER? under a module's answer, for the owner and the OGs (nobody else sees it). It sends the
+ * ⚑ WRONG ANSWER? under a module's answer, for everyone on the site (logged in or not). It sends the
  * answer, the module's pictures, its text on screen, the text pasted on the page and the game's data,
  * with an optional note, to the owner's Discord
  * (src/core/report.js → api/report.js). The status shows here: the bomb app has no toasts.

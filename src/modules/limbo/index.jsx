@@ -119,7 +119,7 @@ export function LimboModule({ isActive = true }) {
               sub={<>the whole GIF: the glowing key at the start, the shuffle, the colours at the end</>}
             />
           }
-          controls={<button className="reset-btn" type="button" onClick={handleClear}>clear</button>}
+          controls={<button className="reset-btn" type="button" onClick={handleClear} data-card-clear>clear</button>}
         >
           {error && <div className="limbo-status warn">{error}</div>}
           {r && !r.startSure && (

@@ -3,9 +3,9 @@
 //
 // 1. Each app page (dixie / yuza / bomb) keeps its HTML and CSS, but its code (the one inline module
 //    script: every solver, the vision code, the models) is gzipped and AES-encrypted. A small loader asks
-//    /api/unlock for the key, which only a logged-in, allowed user on this site gets, and runs the code
-//    from memory. A Ctrl+S copy, a copy opened from a file or put on another site has only the
-//    encrypted block, so it shows "this only runs on <site>" instead of the app.
+//    /api/unlock for the key, which any page on this site gets (logged in or not: login is only for
+//    rooms), and runs the code from memory. A Ctrl+S copy, a copy opened from a file or put on another
+//    site has only the encrypted block, so it shows "this only runs on <site>" instead of the app.
 // 2. Only what the site needs is published: the app pages, /login and stockfish.js. The old standalone
 //    pages in public/ (bombs, maze, …) are left out of the deploy.
 //
@@ -63,7 +63,7 @@ export function loaderSource(site) {
     document.body.replaceChildren(box); // a saved copy also holds a snapshot of the app's screen: drop it
   }
   const elsewhere = () => stop('THIS COPY DOESN\\u2019T RUN HERE',
-    'The solver only runs on its own website, for people logged in there.', { link: true });
+    'The solver only runs on its own website.', { link: true });
 
   async function open() {
     if (!sealed || location.protocol === 'file:') return elsewhere();
@@ -77,10 +77,7 @@ export function loaderSource(site) {
     } catch (e) {
       return stop('CAN\\u2019T REACH THE SITE', 'Check your internet connection, then try again.', { retry: true });
     }
-    if (res.status === 401 || res.status === 403) {
-      location.replace('/login?next=' + encodeURIComponent(location.pathname + location.search + location.hash));
-      return;
-    }
+    if (res.status === 403) return elsewhere(); // not this site's own page
     if (res.status === 404 || res.status === 405) return elsewhere();
     if (!res.ok) return stop('COULDN\\u2019T CHECK YOUR ACCESS', 'The site had a problem. Try again in a minute.', { retry: true });
     const { key, account } = await res.json();
@@ -88,14 +85,15 @@ export function loaderSource(site) {
     const zipped = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes(sealed.dataset.iv) }, aes, bytes(sealed.textContent.trim()));
     sealed.remove();
     const code = await new Response(new Blob([zipped]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
-    window.__BB_ACCOUNT__ = account;
+    window.__BB_SITE__ = true; // the site's API is here (rooms, ⚑ reports)
+    window.__BB_ACCOUNT__ = account || null; // null: not logged in (fine: login is only for rooms)
     await ready(); // the original module ran after the page was parsed
     const url = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
     try { await import(url); } finally { URL.revokeObjectURL(url); }
   }
   open().catch((e) => {
     console.error(e);
-    stop('COULDN\\u2019T START', 'Reload the page. If it keeps happening, log out and back in.', { retry: true });
+    stop('COULDN\\u2019T START', 'Reload the page. If it keeps happening, tell the owner.', { retry: true });
   });
 })();`;
 }

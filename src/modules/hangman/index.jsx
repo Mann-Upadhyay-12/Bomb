@@ -174,7 +174,7 @@ export function HangmanModule({ isActive = true }) {
     <ModuleLayout
       input={
         <ModuleInput
-          controls={<button className="reset-btn" type="button" onClick={handleClear}>clear</button>}
+          controls={<button className="reset-btn" type="button" onClick={handleClear} data-card-clear>clear</button>}
           dropzone={
             <Dropzone
               onImage={handleImage}

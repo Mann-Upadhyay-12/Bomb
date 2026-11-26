@@ -1,0 +1,129 @@
+/* ── 👥 ROOM (top bar) and its panel: core/room/RoomBar.jsx ── */
+.room-wrap { position: relative; display: inline-flex; }
+.room-bar-btn {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 11.5px; font-weight: 700; letter-spacing: .06em;
+  padding: 8px 14px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--paper-raised); color: var(--ink);
+  cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+}
+.room-bar-btn:hover { border-color: var(--brass); color: var(--brass); }
+.room-bar-btn.in { border-color: var(--brass); color: var(--brass); background: rgba(var(--brass-rgb), 0.1); }
+.room-live { width: 8px; height: 8px; border-radius: 50%; background: #E5B84B; box-shadow: 0 0 0 2px rgba(229,184,75,.25); }
+.room-live.live { background: #68D391; box-shadow: 0 0 0 2px rgba(104,211,145,.25); }
+@media not all and (hover: hover) and (pointer: fine) { .room-bar-btn { min-height: 36px; } }
+
+.room-panel {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 60;
+  width: min(460px, calc(100vw - 32px));
+  padding: 14px 16px; border-radius: 16px;
+  border: 1px solid var(--line); background: var(--paper-raised); color: var(--ink);
+  box-shadow: 0 14px 40px rgba(0,0,0,.35);
+  display: flex; flex-direction: column; gap: 10px;
+  font-size: 13.5px;
+}
+/* phones: a sheet from the bottom of the screen, so the top bar (and the 👥 button) stays in view */
+@media (max-width: 700px) {
+  .room-wrap { position: static; }
+  .room-panel {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: auto;
+    max-height: 78vh; overflow-y: auto; border-radius: 18px 18px 0 0;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+    box-shadow: 0 -10px 40px rgba(0,0,0,.45);
+    z-index: 100000; /* over the HEIST / BOMBS corner link while open */
+  }
+}
+.room-blurb, .room-note { color: var(--ink-soft); line-height: 1.45; }
+.room-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; }
+.room-label {
+  font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; font-weight: 700; letter-spacing: .1em;
+  color: var(--brass); min-width: 64px;
+}
+[data-theme="parchment"] .room-label { color: var(--brass-deep); }
+.room-hint { color: var(--ink-soft); font-size: 12px; }
+.room-spacer { flex: 1; }
+
+.room-btn, .room-chip {
+  font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; font-weight: 700; letter-spacing: .05em;
+  padding: 7px 12px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--paper); color: var(--ink);
+}
+.room-btn:hover:not(:disabled), .room-chip:hover { border-color: var(--brass); color: var(--brass); }
+.room-btn:disabled { opacity: .5; cursor: default; }
+.room-btn.primary { border-color: var(--brass); color: var(--brass); background: rgba(var(--brass-rgb), 0.12); }
+.room-btn.danger:hover, .room-btn.armed { border-color: #F87171; color: #F87171; }
+.room-btn.armed { background: rgba(248,113,113,0.12); }
+a.room-btn { display: inline-block; text-decoration: none; }
+.room-login { padding: 8px 16px; }
+.room-chip { min-width: 38px; }
+.room-chip.on { border-color: var(--brass); color: var(--brass); background: rgba(var(--brass-rgb), 0.12); }
+
+.room-code-input {
+  flex: 1; min-width: 9ch; max-width: 16ch;
+  font-family: ui-monospace, Consolas, monospace; font-size: 15px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+  padding: 7px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); outline: 0;
+}
+.room-code-input:focus { border-color: var(--brass); }
+.room-code-input::placeholder { color: var(--ink-soft); opacity: .6; }
+
+.room-title-row { gap: 10px; }
+.room-title { font-family: ui-monospace, Consolas, monospace; font-weight: 700; font-size: 15px; letter-spacing: .1em; color: var(--brass); }
+.room-count { color: var(--ink-soft); font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+.room-ok { color: #68D391; font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; font-weight: 700; }
+[data-theme="parchment"] .room-ok { color: #2F7D4F; }
+.room-invite-line { font-family: ui-monospace, Consolas, monospace; font-size: 12px; user-select: all; word-break: break-all; padding: 6px 8px; border: 1px dashed var(--line); border-radius: 8px; }
+
+.room-members { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.room-member { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; position: relative; }
+.room-avatar { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex: none; }
+.room-avatar-letter { display: inline-flex; align-items: center; justify-content: center; background: var(--paper); border: 1px solid var(--line); font-weight: 700; font-size: 12px; }
+.room-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); margin-left: -14px; margin-top: 18px; border: 2px solid var(--paper-raised); flex: none; }
+.room-member.online .room-dot { background: #68D391; }
+.room-name { font-weight: 600; }
+.room-tag {
+  font-family: ui-monospace, Consolas, monospace; font-size: 10px; font-weight: 700; letter-spacing: .08em;
+  padding: 2px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-soft);
+}
+.room-tag.host { border-color: var(--brass); color: var(--brass); }
+.room-where { color: var(--ink-soft); font-size: 12px; }
+.room-where::before { content: '· '; }
+
+.room-shared { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--line); padding-top: 10px; }
+.room-shared-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; }
+.room-from { color: var(--ink-soft); font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .04em; white-space: nowrap; }
+.room-actions { border-top: 1px solid var(--line); padding-top: 10px; }
+.room-status { font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--ink-soft); }
+.room-status.bad { color: #F87171; }
+[data-theme="parchment"] .room-status.bad { color: #B42318; }
+
+/* a card's picture (core/Dropzone.jsx) or a shared manual (ModuleGroup's 📖 bar) that came from the room */
+.mgroup-manual-from { font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; color: var(--brass); white-space: nowrap; }
+[data-theme="parchment"] .mgroup-manual-from { color: var(--brass-deep); }
+.dz-room-from { margin-top: 6px; font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; color: var(--brass); }
+[data-theme="parchment"] .dz-room-from { color: var(--brass-deep); }
+
+/* New game in a room, for anyone but the host */
+.newgame-btn.locked { opacity: .55; cursor: not-allowed; }
+.newgame-btn.locked:hover { border-color: var(--line); color: var(--ink); }
+
+/* the answers board (roomBoard.js): one row per card, red when members' answers differ */
+.room-board-row {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; width: 100%; text-align: left;
+  padding: 6px 8px; border-radius: 8px; border: 1px solid transparent; background: none; color: var(--ink);
+  font: inherit; cursor: pointer;
+}
+.room-board-row:hover { border-color: var(--line); background: rgba(var(--brass-rgb), 0.06); }
+.room-board-card { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; font-weight: 700; color: var(--ink-soft); min-width: 10ch; }
+.room-board-ans { flex: 1; min-width: 0; font-family: ui-monospace, Consolas, monospace; font-weight: 700; overflow-wrap: anywhere; }
+.room-board-same { color: #68D391; font-weight: 600; font-size: 11px; }
+[data-theme="parchment"] .room-board-same { color: #2F7D4F; }
+.room-board-row.differ { border-color: rgba(248,113,113,0.5); background: rgba(248,113,113,0.08); }
+.room-board-row.differ .room-board-ans { color: #F87171; display: flex; flex-direction: column; gap: 2px; }
+[data-theme="parchment"] .room-board-row.differ .room-board-ans { color: #B42318; }
+.room-board-one b { font-size: 10.5px; letter-spacing: .05em; margin-right: 4px; }
+.room-kick {
+  margin-left: auto; font-family: ui-monospace, Consolas, monospace; font-size: 11px; font-weight: 700;
+  padding: 3px 9px; border-radius: 999px; cursor: pointer; border: 1px solid var(--line); background: none; color: var(--ink-soft);
+}
+.room-kick:hover, .room-kick.armed { border-color: #F87171; color: #F87171; }
+.card-flash { outline: 2px solid var(--brass); outline-offset: 3px; transition: outline-color .6s; }

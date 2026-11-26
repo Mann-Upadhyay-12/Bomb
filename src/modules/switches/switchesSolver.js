@@ -33,3 +33,19 @@ export function swBFS(initial, goal, forbidden) {
   }
   return null;
 }
+
+/**
+ * The Helper's forbidden list, however it was pasted ("Forbidden: UDDUD, DDUUU", bullets, one per
+ * line, arrows ↑↓) → the distinct 5-switch states, U = up, D = down. Only whole 5-letter U/D groups
+ * count, so the words around them are ignored.
+ */
+export function swParseForbidden(text) {
+  const up = String(text || '').toUpperCase().replace(/[↑⬆▲]/g, 'U').replace(/[↓⬇▼]/g, 'D');
+  return [...new Set(up.match(/(?<![A-Z])[UD]{5}(?![A-Z])/g) || [])];
+}
+
+/** A path of states → the flips between them, "SW1 → SW4 …" */
+export function swMoves(path) {
+  if (!path) return '';
+  return path.slice(1).map((s, i) => `SW${s.split('').findIndex((c, j) => c !== path[i][j]) + 1}`).join(' → ');
+}

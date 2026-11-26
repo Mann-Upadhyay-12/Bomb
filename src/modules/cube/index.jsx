@@ -199,7 +199,7 @@ export function CubeModule({ isActive = true }) {
           }
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={handleClear}>
+              <button className="reset-btn" type="button" onClick={handleClear} data-card-clear>
                 clear
               </button>
               <button
@@ -222,7 +222,7 @@ export function CubeModule({ isActive = true }) {
             >
               ▶ SOLVE CUBE
             </button>
-            <button type="button" className="bg-btn" onClick={handleClear}>
+            <button type="button" className="bg-btn" onClick={handleClear} data-card-clear>
               🗑️ RESET CUBE
             </button>
           </div>

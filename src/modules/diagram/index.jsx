@@ -13,6 +13,7 @@ import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
 import { DiagramWorking, DG_LAYOUTS } from './working.jsx';
 import { useInstance } from '../../core/InstanceContext.jsx';
 import { dgSplitPanels, dgStripStore, useDiagramStrip } from './diagramStrip.js';
+import { useCardState } from '../../core/room/useCardState.js';
 
 const DG_LETTERS = ['A', 'B', 'C'];
 
@@ -67,7 +68,8 @@ export function DiagramModule({ isActive = true }) {
   const [orient2, setOrient2] = useState('h'); // 'h' or 'v'
   // Which region is answered (and auto-copied): the SHADED / UNSHADED switch, SHADED to start.
   // (The serial no longer picks it — the vowel rule was removed 2026-11-24.)
-  const [showUnshaded, setShowUnshaded] = useState(false);
+  // in a room, the switch is the room's (core/room/useCardState.js)
+  const [showUnshaded, setShowUnshaded] = useCardState('unshaded', false);
 
   const [lettersState, setLettersState] = useState({
     c3: Object.assign({}, DG_LAYOUTS.c3.defaults),
@@ -348,7 +350,7 @@ export function DiagramModule({ isActive = true }) {
           }
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={handleClear}>
+              <button className="reset-btn" type="button" onClick={handleClear} data-card-clear>
                 clear
               </button>
               <button

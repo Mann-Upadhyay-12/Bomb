@@ -41,12 +41,12 @@ const MODULES = {
   page: ['../core/leftPage'],
   // Discord markdown → the text Discord shows (a phone copies **P**: T with its markup)
   text: ['../utils/discordText'],
-  // the modules added 2026-11-24 (Balance stays out)
+  // the modules added 2026-11-24 (Balance stays out; Battleship was taken out 2026-11-25)
   blackjack: ['blackjack/blackjackSolver', 'blackjack/blackjackVision'],
   batteries: ['../core/sectionsData', 'batteries/batteriesSolver', 'batteries/batteriesVision', 'batteries/batteriesOCR'],
   wireplace: ['wireplace/wireplaceSolver', 'wireplace/wireplaceVision'],
-  laundry: ['laundry/laundrySolver', 'laundry/laundryVision', 'laundry/laundryOCR', 'laundry/laundrySprite'],
-  battleship: ['battleship/battleshipSolver']
+  laundry: ['laundry/laundrySolver', 'laundry/laundryVision', 'laundry/laundryOCR', 'laundry/laundrySprite']
+  // Battleship removed from conso's app 2026-11-25 (user); Balance never went
 };
 
 let entry = '';

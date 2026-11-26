@@ -161,7 +161,7 @@ export function QueensModule({ isActive = true }) {
           }
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={handleReset}>
+              <button className="reset-btn" type="button" onClick={handleReset} data-card-clear>
                 clear
               </button>
               <button

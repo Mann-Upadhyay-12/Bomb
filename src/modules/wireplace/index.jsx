@@ -174,7 +174,7 @@ export function WirePlacementModule({ isActive = true }) {
           }
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={handleClear}>clear board</button>
+              <button className="reset-btn" type="button" onClick={handleClear} data-card-clear>clear board</button>
               <button className="reset-btn" type="button" onClick={clearTable} disabled={!table}>clear table</button>
               <button className="reset-btn" type="button" style={{ borderColor: 'var(--brass)', color: 'var(--brass)' }} onClick={handleSample}>⚡ SAMPLE</button>
             </>

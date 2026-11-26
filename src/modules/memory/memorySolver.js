@@ -114,3 +114,20 @@ export function solveMemoryStage(parsed, stage, display, labels, history) {
   if (rule.type === 'samePos') return { pos: past.pos, label: full ? Number(labels[past.pos - 1]) : null, rule, needLabels: !full };
   return full ? { pos: at(past.label), label: past.label, rule } : { label: past.label, rule, needLabels: true };
 }
+
+/**
+ * The saved presses after a new picture. h = the saved presses; shown = the answered stage that was
+ * on screen ({ pos, label, display, key: 'display|labels' }) or null; key = the new picture's
+ * 'display|labels'; lit = its lit stage lights (stages done), null when they weren't read.
+ * The lights decide: one more done = the answered stage was pressed, fewer = back to that stage
+ * (a stage saved twice). Without them a different picture means the answered stage was pressed.
+ */
+export function stageAfterPicture(h, shown, key, lit) {
+  const press = shown ? { pos: shown.pos, label: shown.label, display: shown.display } : null;
+  if (lit !== null && lit !== undefined) {
+    if (lit === h.length + 1 && press) return [...h, press];
+    if (lit < h.length) return h.slice(0, lit);
+    return h;
+  }
+  return press && key !== shown.key ? [...h, press] : h;
+}

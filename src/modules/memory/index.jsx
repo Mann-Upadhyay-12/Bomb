@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useId } from 'react';
+import React, { useState, useEffect, useId, useRef } from 'react';
 import { preWarmOCR } from '../search/searchOCR.js';
-import { SAMPLE_MANUAL, parseMemoryManual, solveMemoryStage } from './memorySolver.js';
+import { SAMPLE_MANUAL, parseMemoryManual, solveMemoryStage, stageAfterPicture } from './memorySolver.js';
 import { readMemoryImage } from './memoryVision.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
 import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { useSharedSetting } from '../../core/sharedSetting.js';
 import { manualBoxPaste } from '../../core/airPaste.js';
+import { useInstance } from '../../core/InstanceContext.jsx';
 import { Dropzone } from '../../core/Dropzone.jsx';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
@@ -14,7 +15,8 @@ import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
 import { CopyLines } from '../../core/components/CopyLines.jsx';
 import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
 
-const KEY = 'bombvision_memory_manual';
+export const MEMORY_MANUAL_KEY = 'bombvision_memory_manual';
+const KEY = MEMORY_MANUAL_KEY;
 const ord = (n) => ['', '1st', '2nd', '3rd', '4th'][n] || `${n}th`;
 
 export function MemoryModule({ isActive = true }) {
@@ -23,6 +25,9 @@ export function MemoryModule({ isActive = true }) {
   const { copy } = useClipboard();
   const answerChanged = useAnswerGate();
   const uid = useId();
+  // a card of the multiple page: the manual is the 📖 bar above the cards (pasted once for all)
+  const inst = useInstance();
+  const grouped = Boolean(inst && inst.grouped);
   const [manual, setManual] = useSharedSetting(KEY, '');
   const [history, setHistory] = useState([]); // [{ pos, label, display }] per finished stage
   const [display, setDisplay] = useState(null);
@@ -47,43 +52,64 @@ export function MemoryModule({ isActive = true }) {
     if (copyOnDecode && fresh && answer) copy(answer);
   }, [answer, stage, isActive]);
 
+  // The saved presses, kept in a ref too: a picture's handler can be an older copy of this function
+  // (one drop handled twice, the second after the first was saved), so it reads the latest from here.
+  const histRef = useRef(history);
+  const saveHistory = (next) => { histRef.current = next; setHistory(next); };
+  const live = useRef(null);
+  live.current = { ready, r, display, labelNums };
+  const reading = useRef(false);   // a picture is being read
+  const lastPic = useRef('');      // what the last picture showed: the same picture again changes nothing
+
   // the answer on screen was pressed: remember it and go to the next stage
   const commit = () => {
     if (!ready) return false;
-    setHistory(prev => [...prev, { pos: r.pos, label: r.label, display }]);
+    saveHistory([...histRef.current, { pos: r.pos, label: r.label, display }]);
     setDisplay(null); setLabels(['', '', '', '']);
+    lastPic.current = '';
     return true;
   };
 
   const handleImage = async (img, dataUri, fileBlob) => {
     setPreviewUri(dataUri);
     setLastImage(img, fileBlob);
-    if (busy) return;
-    // the stage on screen, if answered: a picture of a different stage means it was pressed
-    const prev = ready ? { pos: r.pos, label: r.label, display, key: `${display}|${labelNums.join('')}` } : null;
+    if (reading.current) return;
+    reading.current = true;
+    // the stage on screen, if answered: a picture of the next stage means it was pressed
+    const { ready: rdy, r: rr, display: d, labelNums: ln } = live.current;
+    const shown = rdy ? { pos: rr.pos, label: rr.label, display: d, key: `${d}|${ln.join('')}` } : null;
     setBusy(true);
     setStatus({ text: 'Reading the display and buttons…', ok: null });
     try {
       const res = await readMemoryImage(img);
-      const advanced = !!(prev && res.ok && `${res.display}|${(res.labels || []).join('')}` !== prev.key);
-      if (advanced) setHistory(h => [...h, { pos: prev.pos, label: prev.label, display: prev.display }]);
+      const h = histRef.current;
+      const key = `${res.display}|${(res.labels || []).join('')}`;
+      // the module's stage lights = how many stages are done; null when the five lights weren't found
+      const lit = res.dots && res.dots.total === 5 && res.dots.lit <= 4 ? res.dots.lit : null;
+      const same = res.ok && `${key}|${lit}` === lastPic.current;
+      if (res.ok) lastPic.current = `${key}|${lit}`;
+      const next = res.ok && !same ? stageAfterPicture(h, shown, key, lit) : h;
+      if (next !== h) saveHistory(next);
       if (res.display) setDisplay(res.display);
       if (res.labels && res.labels.length === 4) setLabels(res.labels.map(v => (v ? String(v) : '')));
-      const nextStage = Math.min(5, history.length + (advanced ? 1 : 0) + 1);
-      const dotNote = res.dots && res.dots.total === 5 && res.dots.lit !== nextStage - 1 && res.dots.lit > 0 ? ` The picture's lights say ${res.dots.lit} stage${res.dots.lit === 1 ? '' : 's'} done — check the stage.` : '';
+      const nextStage = Math.min(5, next.length + 1);
+      const saved = next.length > h.length ? `Stage ${h.length + 1} saved. ` : '';
+      const wentBack = next.length < h.length ? `The picture's lights say stage ${nextStage} — went back to it. ` : '';
+      const dotNote = lit !== null && lit > next.length ? ` The picture's lights say stage ${lit + 1}, but only ${next.length} press${next.length === 1 ? ' is' : 'es are'} saved — enter the missing stage first.` : '';
       setStatus(res.ok
-        ? { text: `✓ ${advanced ? `Stage ${nextStage - 1} saved. ` : ''}Stage ${nextStage}: display ${res.display}, buttons ${(res.labels || []).map(v => v || '?').join(' ')}${res.sure ? '' : ' — check them'}.${dotNote}`, ok: res.sure && !dotNote }
+        ? { text: `✓ ${saved}${wentBack}Stage ${nextStage}: display ${res.display}, buttons ${(res.labels || []).map(v => v || '?').join(' ')}${res.sure ? '' : ' — check them'}.${dotNote}`, ok: res.sure && !dotNote && !wentBack }
         : { text: `⚠ ${res.reason}`, ok: false });
     } catch (e) {
       setStatus({ text: `⚠ ${e.message} — enter the display and buttons below.`, ok: false });
     } finally {
+      reading.current = false;
       setBusy(false);
     }
   };
 
-  const handleSample = () => { setManual(SAMPLE_MANUAL); setHistory([]); setDisplay(1); setLabels(['4', '2', '3', '1']); setStatus({ text: '', ok: null }); };
-  const handleClear = () => { setHistory([]); setDisplay(null); setLabels(['', '', '', '']); setPreviewUri(''); setStatus({ text: '', ok: null }); setLastImage(null, null); setLastCopyString(''); };
-  const back = () => { setHistory(prev => prev.slice(0, -1)); setStatus({ text: '', ok: null }); };
+  const handleSample = () => { setManual(SAMPLE_MANUAL); saveHistory([]); lastPic.current = ''; setDisplay(1); setLabels(['4', '2', '3', '1']); setStatus({ text: '', ok: null }); };
+  const handleClear = () => { saveHistory([]); lastPic.current = ''; setDisplay(null); setLabels(['', '', '', '']); setPreviewUri(''); setStatus({ text: '', ok: null }); setLastImage(null, null); setLastCopyString(''); };
+  const back = () => { saveHistory(histRef.current.slice(0, -1)); lastPic.current = ''; setStatus({ text: '', ok: null }); };
 
   const placeholder = done ? 'ALL 5 STAGES DONE ✓'
     : !manual.trim() ? 'PASTE THE MEMORY MANUAL'
@@ -113,7 +139,7 @@ export function MemoryModule({ isActive = true }) {
           ) : null}
           controls={
             <>
-              <button className="reset-btn" type="button" onClick={handleClear} title="Start the module again from stage 1">clear</button>
+              <button className="reset-btn" type="button" onClick={handleClear} data-card-clear title="Start the module again from stage 1">clear</button>
               <button className="reset-btn" type="button" style={{ borderColor: 'var(--brass)', color: 'var(--brass)' }} onClick={handleSample}>⚡ SAMPLE</button>
               <button className="reset-btn" type="button" disabled={!ready} onClick={() => { commit(); setStatus({ text: '', ok: null }); }} title="The Defuser pressed it: save this stage and go to the next">✓ pressed → next stage</button>
               <button className="reset-btn" type="button" disabled={!history.length} onClick={back} title="Go back one stage (a press saved by mistake)">↶ back a stage</button>
@@ -124,14 +150,17 @@ export function MemoryModule({ isActive = true }) {
           <div className="btn-config">
             <div className="search-config-row">
               <div className="btn-config-head">
-                <label className="search-config-label" htmlFor={`${uid}-man`} style={{ margin: 0 }}>HELPER MANUAL (paste as-is — a rule per stage and display):</label>
+                {grouped ? <span className="search-config-label" style={{ margin: 0 }}>📖 MANUAL READ:</span>
+                  : <label className="search-config-label" htmlFor={`${uid}-man`} style={{ margin: 0 }}>HELPER MANUAL (paste as-is — a rule per stage and display):</label>}
                 <span className={`maze-status-tag ${parsed.unclear.length || (manual.trim() && parsed.count < 20) ? 'warn' : ''}`}>
                   {parsed.count} / 20 rules{parsed.unclear.length ? ` · ⚠ ${parsed.unclear.length} unclear` : ''}
                 </span>
               </div>
+              {!grouped && (
               <textarea id={`${uid}-man`} className="search-words-field manual-text" spellCheck={false}
                 placeholder={'Stage 1:\nIf the display is 1, press the button labeled 4.\nIf the display is 2, press the button in the second position.\n…'}
                 value={manual} onChange={(e) => setManual(e.target.value)} onPaste={manualBoxPaste()} />
+              )}
             </div>
             <div className="mem-row">
               <div className="mem-field">
