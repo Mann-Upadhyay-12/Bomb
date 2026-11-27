@@ -20,21 +20,24 @@ export function MorseWorking({ rle = [], decoded = null, frameCount = 0 }) {
     ctx.fillRect(0, 0, W, H);
 
     const totalDur = rle.reduce((s, x) => s + x.duration, 0);
-    const unit = (decoded && decoded.forward.unit) || 100;
+    // the decoder's own cut-offs, so the picture always matches the letters below it
+    const f = (decoded && decoded.forward) || {};
+    const unit = f.unit || 100;
+    const dashAt = f.dashAt || unit * 2, letterAt = f.letterAt || unit * 2, wordAt = f.wordAt || unit * 5;
     let x = 0;
 
     for (const { is_on, duration } of rle) {
       const w = (duration / totalDur) * W;
       if (is_on) {
-        const isDash = duration > unit * 2;   // as sent (the SWAPPED reading flips these)
+        const isDash = duration > dashAt;   // as sent (the SWAPPED reading flips these)
         const col = isDash ? (isDark ? '#E5B84B' : '#AD7A2E') : (isDark ? '#4CAF50' : '#3E7C4A');
         const glow = isDash ? 'rgba(173,122,46,0.2)' : 'rgba(62,124,74,0.2)';
         ctx.fillStyle = glow;
         ctx.fillRect(x, H * 0.08, Math.max(w - 1, 1), H * 0.65);
         ctx.fillStyle = col;
         ctx.fillRect(x + 1, H * 0.15, Math.max(w - 2, 1), H * 0.5);
-      } else if (duration > unit * 2) {
-        const isWord = duration > unit * 5;
+      } else if (duration > letterAt) {
+        const isWord = duration > wordAt;
         ctx.strokeStyle = isWord ? 'rgba(173,122,46,0.6)' : (isDark ? 'rgba(255,255,255,0.13)' : 'rgba(33,29,23,0.18)');
         ctx.lineWidth = isWord ? 1.5 : 1;
         ctx.setLineDash(isWord ? [4, 4] : [2, 5]);

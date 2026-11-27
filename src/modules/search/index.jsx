@@ -12,6 +12,8 @@ import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
 import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { Dropzone } from '../../core/Dropzone.jsx';
+import { useCardState } from '../../core/room/useCardState.js';
+import { useAirText } from '../../core/airPaste.js';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
 import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
@@ -43,8 +45,10 @@ export function SearchModule({ isActive = true }) {
   const answerChanged = useAnswerGate();
   const uid = useId(); // per-instance ids: missions can show the same module several times
 
-  const [gridData, setGridData] = useState(() => Array.from({ length: 5 }, () => Array(5).fill('')));
-  const [confidence, setConfidence] = useState(() => Array.from({ length: 5 }, () => Array(5).fill(100)));
+  // in a room, the letters (read from a picture or typed) are the room's: only the app that took the
+  // picture reads it, the teammates get the grid (core/room/useCardState.js)
+  const [gridData, setGridData] = useCardState('grid', () => Array.from({ length: 5 }, () => Array(5).fill('')));
+  const [confidence, setConfidence] = useCardState('confidence', () => Array.from({ length: 5 }, () => Array(5).fill(100)));
   const [wordsText, setWordsText] = useState(() => {
     try {
       return localStorage.getItem(SEARCH_WORDS_KEY) || MASTER_SEARCH_WORDS;
@@ -57,7 +61,7 @@ export function SearchModule({ isActive = true }) {
   const [previewUri, setPreviewUri] = useState('');
   const [previewMeta, setPreviewMeta] = useState('');
   const [ocrProgress, setOcrProgress] = useState(null); // percentage or null
-  const [ocrStatus, setOcrStatus] = useState('');
+  const [ocrStatus, setOcrStatus] = useCardState('status', '');
   // Each OCR run gets an id; a newer paste (or Clear) makes older runs stop writing into the grid
   const ocrRunRef = React.useRef(0);
 
@@ -151,6 +155,17 @@ export function SearchModule({ isActive = true }) {
     showToast(`SAMPLE GRID #${sampleIndex + 1} LOADED ✓`);
   };
 
+  // the manual's word list pasted anywhere on the page (Ctrl+V, no text box): words of letters only,
+  // so a chat line or a link isn't taken for it
+  useAirText(isActive, (t) => {
+    const toks = t.split(/[\s,;]+/).filter(Boolean);
+    const words = toks.filter(w => /^[A-Za-z]{2,12}$/.test(w));
+    if (words.length < 8 || words.length < toks.length * 0.85) return false;
+    setWordsText(t);
+    try { localStorage.setItem(SEARCH_WORDS_KEY, t); } catch (e) {}
+    return true;
+  });
+
   const handleRestoreWords = () => {
     setWordsText(MASTER_SEARCH_WORDS);
     try {
@@ -192,7 +207,7 @@ export function SearchModule({ isActive = true }) {
       return;
     }
 
-    // 2. Tesseract for the cells the shape match isn't sure about (letters with no sample yet: B, I, Q …)
+    // 2. Tesseract for the cells the shape match isn't sure about (letters with no sample yet: B, Q …)
     setOcrStatus(`Starting OCR engine for ${unsureCells} unclear cell${unsureCells > 1 ? 's' : ''}…`);
     setOcrProgress(5);
 
@@ -354,7 +369,7 @@ export function SearchModule({ isActive = true }) {
       input={
         <ModuleInput
           dropzone={
-            <Dropzone
+            <Dropzone shareReading
               onImage={handleImage}
               icon="🔍 S E A R C H"
               title="Click here, then paste a 5×5 Word Search screenshot"

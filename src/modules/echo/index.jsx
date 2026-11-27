@@ -9,6 +9,7 @@ import { useSharedSetting } from '../../core/sharedSetting.js';
 import { manualBoxPaste } from '../../core/airPaste.js';
 import { useInstance } from '../../core/InstanceContext.jsx';
 import { Dropzone } from '../../core/Dropzone.jsx';
+import { useCardState } from '../../core/room/useCardState.js';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
 import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
@@ -28,9 +29,11 @@ export function EchoModule({ isActive = true }) {
   const inst = useInstance();
   const grouped = Boolean(inst && inst.grouped);
   const [list, setList] = useSharedSetting(KEY, '');
-  const [word, setWord] = useState('');
+  // in a room, the word (read from a picture or typed) is the room's: only the app that took the
+  // picture reads it, the teammates get the word (core/room/useCardState.js)
+  const [word, setWord] = useCardState('word', '');
   const [log, setLog] = useState([]); // [{ from, to }] one per stage answered
-  const [status, setStatus] = useState({ text: '', ok: null });
+  const [status, setStatus] = useCardState('status', { text: '', ok: null });
   const [busy, setBusy] = useState(false);
   const [previewUri, setPreviewUri] = useState('');
 
@@ -85,7 +88,7 @@ export function EchoModule({ isActive = true }) {
     <ModuleLayout
       input={
         <ModuleInput
-          dropzone={<Dropzone onImage={handleImage} icon="CONGA → ?" title="Click here, then paste the Echo picture" sub={<>reads the <b>shown word</b> — paste each stage's picture</>} />}
+          dropzone={<Dropzone shareReading onImage={handleImage} icon="CONGA → ?" title="Click here, then paste the Echo picture" sub={<>reads the <b>shown word</b> — paste each stage's picture</>} />}
           preview={previewUri ? (
             <div className="preview-row show">
               <img src={previewUri} alt="echo picture" />

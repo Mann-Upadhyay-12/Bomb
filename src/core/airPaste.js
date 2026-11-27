@@ -2,6 +2,10 @@
 // with nothing focused): the module's picture box (Dropzone) on screen takes it — in a group of cards,
 // the selected card. A phone has no Ctrl+V outside a text box, so the manual link boxes (ManualPasteBox)
 // and the manual text boxes hand what was pasted to the same place with pasteInAir().
+// A manual (or bot message) that is TEXT is pasted in air too: useAirText() below.
+
+import { useEffect, useRef } from 'react';
+import { discordPlain } from '../utils/discordText.js';
 
 const EVENT = 'bv-air-paste';
 export const AIR_PASTE_EVENT = EVENT;
@@ -47,4 +51,43 @@ export function manualBoxPaste(card = null) {
     e.stopPropagation(); // not the page-wide Ctrl+V as well
     pasteInAir(src, { card });
   };
+}
+
+const isTextField = el => el && (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !['file', 'checkbox', 'radio', 'button', 'range', 'color'].includes(el.type)));
+
+/**
+ * The text of a Ctrl+V made "in air" (no text box focused), with the Discord markup a phone copies
+ * taken off. null: it went into a text box, it carries a picture, or it is just a link (those are
+ * the picture box's).
+ */
+export function airText(e) {
+  if (typeof document !== 'undefined' && isTextField(document.activeElement)) return null;
+  const cd = e && e.clipboardData;
+  if (!cd || Array.from(cd.items || []).some(it => it.kind === 'file')) return null;
+  const t = discordPlain(cd.getData('text/plain') || cd.getData('text') || '').trim();
+  if (!t || LINK_RE.test(t)) return null;
+  return t;
+}
+
+/**
+ * A module's text manual (or the bot's message) pasted in air: Ctrl+V anywhere on the page, as a
+ * manual picture is. `take(text)` → true when the text was this module's (it is then used and goes
+ * no further); false lets it go on (to the picture box). Listens only while `active` (the module's
+ * tab is open — in a group of cards, the selected card).
+ */
+export function useAirText(active, take) {
+  const latest = useRef(take);
+  latest.current = take;
+  useEffect(() => {
+    if (!active || typeof window === 'undefined') return undefined;
+    const onPaste = (e) => {
+      if (e.defaultPrevented) return; // a group's manual bar took it
+      const t = airText(e);
+      if (t == null || !latest.current(t)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    };
+    window.addEventListener('paste', onPaste, true);
+    return () => window.removeEventListener('paste', onPaste, true);
+  }, [active]);
 }

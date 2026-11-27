@@ -6,6 +6,7 @@
 // logged in, 403 not-allowed { state: waiting | blocked | expired } when /admin hasn't allowed them.
 //   GET  state                 the room you're in: members + everything it shares this game, or { room: null }
 //   GET  picture&id=…          one of your room's pictures (a card's screenshot)
+//   GET  warm                  nothing (no login needed): wakes the function up before the room needs it
 //   POST create   { size }     a new room (2–4, default 4); you're the host. You leave any room you were in
 //   POST join     { code }     404 unknown / ended · 423 locked · 409 full · 403 kicked
 //   POST leave                 the host's role passes on; the last one out ends the room
@@ -15,6 +16,8 @@
 // as well (fast), and the copy sent from here carries the same id so each app applies it once.
 //   POST put      { key, value, game, tab }   a shared item (roomKeys.js); 409 when the game moved on.
 //                              key 'level' (the level the room plays) is host only
+//   POST puts     { module, card, items: [{ key, value }], game, tab }   a card's reading: several of its
+//                              state: values in one write (the app that read the picture sends them)
 //   POST card     { module, card, url, id, game, tab }   a card took a picture from a link (shared as it is)
 //   POST picture  multipart: module, card, id, game, tab, image   a card took a picture file
 //   POST clear    { module, card, game, tab }   a card's CLEAR, for the room (its state: items go too)
@@ -29,10 +32,10 @@ import { accessFor } from '../lib/users.js';
 import { json, sameOrigin } from '../lib/web.js';
 import {
   RoomError, MAX_VALUE_BYTES, MAX_PICTURE_BYTES, PICTURE_TYPES, parseSize, currentRoom, createRoom, joinRoom,
-  leaveRoom, endRoom, setLocked, nextGame, putItem, addCardPic, clearCard, roomItems, savePicture, loadPicture,
+  leaveRoom, endRoom, setLocked, nextGame, putItem, putItems, addCardPic, clearCard, roomItems, savePicture, loadPicture,
   broadcast, roomView, kickMember, putAnswer, listMembers, cleanupNow,
 } from '../lib/rooms.js';
-import { normCode, roomKeyOk, roomKeyKept, MAX_CARDS, MAX_ANSWER_CHARS, ansKey, LEVEL_KEY, levelOk } from '../src/core/room/roomKeys.js';
+import { normCode, roomKeyOk, roomKeyKept, MAX_CARDS, MAX_ANSWER_CHARS, ansKey, LEVEL_KEY, levelOk, stateOf, MAX_PUTS } from '../src/core/room/roomKeys.js';
 
 // About 10 writes a second per person (typing in a manual box is debounced by the app already)
 const BURST = 20, PER_SEC = 10;
@@ -81,6 +84,7 @@ async function withRoom(me, fn) {
 const hostOnly = (room, me) => (room.host_id === me.id ? null : json({ error: 'host-only' }, 403));
 
 export async function GET(request) {
+  if (new URL(request.url).searchParams.get('action') === 'warm') return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
   const me = await who(request);
   if (me instanceof Response) return me;
   const url = new URL(request.url);
@@ -212,6 +216,26 @@ async function act(action, request, me) {
       }
       await putItem(room, key, value, me.id, now);
       await tell(room, { t: 'put', key, value, game: room.game, tab, mid });
+      return json({ ok: true });
+    }
+
+    if (action === 'puts') {
+      const key = cardKey(field('module'), field('card'));
+      if (!key) return json({ error: 'card' }, 400);
+      if (oldGame(key)) return json({ error: 'old-game', game: room.game }, 409);
+      const [, module, n] = key.split(':');
+      const list = Array.isArray(body.items) ? body.items : [];
+      if (!list.length || list.length > MAX_PUTS) return json({ error: 'items' }, 400);
+      const items = [];
+      for (const it of list) {
+        const s = stateOf(it && it.key);
+        // only this card's state: values
+        if (!s || s.module !== module || s.card !== Number(n)) return json({ error: 'key' }, 400);
+        items.push({ key: it.key, value: it.value === undefined ? null : it.value });
+      }
+      if (JSON.stringify(items).length > MAX_VALUE_BYTES) return json({ error: 'too-big' }, 413);
+      await putItems(room, items, me.id, now);
+      await tell(room, { t: 'puts', key, items, game: room.game, tab, mid });
       return json({ ok: true });
     }
 

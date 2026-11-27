@@ -12,6 +12,7 @@ import { CopyLines } from '../../core/components/CopyLines.jsx';
 import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
 import { LogicWorking } from './working.jsx';
 import { useSharedSetting } from '../../core/sharedSetting.js';
+import { useAirText } from '../../core/airPaste.js';
 import {STAGE_SYMBOLS, evaluateExpression, parseManualText, readLogicGrid, detectStage} from './logicSolver.js';
 
 // This game's P–T values, saved (a reload keeps them) and shared by every Logic window; New game
@@ -54,6 +55,13 @@ export function LogicModule({ isActive = true }) {
     if (Object.keys(updates).length === 0) return;
     setVars(prev => ({ ...prev, ...updates }));
   };
+
+  // the manual's "P = T, Q = F …" pasted anywhere on the page (Ctrl+V, no text box)
+  useAirText(isActive, (t) => {
+    if (!Object.keys(parseManualText(t)).length) return false;
+    handleManualTextChange(t);
+    return true;
+  });
 
   // Evaluate each stage using the current variable assignments. `greek`: α–δ as this stage sees
   // them (for the coloured formula in the workbench); `pending`: it needs an earlier stage first.

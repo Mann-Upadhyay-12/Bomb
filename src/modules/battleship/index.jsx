@@ -9,6 +9,7 @@ import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
 import { CopyLines } from '../../core/components/CopyLines.jsx';
 import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
 import { useCardState } from '../../core/room/useCardState.js';
+import { useAirText } from '../../core/airPaste.js';
 
 const WAIT = 20; // seconds between shots
 const BOARD = { cols: 6, rows: 6 };
@@ -76,6 +77,14 @@ export function BattleshipModule({ isActive = true }) {
       });
     }
   };
+
+  // the fleet list pasted anywhere on the page (Ctrl+V, no text box) is read as if pasted in the box
+  useAirText(isActive, (t) => {
+    const p = parseBattleshipText(t);
+    if (!p.ships.length && !p.shots.length) return false;
+    handleText(t);
+    return true;
+  });
 
   const mark = (i, result) => {
     setShots(prev => {

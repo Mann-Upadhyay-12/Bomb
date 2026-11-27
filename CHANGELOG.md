@@ -4,6 +4,147 @@ Newest first. Dates are when the work was committed. Both games also show a shor
 players under About → CHANGELOG: Heist's in `src/heist/heistMarkup.html` (its v1.27 is this
 session's), the bomb app's in `src/core/bombChangelog.js`. Add a line there when a change ships.
 
+## 2026-11-27 — Tester reports (Morse dash length, Word Search I in Chrome), bomb timer, Balance glyphs
+
+- **Morse** (`morseDecoder.js morseTiming`, `working.jsx`): report "F[.-.-]GE | EWCL | QCUT", "pretty
+  sure it didn't read all frames". It did read all 126 frames. The cut-offs were wrong: dash = longer
+  than 2 × the shortest flash, letter gap = longer than 2 × it. This 10 fps red-light GIF has dots of
+  300 ms and dashes of 600–800 ms, so the 600 ms dashes and the 600 ms letter gap fell on the dot /
+  inside-a-letter side. Now flashes and gaps are each split into a short and a long group (1-D Otsu on
+  log durations; no split when the groups are < 1.7× apart), word gap = 5 units. The waveform uses the
+  same cut-offs. Answer: QUEST (swapped, red light). Simulated 10 fps captures with dash 2.2–3× and
+  ±15 % jitter: 2885/3000 words right (old rule 2312). Fixture `morse_quest_red.gif`.
+- **Word Search** (`searchGlyphs.js`, `searchOCR.js`): report "NO WORDS FOUND", "I -> E" from a Mac
+  Chrome player (the owner, on Firefox, got DISH from the same picture). The letter bank had no I, so
+  every I went to Tesseract. In Chromium (checked in headless Chromium with the app's own steps)
+  Tesseract's first pass calls this clean I "E" at 0 % confidence. `recognizeCellConsensus` turned a 0
+  into 50 (`|| 50`), so the second pass ("1" → I at 48 %), meant for reads under 30 %, never ran. The
+  shape match has no I either and agreed: E at 0.17. HSID became HSED. Two fixes, each enough on its
+  own: (1) an I sample cut from this grid (all three I's are the same pixels): I scores 1.00, 0.83
+  ahead of E, J stays J, and the grid is read entirely by shape; (2) a 0 % read stays 0, so it gets the
+  second pass (B and Q, still without a sample, are covered too). Fixture `search_hnxji.png`.
+- **Bomb timer** (`core/bombClock.js`, `BombTimer.jsx`, `NeedyTimer.jsx`, Batteries `TimerHelp`):
+  asked: an answer may have to go in while a digit is on the timer ("5:XX or X:5X or X:X5"), "so add a
+  timer, if I run timer or needy button other should start working too". One clock { at, sec } under
+  Batteries' old key `batteries_timer_sync` (rooms already share it, New game already clears it). The
+  top bar's ▶ TIMER, the needy reminder's ▶ and Batteries' ▶ 8:00 / sync all start it, and ■ on any
+  stops it. Typing the timer ("6:42") starts or corrects it. The needy reminder's 30-second marks count
+  from the bomb's 8:00, so a re-sync moves them too, and it waits for the next mark instead of firing
+  at once. The needy reminder is no longer keyed by level: switching levels doesn't stop the clock.
+- **MISSION:** the top bar's levels button says MISSION when no level is picked (was MISSIONS / SECTIONS).
+- **Balance reads glyphs by shape** (`balanceGlyphs.js`, `balanceGlyphBank.js`, `balanceVision.js`):
+  asked: "Balance still doesn't work. Make custom ocr like other modes if you have to but please get it
+  working". Three new pictures failed: "Sn + CH₃COOH → Sn(CH₃COO)₂ + H₂" (right side read as
+  SrNi(CHCOO)2: the n cut into three pieces, the ₃ read as nothing), "Ca(NO₃)₂ → …" (the ₃ carried the
+  O's edge, read as nothing) and "Al + ZnSO₄ → Al₂(SO₄)₃ + Zn" (a clean Z read "4" → "An"). Like Word
+  Search: every glyph is compared first with glyphs cut from the 18 real pictures (12×12 ink coverage,
+  width / height, and for main-line glyphs their height and place on the line; subscripts only against
+  digits). A sure match (score ≥ 0.80, 0.08 ahead of any other character) is used as is; the rest still
+  go to Tesseract and the old rules. The bank comes from every side whose glyphs line up one-to-one with
+  the right equation (32 of 36 sides, 277 glyphs → 227 samples, 25 characters). Repairs checked by
+  shape: 2–3 touching pieces that are together clearly one letter are joined (the n), and a subscript
+  unlike any digit loses a neighbour's curl or edge on a side another glyph touches, when that makes it
+  a far better match (+0.15); never a digit-sized piece (the "1" of a glued "₁₆"), and a sure digit
+  with more solid loops than it can have is not sure (a lookalike font's "₈" read "3"). Tesseract now
+  only starts when a glyph needs it.
+  Checks: all 18 real pictures right (14 with no Tesseract at all); each picture read with its own
+  samples left out: 17/18 (the miss is the Z, which no other picture has); each picture's glyphs from
+  the other pictures' samples: 263/264, never sure of a wrong one; each character with all its samples
+  removed (a letter not seen yet): never read as another for sure. 95 equations rendered in the
+  stand-in fonts (Patua One / Aleo 800, 440 and 770 px): 291 right vs the old reader's 290 on the same
+  pictures, none worse (the renderer is rougher than 25 Nov's, so both score lower than then).
+  `scripts/check-balance.mjs` reads every picture in `tests/fixtures/balance_truth.json` in headless
+  Chrome (`--loo`: without its own samples; `--bank`: rebuilds the bank); `tests/balanceGlyphs.test.js`
+  checks the bank never gives a sure wrong character. New fixtures: `balance_sn_acetic_wrapped.png`,
+  `balance_cano32_wrapped.png`, `balance_al_znso4_wrapped.png`.
+
+## 2026-11-26 — Rooms: the paster's app reads, everyone else gets the reading
+
+- **Asked:** "don't send images to other pc just send parsed data but keep images in server";
+  "paste the paster, if they mess up their fault"; teammates should see the reading and the answer
+  first (Piano's drawn staff, Rubik's Cube's net), the picture last; room reports "in addition"; the
+  real problem is "for 2nd person answer is updating way too slow and by that time they end up
+  entering the wrong one"; "I agree with all cheap things there do them".
+  Design and answers: `docs/rooms-architecture.md` §12–13.
+- **Shared reading** (`<Dropzone shareReading>`, `roomCards.js`, `useCardState.js`): only the app that
+  took a picture reads it. Its card's `useCardState` changes during the reading (until the module's
+  onImage / onFiles Promise settles) go in one `puts`: up to 24 values plus `pictureRead` = the
+  picture's id, one live message and one database write (`api/room.js` `puts`, `lib/rooms.js
+  putItems`). The live channel carries "a picture is coming" without its bytes, and the server keeps
+  the picture. Teammates don't read it. They show a thumbnail last, fetched after the reading is in
+  (`Dropzone.jsx RoomPicture`). A reading that doesn't come within 6 s (a teammate still on the old
+  page): this app reads the picture itself. `useShareWork(fn)`: a tap that starts a solver (Cube)
+  goes out with the solver's answer. Overlapping readings on one card go together.
+  Converted (14): Piano, Rubik's Cube, Memory, Password, Who's on First, Button, Batteries, Word
+  Search, Echo, Balance, Knobs, Bluescreen, Laundry, Complex Wires. The other 19 still read the old way.
+- **UPDATING:** from the moment a teammate's picture arrives until its reading is in (or until this app
+  has read it, for cards read the old way; max 20 s), the answer panel shows ⏳ UPDATING — NAME'S NEW
+  PICTURE and won't copy, and the board row says ⏳ UPDATING (`useCardUpdating`).
+- **Room reports:** a ⚑ report from a room card sends `room_card`. For a logged-in member, a second
+  Discord message follows with the card's pictures from the server in paste order (who pasted each;
+  links fetched only from Discord's picture servers), each player's answer and `card-values.txt`
+  (`lib/report.js gatherRoomReport / roomReportMessage`).
+- **Small ones (§9):**
+  - "which module" goes out as a `where` live message at once (presence lagged up to 6 s; the newer
+    of the two wins);
+  - board answers go at once, then the latest at most every 300 ms (was 700 ms);
+  - fast-way pictures up to 170 KB (was 135 KB), messages up to 236 KB;
+  - `GET /api/room?action=warm` every 4 idle minutes while in a room.
+  - Skipped "read the on-screen module first": teammates don't read on shared cards.
+- `RoomCardContext` moved to `roomCardContext.js` (no JSX), so `useCardState.js` loads in Node tests;
+  `writeCardValue` is the setter's logic, exported.
+- Tests: `tests/roomFast.test.js` +6 (shared reading on both sides, UPDATING, fallback, `where`, board
+  timing), `tests/rooms.test.js` +2 (`puts`, `warm`), `tests/roomReport.test.js` (2). Not tried in a
+  browser (no Chromium here).
+
+## 2026-11-26 — Laundry: leave out buttons that need no press
+
+- **Asked:** "In laundry if you don't need to rotate something don't show it too"
+- When the start is known (Load 1, or the module picture was read), a control with 0 presses is
+  dropped from the answer, the copy line and the cards, and the note names it ("Wash is already
+  right, so not shown"). If all four are already set, the answer says "Nothing to press".
+- From a guessed start (load 2+ with no picture) all four still show: "already set" is only a guess
+  there.
+
+## 2026-11-26 — Text manuals pasted in air; several Rubik's Cubes
+
+- **Asked:** "Who's on first, copy paste in air doesn't work. Whatever needs copy paste of text manual
+  make it work in air. Also rubiks's cube can be multiple so add multiple tabs in that too!"
+- **Who's on First:** the group's manual bar only took an in-air paste with both "Step 1" and
+  "Step 2" in it, though the parser reads a manual without them. Now `looksLikeWofManual` decides,
+  using the parser. A paste of one step on its own (two messages, with or without headings) replaces
+  that step and keeps the other (`mergeWofManual`, wired in through a new `merge` option on
+  `ModuleGroup`'s `MANUALS`). `parseRules` now reads a Step 2 pasted alone: before, its lists were
+  skipped while it waited for six position lines. It also reads "Top-left".
+- **`useAirText(active, take)`** (new, `src/core/airPaste.js`): text pasted in air goes to the active
+  module when `take(text)` says it's that module's text. Wired into Laundry (load message → message
+  box; manual text or one page of it → manual), Logic (`P = T …`), Battleship (fleet list / shots),
+  Bluescreen (crash message; a bare 4-digit number needs "error" / "crash"), Search (8+ plain words)
+  and Knobs (the UP / DOWN … table as text).
+- **Group manual detectors:** Piano, Wires and Memory also accept whatever their parsers read
+  (codes without decimals, "three wires", Memory rules without the words "display" / "position").
+- **Rubik's Cube:** `shared: true` in `sectionsData.js`, so it gets one card per cube and MODULES TO
+  SOLVE. Cube has no manual; each card keeps its own stickers and solution.
+- Checked in headless Chromium: WOF Step 2 then Step 1 pasted in air → merged; Laundry, Logic,
+  Battleship, Bluescreen and Search pastes taken; prose and a bare number ignored; Cube with 2 cards,
+  SAMPLE in card 2 answers card 2 only. Tests: 1 more in `tests/audit-solvers.test.js`; all 346 pass.
+
+## 2026-11-26 — Rooms: timing line
+
+- **Asked:** "build timing line" (from `docs/rooms-architecture.md` §9.1): measure where a room's time
+  goes before building anything bigger.
+- `src/core/room/roomTiming.js` (new) and a TIMING (THIS DEVICE) section in the room panel, with
+  COPY TIMINGS:
+  - **live link:** a ping on the live channel every 20 s and each teammate's answer (round trip,
+    median of the last 5); the quickest answer also gives the clock difference;
+  - **pictures:** each of the last 8: fast way or server, trip, download, in the card, answer
+    changed (from `roomBoard.noteAnswer`), or "same or no new answer" after 20 s;
+  - **last tap or text:** its trip from a teammate.
+- Nothing is sent anywhere. Ping and pong are live-channel messages only, with no server copy.
+  `roomClient` answers a teammate's ping and never passes ping or pong to the room parts.
+- Tests: 2 more in `tests/roomFast.test.js` (ping and pong with a 5 s clock difference, a picture's
+  times, the lines); 338 pass.
+
 ## 2026-11-26 — Rooms: the fast way; module settings shared
 
 - **Asked:** "if I update a setting from my end for stuff like complex (the "EDGE CONDITIONS") it should

@@ -16,6 +16,7 @@ import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { useSharedSetting } from '../../core/sharedSetting.js';
 import { useInstance } from '../../core/InstanceContext.jsx';
 import { Dropzone } from '../../core/Dropzone.jsx';
+import { useCardState } from '../../core/room/useCardState.js';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
 import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
@@ -39,10 +40,12 @@ export function PasswordModule({ isActive = true }) {
   const inst = useInstance();
   const grouped = Boolean(inst && inst.grouped);
 
-  const [rowsText, setRowsText] = useState('');
+  // in a room, the rows (typed or read from a picture) are the room's: only the app that took the
+  // picture reads it, the teammates get the row (core/room/useCardState.js)
+  const [rowsText, setRowsText] = useCardState('rows', '');
   // The passwords list is the same for every Password module, so all windows share it
   const [masterText, setMasterText] = useSharedSetting(PASSWORD_WORDS_KEY, PASSWORD_DEFAULT_WORDS);
-  const [status, setStatus] = useState({ text: '', ok: null });
+  const [status, setStatus] = useCardState('status', { text: '', ok: null });
   const [busy, setBusy] = useState(false);
   const [previewUri, setPreviewUri] = useState('');
   const activeRef = useRef(isActive);
@@ -122,7 +125,7 @@ export function PasswordModule({ isActive = true }) {
       input={
         <ModuleInput
           dropzone={
-            <Dropzone
+            <Dropzone shareReading
               onImage={handleImage}
               icon="🔑 S M E D N"
               title="Click here, then paste a Password screenshot — each one adds a row"

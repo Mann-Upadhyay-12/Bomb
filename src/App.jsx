@@ -4,6 +4,7 @@ import { useToastState } from './core/ToastContext.jsx';
 import { ModeRouter } from './core/ModeRouter.jsx';
 import { MissionSidebar } from './core/components/MissionSidebar.jsx';
 import { NeedyTimer, playBeep } from './core/components/NeedyTimer.jsx';
+import { BombTimer } from './core/components/BombTimer.jsx';
 import { SerialBar } from './core/components/SerialBar.jsx';
 import { NewGameButton } from './core/components/NewGameButton.jsx';
 import { RoomBar } from './core/room/RoomBar.jsx';
@@ -405,10 +406,12 @@ export function App() {
               title="Open missions sidebar"
             >
               <span className="toggle-icon">☰</span>
-              <span>{activeMission ? (activeMission.custom ? `LEVEL: ${activeMission.label}` : `MISSION: ${activeMission.id}`) : 'MISSIONS / SECTIONS'}</span>
+              <span>{activeMission ? (activeMission.custom ? `LEVEL: ${activeMission.label}` : `MISSION: ${activeMission.id}`) : 'MISSION'}</span>
             </button>
-            {/* Needy reminder: on every level and in "all modules"; keyed by level so switching stops it */}
-            <NeedyTimer key={activeMission ? activeMission.id : 'all-modules'} />
+            {/* The bomb's timer and the needy reminder run on one clock (core/bombClock.js): starting or
+                stopping either does both. It keeps running across levels; New game stops it. */}
+            <BombTimer />
+            <NeedyTimer />
             {/* Serial: same on every bomb in a game, so it lives here, not per module */}
             <SerialBar />
             {/* New game: forgets the serial, this game's manuals and every screenshot at once */}

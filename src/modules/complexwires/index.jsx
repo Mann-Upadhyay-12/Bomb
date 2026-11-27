@@ -34,9 +34,13 @@ export function ComplexWiresModule({ isActive = true }) {
   const [rules, setRules] = useCardState('rules', () => ({ ...CW_PRESETS.preset1 }));
   const [edge, setEdge] = useCardState('edge', { even: false, needy: false, gte5: true });
   const [wires, setWires] = useCardState('wires', blankWires);
-  const [unsure, setUnsure] = useState(() => new Set());
+  // the rule letters a diagram picture left unsure, and what the last picture said: the card's (an array
+  // in the room: plain data), so the teammates see them too (only the app that took the picture reads it)
+  const [unsureList, setUnsureList] = useCardState('unsure', []);
+  const unsure = React.useMemo(() => new Set(unsureList), [unsureList]);
+  const setUnsure = (next) => setUnsureList(prev => [...(typeof next === 'function' ? next(new Set(prev)) : next)]);
   const [serial, setSerial] = useBombSerial(); // game-wide, also in the top bar
-  const [readStatus, setReadStatus] = useState({ text: '', ok: null });
+  const [readStatus, setReadStatus] = useCardState('status', { text: '', ok: null });
   const [thumbs, setThumbs] = useState({ diagram: '', wires: '' });
 
   const presetName = Object.keys(CW_PRESETS).find(k => Object.keys(CW_PRESETS[k]).every(id => CW_PRESETS[k][id] === rules[id])) || 'custom';
@@ -178,7 +182,7 @@ export function ComplexWiresModule({ isActive = true }) {
       input={
         <ModuleInput
           dropzone={
-            <Dropzone
+            <Dropzone shareReading
               onImage={handleImage}
               icon="⚡ ★ 💡 C D S P B"
               title="Click here, then paste the wires panel or the rule diagram"

@@ -7,6 +7,7 @@ import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
 import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { Dropzone } from '../../core/Dropzone.jsx';
+import { useCardState } from '../../core/room/useCardState.js';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
 import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
@@ -23,8 +24,10 @@ export function BalanceModule({ isActive = true }) {
   const answerChanged = useAnswerGate();
   const uid = useId();
 
-  const [equation, setEquation] = useState('');
-  const [status, setStatus] = useState({ text: '', ok: null });
+  // in a room, the equation (read from a picture or typed) is the room's: only the app that took the
+  // picture reads it, the teammates get the equation (core/room/useCardState.js)
+  const [equation, setEquation] = useCardState('equation', '');
+  const [status, setStatus] = useCardState('status', { text: '', ok: null });
   const [busy, setBusy] = useState(false);
   const [previewUri, setPreviewUri] = useState('');
 
@@ -98,7 +101,7 @@ export function BalanceModule({ isActive = true }) {
       input={
         <ModuleInput
           dropzone={
-            <Dropzone
+            <Dropzone shareReading
               onImage={handleImage}
               icon="⚖️ KNO₃ → KNO₂ + O₂"
               title="Click here, then paste the Balance screenshot"

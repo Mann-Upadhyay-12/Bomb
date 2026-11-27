@@ -48,11 +48,11 @@ export const BLANK = '(BLANK)';
 export function parseRules(text) {
   text = discordPlain(text); // a phone copies Discord's **markup** too
   const R = { posOfWord: {}, step2: {}, displayWords: [], buttonLabels: [] };
-  let mode = 1, npos = 0;
+  let mode = 1, npos = 0, headed1 = false;
   const seenPos = {};
   for (const raw of String(text || '').split(/\r?\n/)) {
     const line = raw.replace(/[\u2018\u2019]/g, "'").replace(/[*`]/g, '').trim();
-    if (/^step\s*1/i.test(line)) { mode = 1; continue; }
+    if (/^step\s*1/i.test(line)) { mode = 1; headed1 = true; continue; }
     if (/^step\s*2/i.test(line)) { mode = 2; continue; }
     const m = line.match(/^[-•]?\s*([^:]+?)\s*:\s*(.+)$/);
     if (!m) continue;
@@ -60,7 +60,12 @@ export function parseRules(text) {
     const words = m[2].split(',').map(w => w.trim().toUpperCase()).filter(Boolean);
     if (!words.length) continue;
     if (mode === 1 && npos === 6) mode = 2;
-    const pi = POS_NAMES.indexOf(key);
+    const pi = POS_NAMES.indexOf(key.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ')); // "Top-left" too
+    // Step 2 copied on its own (no "Step 2" heading): its first line is a label's list, not one of
+    // the six positions — or a position-named label whose list ends with its own name, as every
+    // Step 2 list does ("TOP RIGHT: FIRST, WHAT, TOP RIGHT")
+    const wordList = words.length >= 2 && key.length <= 14 && words.every(w => w.length <= 14); // not a sentence
+    if (mode === 1 && !headed1 && npos === 0 && wordList && (pi < 0 || words[words.length - 1] === key)) mode = 2;
     if (mode === 1) {
       if (pi < 0 || seenPos[pi]) continue;
       seenPos[pi] = true; npos++;
@@ -72,6 +77,43 @@ export function parseRules(text) {
   R.buttonLabels = Object.keys(R.step2);
   R.positions = npos;
   return R;
+}
+
+// what a paste holds: Step 1 (the six positions' display words) and / or Step 2 (the label lists)
+const hasStep1 = R => R.positions >= 4;
+const hasStep2 = R => Object.values(R.step2).filter(l => l.length >= 2).length >= 4;
+
+/**
+ * Text pasted "in air" that is this module's manual: both steps, or one of them on its own (the
+ * Helper's manual may come as two messages, with or without the "Step 1" / "Step 2" headings).
+ */
+export function looksLikeWofManual(text) {
+  if (/^https?:\/\//i.test(String(text || '').trim())) return false;
+  const R = parseRules(text);
+  return hasStep1(R) || hasStep2(R);
+}
+
+/** The manual as text, Step 1 from `s1` and Step 2 from `s2` (parsed rules). */
+function rulesText(s1, s2) {
+  const pos = POS_NAMES.map((name, pi) => {
+    const words = s1.displayWords.filter(w => s1.posOfWord[w] === pi);
+    return words.length ? `    ${name.toLowerCase()}: ${words.join(', ')}` : '';
+  }).filter(Boolean);
+  const lists = Object.entries(s2.step2).map(([k, l]) => `    ${k}: ${l.join(', ')}`);
+  return `Step 1. The display word tells you which button label to ask for:\n\n${pos.join('\n')}\n\n\n`
+    + `Step 2. Find that label's list below. Tell the Defuser to press the first word in the list that appears on any button.\n\n${lists.join('\n')}`;
+}
+
+/**
+ * A pasted manual → the manual to use. Both steps: the paste as it is. One step: it replaces that
+ * step of the manual loaded now, and the other step stays (paste Step 1 and Step 2 in any order).
+ */
+export function mergeWofManual(prevText, pasted) {
+  const P = parseRules(pasted);
+  const one = hasStep1(P), two = hasStep2(P);
+  if ((one && two) || (!one && !two)) return String(pasted || '').trim();
+  const O = parseRules(prevText);
+  return rulesText(one ? P : O, two ? P : O);
 }
 
 export function solveCore(R, disp, btns) {

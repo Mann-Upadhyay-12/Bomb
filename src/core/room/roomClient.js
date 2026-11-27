@@ -11,6 +11,7 @@
 // connection the app reads /api/room?action=state every few seconds instead.
 import { useSyncExternalStore } from 'react';
 import { roomKeyKept, normCode } from './roomKeys.js';
+import { linkMeasured, changeArrived, resetRoomTiming } from './roomTiming.js';
 
 /** This page load (two tabs of one person are two tabs, one member). */
 export const TAB = (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2)).slice(0, 18);
@@ -19,7 +20,8 @@ const ROLE_KEY = 'bombvision_room_role';
 const POLL_MS = 4000;
 // A message sent on the live channel by an app: Realtime's free plan takes 256 KB, so a bigger one only
 // goes the sure way (the server tells everyone to read it from /api/room).
-export const FAST_MAX_CHARS = 180 * 1024;
+// 240 KB arrived in a test, 300 KB was dropped (Supabase's free plan: 256 KB a message)
+export const FAST_MAX_CHARS = 236 * 1024;
 const newMid = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
 let S = {
@@ -118,8 +120,10 @@ const SAYS = {
 export const sayError = (e) => SAYS[e && e.code] || (e && e.code === 'net' ? 'Can’t reach the site — check your connection.' : `Something went wrong (${(e && (e.code || e.message)) || '?'}).`);
 
 /** One call to /api/room. Throws an Error with .code (the server's error, or 'net'). */
+let lastCall = 0; // the last request to the server (warm(): one every few minutes keeps it awake)
 export async function roomApi(action, { body, form, method = 'POST', query = '' } = {}) {
   let res;
+  lastCall = Date.now();
   try {
     res = await fetch(`/api/room?action=${action}${query}`, {
       method,
@@ -245,6 +249,9 @@ function lockedOut(e) {
 
 function gone(note) {
   disconnect();
+  resetRoomTiming();
+  presence = {};
+  for (const id of Object.keys(said)) delete said[id];
   each('onLeave');
   set({ room: null, status: 'off', online: {}, note, error: '' });
 }
@@ -300,6 +307,33 @@ function heard(mid) {
   if (mids.size > 600) mids.delete(mids.values().next().value);
 }
 
+// The timing line (roomTiming.js): a ping every 20 s while live; each teammate's app answers at once
+const PING_MS = 20000;
+const perf = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+let pingTimer = null;
+function ping() {
+  if (!live || !live.send || S.status !== 'live' || !S.room) return;
+  live.send({ t: 'ping', from: S.room.me, tab: TAB, at: Date.now(), p: perf() });
+}
+function startPinging() {
+  stopPinging();
+  ping();
+  pingTimer = setInterval(ping, PING_MS);
+  if (pingTimer && pingTimer.unref) pingTimer.unref();
+}
+function stopPinging() { clearInterval(pingTimer); pingTimer = null; }
+
+// The server sleeps after a few idle minutes, and waking it adds ~0.5 s to the next save (the fast way
+// doesn't wait for it, but a join, a reload or a big picture does). While in a room with the tab open:
+// a tiny request when nothing went to the server for 4 minutes.
+const WARM_MS = 4 * 60e3;
+function warm() {
+  if (!S.room || (typeof document !== 'undefined' && document.hidden) || Date.now() - lastCall < WARM_MS) return;
+  lastCall = Date.now();
+  fetch('/api/room?action=warm', { method: 'GET', credentials: 'same-origin', cache: 'no-store' }).catch(() => {});
+}
+if (typeof setInterval !== 'undefined') { const t = setInterval(warm, 60e3); if (t && t.unref) t.unref(); }
+
 /** The fast way: straight onto the live channel (only while it's connected; the server sends it too). */
 function sendFast(payload) {
   if (!live || !live.send || S.status !== 'live') return;
@@ -311,6 +345,18 @@ function sendFast(payload) {
 
 function onMessage(msg) {
   if (!msg || !S.room) return;
+  // the timing line's ping (roomTiming.js): answer a teammate's, time our own
+  if (msg.t === 'ping') {
+    if (msg.from !== S.room.me && live && live.send) live.send({ t: 'pong', to: msg.tab, from: S.room.me, at: Date.now(), p: msg.p });
+    return;
+  }
+  if (msg.t === 'pong') {
+    if (msg.to === TAB && Number.isFinite(msg.p)) {
+      const rtt = perf() - msg.p;
+      linkMeasured(msg.from, rtt, msg.at - (Date.now() - rtt / 2)); // their clock − ours
+    }
+    return;
+  }
   // the same change from the app that made it (fast) and from the server (sure): apply the first.
   // A card's copy from the server still goes through: it has the server's picture ids, and the card
   // skips a picture it has already loaded
@@ -319,7 +365,8 @@ function onMessage(msg) {
     heard(msg.mid);
     if (again && msg.t !== 'card') return;
   }
-  if (msg.t === 'members') { refresh(); return; }
+  if (msg.t === 'where') { if (msg.from !== S.room.me) heardWhere(msg); return; }
+  if (msg.t === 'members') { refresh(); ping(); sayWhere(); return; }
   if (msg.t === 'kick') {
     // the host removed someone; the room moved to a new topic. Them: out. Everyone else: re-read the
     // room, which hands over the new topic (enter() reconnects)
@@ -334,26 +381,53 @@ function onMessage(msg) {
     return;
   }
   if (msg.big) { refresh(); return; } // too big for one live message: read it from the server
+  if (msg.fast && msg.from !== S.room.me && msg.t !== 'card') changeArrived(msg.from, msg.at, msg.key);
   each('onMessage', msg);
 }
 
+// Who is online comes from presence. Which module each one has open (and their tag) also comes as a
+// live message the moment it changes ('where'): presence takes at most 5 updates per 30 s, so it lags
+// up to 6 s. The newer of the two wins.
+let presence = {};   // discord id → { module, role, at } from presence
+const said = {};     // discord id → { module, role, at } from their 'where' messages
+function showOnline() {
+  const out = {};
+  for (const [id, p] of Object.entries(presence)) {
+    const w = said[id];
+    const pick = w && w.at >= (p.at || 0) ? w : p;
+    out[id] = { module: pick.module || '', role: pick.role || '' };
+  }
+  set({ online: out });
+}
 function online(state) {
   // presence: key = a tab; several tabs of one person show as one member
   const out = {};
   for (const metas of Object.values(state || {})) {
-    for (const m of metas) if (m && m.id) out[m.id] = { module: m.module || '', role: m.role || '' };
+    for (const m of metas) if (m && m.id) out[m.id] = { module: m.module || '', role: m.role || '', at: Number(m.at) || 0 };
   }
-  set({ online: out });
+  presence = out;
+  showOnline();
+}
+function heardWhere(msg) {
+  if (!S.room.members.some((m) => m.id === msg.from) || !Number.isFinite(msg.at)) return;
+  const old = said[msg.from];
+  if (old && old.at > msg.at) return;
+  said[msg.from] = { module: String(msg.module || '').slice(0, 20), role: String(msg.role || '').slice(0, 20), at: msg.at };
+  if (presence[msg.from]) showOnline();
+}
+function sayWhere() {
+  if (live && live.send && S.status === 'live' && S.room) live.send({ t: 'where', from: S.room.me, tab: TAB, module: S.module, role: S.role, at: Date.now() });
 }
 
 let trackTimer = null, lastTrack = 0;
 function track() {
+  sayWhere(); // at once, to everyone listening
   // presence allows few updates (5 per 30 s): send at most one every 6 s, the latest one
   clearTimeout(trackTimer);
   const wait = Math.max(0, lastTrack + 6000 - Date.now());
   trackTimer = setTimeout(() => {
     lastTrack = Date.now();
-    if (live && S.room) live.track({ id: S.room.me, module: S.module, role: S.role });
+    if (live && S.room) live.track({ id: S.room.me, module: S.module, role: S.role, at: Date.now() });
   }, wait);
 }
 
@@ -397,12 +471,14 @@ async function connect(room) {
       if (seq !== connectSeq) return;
       if (status === 'SUBSCRIBED') {
         stopPolling();
+        startPinging();
         set({ status: 'live' });
         lastTrack = 0; track();
         if (down) refresh(); // messages sent while we were away are gone: read the room again
         down = false;
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
         down = true;
+        stopPinging();
         startPolling();
       }
     },
@@ -410,6 +486,7 @@ async function connect(room) {
 }
 
 function disconnect() {
+  stopPinging();
   connectSeq++;
   stopPolling();
   if (live) { live.close(); live = null; }

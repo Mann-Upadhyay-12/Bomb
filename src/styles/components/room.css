@@ -90,6 +90,7 @@ a.room-btn { display: inline-block; text-decoration: none; }
 
 .room-shared { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--line); padding-top: 10px; }
 .room-shared-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; }
+.room-timing-line { color: var(--ink-soft); font-family: ui-monospace, Consolas, monospace; font-size: 11px; overflow-wrap: anywhere; }
 .room-from { color: var(--ink-soft); font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; letter-spacing: .04em; white-space: nowrap; }
 .room-actions { border-top: 1px solid var(--line); padding-top: 10px; }
 .room-status { font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--ink-soft); }
@@ -101,6 +102,18 @@ a.room-btn { display: inline-block; text-decoration: none; }
 [data-theme="parchment"] .mgroup-manual-from { color: var(--brass-deep); }
 .dz-room-from { margin-top: 6px; font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; color: var(--brass); }
 [data-theme="parchment"] .dz-room-from { color: var(--brass-deep); }
+/* a teammate's pictures in a shared-reading card: small, last; a tap shows one big */
+.dz-room-pics { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 6px; cursor: default; }
+.dz-room-pic { max-height: 64px; max-width: 100%; border-radius: 6px; border: 1px solid var(--line); cursor: zoom-in; }
+.dz-room-pic.big { max-height: none; width: 100%; cursor: zoom-out; }
+.dz-room-pic.waiting { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 10px; font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; color: var(--ink-soft); }
+/* the answer while a teammate's new picture is read */
+.stamp.updating { cursor: wait; }
+.stamp.updating .stamp-word { opacity: .85; }
+.stamp-updating { font-size: 13px; letter-spacing: .04em; color: var(--brass); animation: room-updating 1.2s ease-in-out infinite; }
+[data-theme="parchment"] .stamp-updating { color: var(--brass-deep); }
+@keyframes room-updating { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .stamp-updating { animation: none; } }
 
 /* New game in a room, for anyone but the host */
 .newgame-btn.locked { opacity: .55; cursor: not-allowed; }
@@ -120,6 +133,7 @@ a.room-btn { display: inline-block; text-decoration: none; }
 .room-board-row.differ { border-color: rgba(248,113,113,0.5); background: rgba(248,113,113,0.08); }
 .room-board-row.differ .room-board-ans { color: #F87171; display: flex; flex-direction: column; gap: 2px; }
 [data-theme="parchment"] .room-board-row.differ .room-board-ans { color: #B42318; }
+.room-board-updating { color: var(--brass); }
 .room-board-one b { font-size: 10.5px; letter-spacing: .05em; margin-right: 4px; }
 .room-kick {
   margin-left: auto; font-family: ui-monospace, Consolas, monospace; font-size: 11px; font-weight: 700;

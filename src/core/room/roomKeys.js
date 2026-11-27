@@ -71,6 +71,10 @@ export function stateOf(key) {
 }
 export const stateKey = (module, card, name) => `state:${module}:${card}:${name}`;
 export const stateNameOk = (name) => STATE_NAME_RE.test(String(name || ''));
+// A card whose reading is shared (roomCards.js): after the app that took a picture has read it, its
+// card's values go to the room in one write, with this one saying which picture they're from
+export const READ_NAME = 'pictureRead';
+export const MAX_PUTS = 24; // values in one reading
 
 /** ans:<module>:<n>:<member> → { module, card, member }, else null. */
 export function ansOf(key) {

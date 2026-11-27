@@ -14,7 +14,7 @@ import { useToast } from '../../core/ToastContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
 import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { Dropzone, ManualPasteBox } from '../../core/Dropzone.jsx';
-import { manualBoxPaste } from '../../core/airPaste.js';
+import { manualBoxPaste, useAirText } from '../../core/airPaste.js';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
 import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
@@ -46,8 +46,18 @@ export function KnobModule({ isActive = true }) {
   const rules = React.useMemo(() => parseKnobRules(rulesText), [rulesText]);
   const readAt = stampedAt(rulesText);
   const [manualProblem, setManualProblem] = useState('');
+  // the table as text pasted anywhere on the page (Ctrl+V, no text box)
+  useAirText(isActive, (t) => {
+    const r = parseKnobRules(t);
+    if (Object.values(r).reduce((n, l) => n + l.length, 0) < 2) return false;
+    setRulesText(t);
+    setManualProblem('');
+    return true;
+  });
   // in a room, the lights and the disarmed count are the room's (core/room/useCardState.js); lights a
   // picture reads stay in each app (every app reads the same mirrored picture)
+  // the lights (read from the defuser's picture or tapped) are the card's: only the app that took the
+  // picture reads it, the teammates get the lights (core/room/useCardState.js)
   const [knobState, setKnobState] = useCardState('lights', [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
   const [disarmedCount, setDisarmedCount] = useCardState('disarmed', 0);
   const [previewUri, setPreviewUri] = useState('');
@@ -162,7 +172,7 @@ export function KnobModule({ isActive = true }) {
       input={
         <ModuleInput
           dropzone={
-            <Dropzone
+            <Dropzone shareReading
               onImage={handleImage}
               icon="🎛️ ⭕ ❌ ⭕ ❌"
               title="Click here, then paste the Knobs manual picture or the 12 knob LEDs"

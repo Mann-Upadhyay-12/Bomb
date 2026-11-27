@@ -1,7 +1,7 @@
 import React, { useState, useId, useMemo } from 'react';
 import { preWarmOCR } from '../search/searchOCR.js';
 import { readLaundryPicture } from './laundryOCR.js';
-import { solveLaundry, pressesFor, parseLaundryText, parseLaundryManual, describeFormula, CONTROLS, TABLES, SAMPLE_MANUAL_TEXT } from './laundrySolver.js';
+import { solveLaundry, pressesFor, parseLaundryText, parseLaundryManual, isLoadMessage, describeFormula, CONTROLS, TABLES, SAMPLE_MANUAL_TEXT } from './laundrySolver.js';
 import { useSharedState } from '../../core/sharedSetting.js';
 import { SPRITE, SPRITE_CELL } from './laundrySprite.js';
 import { useBombSerial } from '../../core/bombSerial.js';
@@ -9,7 +9,7 @@ import { useAppState } from '../../core/AppStateContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
 import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { Dropzone, ManualPasteBox } from '../../core/Dropzone.jsx';
-import { manualBoxPaste } from '../../core/airPaste.js';
+import { manualBoxPaste, useAirText } from '../../core/airPaste.js';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
 import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
@@ -73,9 +73,11 @@ export function LaundryModule({ isActive = true }) {
   const [counts, setCounts] = useCardState('counts', EMPTY);
   const [load, setLoad] = useCardState('load', null);
   const [botText, setBotText] = useCardState('botText', '');
-  const [current, setCurrent] = useState(null); // symbols the tiles show now (from a picture)
-  const [unsure, setUnsure] = useState([]);
-  const [status, setStatus] = useState({ text: '', ok: null });
+  // what the module picture showed is the card's too: only the app that took the picture reads it,
+  // the teammates get the symbols (core/room/useCardState.js)
+  const [current, setCurrent] = useCardState('current', null); // symbols the tiles show now (from a picture)
+  const [unsure, setUnsure] = useCardState('unsure', []);
+  const [status, setStatus] = useCardState('status', { text: '', ok: null });
   const [busy, setBusy] = useState(false);
   const [thumb, setThumb] = useState('');
   const [checkAt, setCheckAt] = useCardState('checkAt', null);
@@ -96,9 +98,13 @@ export function LaundryModule({ isActive = true }) {
   const from = current || start;
   const presses = res.ready ? pressesFor(res.set, from) : null;
   const pressNote = (k) => (presses && presses[k] ? ` ↻${presses[k]}` : '');
-  const answer = res.ready
-    ? CONTROLS.map(([k, label]) => `${label === 'Special care' ? 'Care' : label} ${res.set[k]}${startKnown ? pressNote(k) : ''}`).join(' · ')
-    : '';
+  // a button that is already on its symbol needs no press, so it is left out — only when the start is
+  // known (Load 1 or a module picture); from a guessed start every button is still shown
+  const alreadySet = res.ready && startKnown ? CONTROLS.filter(([k]) => presses[k] === 0).map(([k]) => k) : [];
+  const toSet = CONTROLS.filter(([k]) => !alreadySet.includes(k));
+  const answer = !res.ready ? ''
+    : toSet.length ? toSet.map(([k, label]) => `${label === 'Special care' ? 'Care' : label} ${res.set[k]}${startKnown ? pressNote(k) : ''}`).join(' · ')
+    : 'Nothing to press — all four are already set';
 
   React.useEffect(() => {
     const fresh = answerChanged(answer); // false when only isActive changed
@@ -128,6 +134,22 @@ export function LaundryModule({ isActive = true }) {
   // A manual picture with the formulas starts the manual over (page 1 / a new game); one without
   // them (page 2) is added to what is there.
   const addManualText = (text, hasFormulas) => setManualText(prev => (hasFormulas || !prev.trim() ? text : `${prev.trim()}\n\n${text}`));
+
+  // Text pasted anywhere on the page (Ctrl+V, no text box): the bot's load message goes to the
+  // message box, the manual's text (a page of it) to the manual — like their pictures
+  useAirText(isActive, (t) => {
+    if (isLoadMessage(t)) { handleText(t); return true; }
+    const m = parseLaundryManual(t);
+    const formulas = Object.keys(m.formulas).length > 0;
+    if (formulas || Object.keys(m.tables).length || m.care.length) {
+      addManualText(t, formulas);
+      setStatus({ text: formulas ? '✓ Manual pasted' : '✓ Manual page added to the one loaded', ok: true });
+      return true;
+    }
+    const f = parseLaundryText(t);
+    if (['remaining', 'solved', 'needy', 'total'].some(k => f[k] != null)) { handleText(t); return true; }
+    return false;
+  });
 
   const readPictures = async (items) => {
     setBusy(true);
@@ -169,7 +191,7 @@ export function LaundryModule({ isActive = true }) {
       const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = uri; });
       items.push({ img, uri, blob: f });
     }
-    readPictures(items);
+    return readPictures(items);
   };
 
   const nextLoad = () => {
@@ -192,7 +214,12 @@ export function LaundryModule({ isActive = true }) {
   const clearManual = () => { setManualText(''); setStatus({ text: 'Manual cleared — paste the new game\'s manual.', ok: null }); };
 
   const left = checkAt ? Math.max(0, Math.ceil((checkAt - now) / 1000)) : null;
-  const answers = res.ready ? CONTROLS.map(([k, label]) => `${label}: ${res.set[k]}${pressNote(k)}`) : [];
+  const answers = !res.ready ? []
+    : toSet.length ? toSet.map(([k, label]) => `${label}: ${res.set[k]}${pressNote(k)}`)
+    : ['Nothing to press — all four are already set'];
+  const alreadyNote = alreadySet.length > 0 && alreadySet.length < 4
+    ? <> {CONTROLS.filter(([k]) => alreadySet.includes(k)).map(([, label]) => label).join(', ')} {alreadySet.length === 1 ? 'is' : 'are'} already right, so not shown.</>
+    : null;
   const placeholder = busy ? '📷 READING…'
     : res.missing && res.missing.includes('manual') ? "PASTE THIS GAME'S LAUNDRY MANUAL"
     : res.missing && res.missing.length ? `NEED ${res.missing.map(m => m.toUpperCase()).join(', ')}`
@@ -202,14 +229,14 @@ export function LaundryModule({ isActive = true }) {
   const stats = res.ready ? `${res.item.name.toUpperCase()} · ${res.material.name.toUpperCase()} · ${res.color.name.toUpperCase()}${load ? ` · LOAD ${load}` : ''}` : 'ITEM · MATERIAL · COLOR';
 
   const copyItems = [];
-  if (answer) copyItems.push({ label: 'COPY ALL FOUR', value: answer });
+  if (answer && toSet.length) copyItems.push({ label: toSet.length === 4 ? 'COPY ALL FOUR' : 'COPY', value: answer });
 
   return (
     <ModuleLayout
       input={
         <ModuleInput
           dropzone={
-            <Dropzone
+            <Dropzone shareReading
               onImage={handleImage}
               onFiles={handleFiles}
               multiple
@@ -280,9 +307,9 @@ export function LaundryModule({ isActive = true }) {
       answers={
         <>
           <AnswerPanel label={load ? `SET — LOAD ${load}` : 'SET'} stats={stats} answers={answers} copyValue={answer} placeholder={placeholder} />
-          {res.ready && (
+          {res.ready && toSet.length > 0 && (
             <div className="ld-grid">
-              {CONTROLS.map(([k, label]) => (
+              {toSet.map(([k, label]) => (
                 <div key={k} className="ld-card">
                   <div className="ld-card-head">{label.toUpperCase()}</div>
                   <div className="ld-card-row">
@@ -307,6 +334,7 @@ export function LaundryModule({ isActive = true }) {
                 : startKnown
                   ? <>Load 1 always starts on 30°C, High heat, 150°C, Bleach; each press steps to the next symbol in the sheet's order.</>
                   : <>* Presses count from 30°C, High heat, 150°C, Bleach (how load 1 starts); each press steps to the next symbol in the sheet's order. Paste the module picture to count from what it shows now.</>}
+              {alreadyNote}
               {left != null && <div className="ld-check">⏱ Next check in <b>{left}s</b>{left === 0 ? ' — it is checking now' : ''}</div>}
             </div>
           )}

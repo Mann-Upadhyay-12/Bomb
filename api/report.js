@@ -4,10 +4,14 @@
 // guest as "Guest #a1b2c3" (a tag made from their address and SESSION_SECRET: the same for each report
 // they send, and it doesn't show the address). multipart/form-data: module, card, answer, note, serial,
 // page, device, text, pasted, game, and up to MAX_IMAGES `image` files.
+// room_card (card:<module>:<n>): sent from a card while in a room. For a logged-in member of a room, a
+// second message follows with the room's copy of that card: its pictures from the server (who pasted
+// each), every member's answer and the card's values (lib/report.js roomReportMessage).
 import { readSession, sessionSecret } from '../lib/session.js';
 import { accessFor } from '../lib/users.js';
 import { json, sameOrigin } from '../lib/web.js';
-import { IMAGE_TYPES, MAX_IMAGE_BYTES, MAX_IMAGES, reportMessage, reportWebhook } from '../lib/report.js';
+import { IMAGE_TYPES, MAX_IMAGE_BYTES, MAX_IMAGES, reportMessage, reportWebhook, gatherRoomReport, roomReportMessage, roomLinkOk } from '../lib/report.js';
+import { currentRoom, roomItems, listMembers, namesOf, loadPicture } from '../lib/rooms.js';
 
 // one report per person every few seconds (a double tap, or a stuck button); a guest at most a few an
 // hour; and the whole site under Discord's 30 a minute for one webhook. Kept per server instance, so
@@ -94,11 +98,8 @@ export async function POST(request) {
   });
   noteSent(from, now);
 
-  const body = new FormData();
-  body.append('payload_json', JSON.stringify(payload));
-  files.forEach((f, i) => body.append(`files[${i}]`, f.blob, f.name));
   try {
-    const r = await fetch(`${hook}?wait=true`, { method: 'POST', body, signal: AbortSignal.timeout(15000) });
+    const r = await toWebhook(hook, payload, files);
     if (!r.ok) {
       console.error('Report webhook answered', r.status, (await r.text()).slice(0, 300));
       return json({ error: r.status === 404 || r.status === 401 ? 'webhook-gone' : 'discord' }, 502);
@@ -107,5 +108,50 @@ export async function POST(request) {
     console.error('Report webhook failed', e);
     return json({ error: 'discord' }, 502);
   }
-  return json({ ok: true });
+
+  // from a room card: the room's copy of the card follows (the report itself is in either way)
+  let room = false;
+  const card = field('room_card');
+  if (card && !from.guest) {
+    try {
+      const msg = await roomPart(from.who, card);
+      if (msg) {
+        allSent.push(now); // a second message to the webhook
+        const r = await toWebhook(hook, msg.payload, msg.files);
+        room = r.ok;
+        if (!r.ok) console.error('Room report webhook answered', r.status, (await r.text()).slice(0, 300));
+      }
+    } catch (e) { console.error('Room report failed (the report itself was sent)', e); }
+  }
+  return json({ ok: true, room });
+}
+
+function toWebhook(hook, payload, files) {
+  const body = new FormData();
+  body.append('payload_json', JSON.stringify(payload));
+  files.forEach((f, i) => body.append(`files[${i}]`, f.blob, f.name));
+  return fetch(`${hook}?wait=true`, { method: 'POST', body, signal: AbortSignal.timeout(15000) });
+}
+
+/** The room's copy of a card for a member's report → { payload, files }, or null (not in a room). */
+async function roomPart(who, cardKey) {
+  const room = await currentRoom(who.id);
+  if (!room) return null;
+  const [items, members] = await Promise.all([roomItems(room), listMembers(room.id)]);
+  const names = await namesOf([...new Set([...members.map((m) => m.discord_id || m.id), ...items.map((i) => i.from_id)].filter(Boolean))]);
+  const nameOf = (id) => (names.get(id) && names.get(id).username) || 'someone';
+  const gathered = await gatherRoomReport({
+    cardKey, items, nameOf,
+    loadPicture: (id) => loadPicture(room, id),
+    fetchLink: async (url) => {
+      if (!roomLinkOk(url)) return null;
+      const r = await fetch(url, { signal: AbortSignal.timeout(5000), redirect: 'error' });
+      if (!r.ok) return null;
+      const type = (r.headers.get('content-type') || '').split(';')[0].trim();
+      if (!IMAGE_TYPES.includes(type) || Number(r.headers.get('content-length') || 0) > MAX_IMAGE_BYTES) return null;
+      const b = await r.blob();
+      return b.size <= MAX_IMAGE_BYTES ? new Blob([b], { type }) : null;
+    },
+  });
+  return gathered ? roomReportMessage({ who: who.name, room: gathered }) : null;
 }

@@ -8,9 +8,9 @@ import { useAppState } from '../AppStateContext.jsx';
 import { PASSWORD_WORDS_KEY, PASSWORD_DEFAULT_WORDS } from '../../modules/password/index.jsx';
 import { WS_DEFAULT_MANUAL } from '../../modules/wireseq/wireseqRules.js';
 import { PN_KEY } from '../../modules/piano/index.jsx';
-import { PN_DEFAULT_CODES } from '../../modules/piano/pianoSolver.js';
+import { PN_DEFAULT_CODES, pnParseCodes } from '../../modules/piano/pianoSolver.js';
 import { KEY as WOF_KEY } from '../../modules/wof/index.jsx';
-import { DEFAULT_RULES as WOF_DEFAULT_RULES } from '../../modules/wof/wofSolver.js';
+import { DEFAULT_RULES as WOF_DEFAULT_RULES, looksLikeWofManual, mergeWofManual } from '../../modules/wof/wofSolver.js';
 import { CIRCUIT_MANUAL_KEY } from '../../modules/circuit/index.jsx';
 import { MazeManualBar } from '../../modules/maze/manualBar.jsx';
 import { ASTRO_STARS_KEY } from '../../modules/astrology/index.jsx';
@@ -26,6 +26,8 @@ import { WIRES_MANUAL_KEY } from '../../modules/wires/index.jsx';
 import { MEMORY_MANUAL_KEY } from '../../modules/memory/index.jsx';
 import { ECHO_PAIRS_KEY } from '../../modules/echo/index.jsx';
 import { parseEchoPairs } from '../../modules/echo/echoSolver.js';
+import { parseWiresManual } from '../../modules/wires/wiresSolver.js';
+import { parseMemoryManual } from '../../modules/memory/memorySolver.js';
 
 // Modules whose manual is an image strip shared by every copy (pasted / dropped anywhere on the page)
 const IMAGE_MANUALS = { maze: MazeManualBar };
@@ -47,11 +49,12 @@ const MANUALS = {
   simons: null, // manual table picture changes every game: the Simon card reads it (shared in memory)
   piano: {
     key: PN_KEY, fallback: PN_DEFAULT_CODES, label: 'INTERVAL → CODE TABLE', rows: 3,
-    looks: t => /(minor|major|perfect)\s+\d/i.test(t) && /\d\.\d/.test(t)
+    looks: t => (/(minor|major|perfect)\s+\d/i.test(t) && /\d\.\d/.test(t)) || Object.keys(pnParseCodes(t)).length >= 3
   },
   wof: {
     key: WOF_KEY, fallback: WOF_DEFAULT_RULES, label: "WHO'S ON FIRST RULES (STEP 1 & STEP 2)", rows: 8,
-    looks: t => /step\s*1/i.test(t) && /step\s*2/i.test(t)
+    // both steps, or one at a time (two messages, headings or not): one step keeps the other
+    looks: looksLikeWofManual, merge: mergeWofManual
   },
   button: {
     key: 'bombvision_button_checklist', fallback: '', label: 'HELPER CHECKLIST (+ SERIAL / MODULE COUNTS)', rows: 8,
@@ -74,11 +77,11 @@ const MANUALS = {
   // the field-guide modules: every copy on a bomb reads the same Helper text
   wires: {
     key: WIRES_MANUAL_KEY, fallback: '', label: 'WIRES MANUAL (THE 3, 4, 5 AND 6 WIRE LISTS)', rows: 10,
-    looks: t => /\b[3-6]\s*wires?\b/i.test(t) && /\bcut\b/i.test(t)
+    looks: t => /\bcut\b/i.test(t) && (/\b[3-6]\s*wires?\b/i.test(t) || Object.values(parseWiresManual(t).sections).some(l => l.length))
   },
   memory: {
     key: MEMORY_MANUAL_KEY, fallback: '', label: 'MEMORY MANUAL (A RULE PER STAGE AND DISPLAY)', rows: 10,
-    looks: t => /\bstage\s*[1-5]\b/i.test(t) && /\bdisplay\b/i.test(t) && /\b(position|label(l)?ed)\b/i.test(t)
+    looks: t => (/\bstage\s*[1-5]\b/i.test(t) && /\bdisplay\b/i.test(t) && /\b(position|label(l)?ed)\b/i.test(t)) || parseMemoryManual(t).count >= 3
   },
   echo: {
     key: ECHO_PAIRS_KEY, fallback: '', label: 'ECHO WORD LIST (SHOWN WORD → WORD TO ENTER)', rows: 8,
@@ -108,6 +111,8 @@ function SharedManual({ cfg, count, visible }) {
     : isDefault ? (cfg.picture ? 'OLD DEFAULT' : 'DEFAULT') : 'LOADED ✓';
   // a picture manual changes every game: the built-in one is a warning, not a pass
   const bad = status === 'NOT LOADED' || status === 'OLD DEFAULT';
+  const textNow = useRef(text); // the manual a part-paste (cfg.merge) is added to
+  textNow.current = text;
 
   // Pasting the manual anywhere on the page (outside a text box) loads it straight away
   useEffect(() => {
@@ -120,7 +125,7 @@ function SharedManual({ cfg, count, visible }) {
       if (t && cfg.looks(t)) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        setText(t.trim());
+        setText(cfg.merge ? cfg.merge(textNow.current, t) : t.trim());
         showToast(`MANUAL LOADED FOR ${count > 1 ? `ALL ${count}` : 'THIS MODULE'} ✓`);
       }
     };

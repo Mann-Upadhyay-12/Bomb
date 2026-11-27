@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { searchCube } from './cubeSolver.js';
 import { detectCubeStickers, POS, sampleMedianRGB, cls } from './cubeVision.js';
 import { useAppState } from '../../core/AppStateContext.jsx';
@@ -11,19 +11,25 @@ import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
 import { CopyLines } from '../../core/components/CopyLines.jsx';
 import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
 import { CubeWorking } from './working.jsx';
+import { useCardState, useShareWork } from '../../core/room/useCardState.js';
+import { useAnswerGate } from '../../core/useAnswerGate.js';
 
 export function CubeModule({ isActive = true }) {
   const { copyOnDecode, setLastCopyString, setLastImage } = useAppState();
   const { showToast } = useToast();
   const { copy } = useClipboard();
 
-  const [cells, setCells] = useState({
+  // in a room, what the picture gave (the stickers) and the solver's answer are the room's: only the
+  // app that took the picture reads it and solves, the teammates get both (core/room/useCardState.js)
+  const [cells, setCells] = useCardState('cells', () => ({
     U: Array(9).fill('W'),
     F: Array(9).fill('G'),
     R: Array(9).fill('R')
-  });
-  const [solution, setSolution] = useState('');
-  const [statusMsg, setStatusMsg] = useState('');
+  }));
+  const [solution, setSolution] = useCardState('solution', '');
+  const [statusMsg, setStatusMsg] = useCardState('status', '');
+  const shareWork = useShareWork();
+  const answerChanged = useAnswerGate();
   const [previewUri, setPreviewUri] = useState('');
   const [previewMeta, setPreviewMeta] = useState('');
 
@@ -50,33 +56,29 @@ export function CubeModule({ isActive = true }) {
       if (res && res.timeout) {
         setSolution('');
         setStatusMsg('SEARCH TIMED OUT — check the sticker colours');
-        if (activeRef.current) setLastCopyString('');
         return;
       }
       if (res && res.sols && res.sols.length > 0) {
-        const movesStr = res.sols[0];
-        setSolution(movesStr);
+        setSolution(res.sols[0]);
         setStatusMsg(res.len === 0 ? 'ALREADY SOLVED ✓' : `SOLVED (${res.len} moves)`);
-        if (activeRef.current) {
-          setLastCopyString(movesStr);
-          if (copyOnDecode && movesStr) copy(movesStr);
-        }
       } else {
         setSolution('');
         setStatusMsg('NO SOLUTION FOUND (Check face colors)');
-        if (activeRef.current) {
-          setLastCopyString('');
-        }
       }
     } catch (err) {
       if (token !== solveToken.current) return;
       setSolution('');
       setStatusMsg('Error: ' + err.message);
-      if (activeRef.current) {
-        setLastCopyString('');
-      }
     }
   };
+
+  // the answer (this app's solve, or a teammate's in a room) → the app's last answer, and the clipboard
+  useEffect(() => {
+    const fresh = answerChanged(solution);
+    if (!activeRef.current) return;
+    setLastCopyString(solution);
+    if (copyOnDecode && fresh && solution) copy(solution);
+  }, [solution, isActive]);
 
   const handleImage = (img, dataUri, fileBlob) => {
     setPreviewUri(dataUri);
@@ -122,16 +124,15 @@ export function CubeModule({ isActive = true }) {
     }
 
     setCells(sampledCells);
-    solve(sampledCells);
     showToast('CUBE STICKERS READ ✓');
+    return solve(sampledCells); // the reading is done once it's solved (the room gets both at once)
   };
 
   const handleCellColorCycle = (face, idx, nextColor) => {
     const nextFace = [...cells[face]];
     nextFace[idx] = nextColor;
     const nextCells = { ...cells, [face]: nextFace };
-    setCells(nextCells);
-    solve(nextCells);
+    shareWork(() => { setCells(nextCells); return solve(nextCells); });
   };
 
   const handleSample = () => {
@@ -142,8 +143,7 @@ export function CubeModule({ isActive = true }) {
       F: ['G', 'G', 'Y', 'G', 'G', 'R', 'Y', 'Y', 'R'],
       R: ['G', 'G', 'R', 'G', 'R', 'R', 'G', 'R', 'R']
     };
-    setCells(sampleCells);
-    solve(sampleCells);
+    shareWork(() => { setCells(sampleCells); return solve(sampleCells); });
     showToast('SAMPLE CUBE LOADED & SOLVING ✓');
   };
 
@@ -160,9 +160,6 @@ export function CubeModule({ isActive = true }) {
     setPreviewUri('');
     setPreviewMeta('');
     setLastImage(null, null);
-    if (isActive) {
-      setLastCopyString('');
-    }
     showToast('CUBE RESET ✓');
   };
 
@@ -183,6 +180,7 @@ export function CubeModule({ isActive = true }) {
         <ModuleInput
           dropzone={
             <Dropzone
+              shareReading
               onImage={handleImage}
               icon="🧊 🟩 🟥 ⬜"
               title="Click here, then paste a screenshot of the Rubik's cube"

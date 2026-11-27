@@ -17,6 +17,7 @@ import { useSharedSetting, useSharedState } from '../../core/sharedSetting.js';
 import { useInstance } from '../../core/InstanceContext.jsx';
 import { useBombSerial } from '../../core/bombSerial.js';
 import { Dropzone } from '../../core/Dropzone.jsx';
+import { useCardState } from '../../core/room/useCardState.js';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
 import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
@@ -49,11 +50,13 @@ export function ButtonModule({ isActive = true }) {
     FACT_KEYS.forEach(k => { if (Number.isFinite(parsed[k])) f[k] = String(parsed[k]); });
     return f;
   });
-  const [color, setColor] = useState('');
-  const [label, setLabel] = useState('');
-  const [stage, setStage] = useState(null);
-  const [warn, setWarn] = useState({ color: false, label: false });
-  const [status, setStatus] = useState({ text: '', ok: null });
+  // in a room, the button (colour, label, which button) is the room's: only the app that took the
+  // picture reads it, the teammates get what it read (core/room/useCardState.js)
+  const [color, setColor] = useCardState('color', '');
+  const [label, setLabel] = useCardState('label', '');
+  const [stage, setStage] = useCardState('stage', null);
+  const [warn, setWarn] = useCardState('warn', { color: false, label: false });
+  const [status, setStatus] = useCardState('status', { text: '', ok: null });
   const [busy, setBusy] = useState(false);
   const [previewUri, setPreviewUri] = useState('');
   const [log, setLog] = useState([]);
@@ -233,7 +236,7 @@ export function ButtonModule({ isActive = true }) {
       input={
         <ModuleInput
           dropzone={
-            <Dropzone
+            <Dropzone shareReading
               onImage={handleImage}
               icon="🔘 ⏱️"
               title="Click here, then paste the Button screenshot"

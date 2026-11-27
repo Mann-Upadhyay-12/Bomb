@@ -4,7 +4,7 @@ import { useInstance } from './InstanceContext.jsx';
 import { useTouchScreen, phoneTitle } from '../utils/touch.js';
 import { AIR_PASTE_EVENT, pasteInAir } from './airPaste.js';
 import { noteInput } from './report.js';
-import { attachCardZone } from './room/roomCards.js';
+import { attachCardZone, useCardPictures, useCardUpdatingKey, pictureUrl } from './room/roomCards.js';
 import { nameOf } from './room/roomClient.js';
 
 
@@ -134,10 +134,40 @@ export function ManualPasteBox({ what = 'manual', card = null }) {
   );
 }
 
+// A module's onImage / onFiles may return a Promise (an OCR read): "read" is when it settles, plus a
+// moment for React to show what it set
+function whenRead(result, fn) {
+  Promise.resolve(result).catch(() => {}).then(() => { setTimeout(fn, 60); });
+}
+
+/** A teammate's picture in a shared-reading card: shown last (after their reading is in), small; a tap
+ *  shows it big. */
+function RoomPicture({ entry, wait }) {
+  const [url, setUrl] = useState('');
+  const [big, setBig] = useState(false);
+  useEffect(() => {
+    if (wait) return undefined; // the reading first: the picture is the last thing that matters
+    let gone = false;
+    const t = setTimeout(() => { pictureUrl(entry).then((u) => { if (!gone) setUrl(u); }, () => {}); }, 250);
+    return () => { gone = true; clearTimeout(t); };
+  }, [entry.id, entry.pic, wait]);
+  if (!url) return <span className="dz-room-pic waiting">{wait ? 'reading…' : 'picture…'}</span>;
+  return (
+    <img
+      className={`dz-room-pic ${big ? 'big' : ''}`} src={url} alt={`picture from ${nameOf(entry.from)}`} referrerPolicy="no-referrer"
+      title={big ? 'tap to make it small' : 'tap to see it big'}
+      onClick={(e) => { e.stopPropagation(); setBig((b) => !b); }}
+    />
+  );
+}
+
 export function Dropzone({
   onImage,
   onFiles,
   multiple = false,
+  // in a room: only the app that takes a picture reads it; the module keeps what it reads in
+  // useCardState, and the teammates get that (room/roomCards.js) and see the picture last
+  shareReading = false,
   icon = '💣 🚩 1 2 3',
   title = 'Click here or paste image',
   sub = null
@@ -152,19 +182,28 @@ export function Dropzone({
   // it goes to the same card in every teammate's app (room/roomCards.js) — unless it came from there
   const roomZone = useRef(null);
   const [roomFrom, setRoomFrom] = useState(null);
+  const [roomWhere, setRoomWhere] = useState(null);
+  const roomPics = useCardPictures(shareReading ? roomWhere : null);
+  const updating = useCardUpdatingKey(roomWhere ? roomWhere.key : '');
   const took = (src, origin, remote) => {
     noteInput(containerRef.current, src);
     if (remote) return;
     setRoomFrom(null);
     if (roomZone.current) roomZone.current.took(origin, src);
   };
+  // the module's reading of a picture this app took is done: a shared reading goes to the room
+  const readDone = (result) => whenRead(result, () => { if (roomZone.current) roomZone.current.readDone(); });
   const takeImage = (img, dataUri, fileBlob, origin, remote) => {
     took(fileBlob || dataUri, origin || (fileBlob ? { type: 'file', file: fileBlob } : null), remote);
-    if (onImage) onImage(img, dataUri, fileBlob);
+    const result = onImage ? onImage(img, dataUri, fileBlob) : undefined;
+    if (!remote) readDone(result);
+    return result;
   };
   const takeFiles = (files, remote) => {
     for (const f of Array.from(files || []).slice(-3)) took(f, { type: 'file', file: f }, remote);
-    onFiles(files);
+    const result = onFiles(files);
+    if (!remote) readDone(result);
+    return result;
   };
 
   const handleFileChange = (e) => {
@@ -196,15 +235,21 @@ export function Dropzone({
   // remote: it came from the room (a teammate pasted it), so it isn't sent back
   const loadFromSource = (srcObj, done = null, remote = false) => {
     // a pasted file goes through onFiles when the module takes several at once
-    if (srcObj.type === 'file' && multiple && onFiles) { setLoadError(''); takeFiles([srcObj.file], remote); if (done) done(true); return; }
+    if (srcObj.type === 'file' && multiple && onFiles) {
+      setLoadError('');
+      const result = takeFiles([srcObj.file], remote);
+      if (done) { if (remote) whenRead(result, () => done(true)); else done(true); }
+      return;
+    }
     setLoading(srcObj.type === 'url' ? 'url' : true);
     setLoadError('');
     loadImageSource(
       srcObj,
       (img, dataUri, fileBlob) => {
         setLoading(false);
-        takeImage(img, dataUri, fileBlob, srcObj, remote);
-        if (done) done(true);
+        const result = takeImage(img, dataUri, fileBlob, srcObj, remote);
+        // a teammate's picture: done once the module has read it (the card stops saying UPDATING)
+        if (done) { if (remote) whenRead(result, () => done(true)); else done(true); }
       },
       () => {
         setLoading(false);
@@ -283,9 +328,11 @@ export function Dropzone({
     const zone = attachCardZone(
       containerRef.current,
       (src, done) => latest.current.loadFromSource(src, (ok) => done(ok), true),
-      (who) => setRoomFrom(who)
+      (who) => setRoomFrom(who),
+      { shared: shareReading }
     );
     roomZone.current = zone;
+    setRoomWhere(zone.where);
     return () => { zone.detach(); roomZone.current = null; };
   }, []);
 
@@ -453,6 +500,11 @@ export function Dropzone({
         {touch && !loading && <div className="dz-touch">long-press the box → <b>Paste</b> · or tap here to pick a saved picture</div>}
         {loadError && <div className="dz-error">{loadError}</div>}
         {roomFrom && <div className="dz-room-from">👥 FROM {nameOf(roomFrom).toUpperCase()}</div>}
+        {roomPics.length > 0 && (
+          <div className="dz-room-pics" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+            {roomPics.map((p) => <RoomPicture key={p.id} entry={p} wait={Boolean(updating && updating.id === p.id)} />)}
+          </div>
+        )}
         <div className="dz-sub">
           {sub || (
             <>

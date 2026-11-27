@@ -6,6 +6,7 @@
 
 import { ensureOCRWorker } from '../search/searchOCR.js';
 import { fixOcrFormulaSide, readsBalanced, repairEquation } from './balanceSolver.js';
+import { glyphFeature, classifyGlyph } from './balanceGlyphs.js';
 
 const isArrowPx = (r, g, b) => r > 190 && g > 140 && b < 175 && r - b > 55;
 const isTextPx = (r, g, b) => r > 150 && g > 150 && b > 150 && Math.max(r, g, b) - Math.min(r, g, b) < 45;
@@ -21,7 +22,12 @@ function joinCanvases(a, b) {
   return c;
 }
 
-export function locateEquation(img) {
+/**
+ * Find the equation in a module picture and cut it into glyphs.
+ * opts.exclude: a fixture's name whose glyph samples the shape matcher leaves out (to check the reader
+ * on a picture it didn't learn from — scripts/check-balance.mjs).
+ */
+export function locateEquation(img, opts = {}) {
   const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
   const sc = Math.min(1, 900 / Math.max(iw, ih));
   const W = Math.max(1, Math.round(iw * sc)), H = Math.max(1, Math.round(ih * sc));
@@ -458,14 +464,108 @@ export function locateEquation(img) {
         clusters.splice(k, 1);
       }
     }
-    const { capTop, base, capH } = lines();
-    clusters.forEach(c => {
+    // lowered and short — or clearly hanging below the baseline (subscripts sit a bit higher on some lines)
+    const subOf = (c, L) => {
       const ch = c.y1 - c.y0 + 1;
-      // lowered and short — or clearly hanging below the baseline (subscripts sit a bit higher on some lines)
-      c.sub = ch < capH * 0.85 && (
-        ((c.y0 - capTop) > capH * 0.42 && c.y1 >= base - capH * 0.08) ||
-        ((c.y0 - capTop) > capH * 0.25 && c.y1 > base + capH * 0.1));
-    });
+      return ch < L.capH * 0.85 && (
+        ((c.y0 - L.capTop) > L.capH * 0.42 && c.y1 >= L.base - L.capH * 0.08) ||
+        ((c.y0 - L.capTop) > L.capH * 0.25 && c.y1 > L.base + L.capH * 0.1));
+    };
+    // ── Repairs checked against real glyph samples (balanceGlyphs.js) ──
+    // The cuts above are rules about columns of ink; in bigger, blurrier pictures they can cut one
+    // letter in pieces (the "n" of "Sn(" came out as "1", a speck and "[") or leave a bracket's tail on
+    // a subscript ("₃" + the foot of ")", which Tesseract read as nothing). A cut is kept or undone by
+    // whether the pieces look like real glyphs.
+    {
+      const inkOf = (c) => (x, y) => { const q = y * w + x; return mask[q] && c.ids.has(lab[q]) && (!c.keep || c.keep(x, y)); };
+      const featOf = (c, L) => {
+        const ink = inkOf(c);
+        return glyphFeature((x, y) => ink(c.x0 + x, c.y0 + y), c.x1 - c.x0 + 1, c.y1 - c.y0 + 1, { top: c.y0, capTop: L.capTop, base: L.base, capH: L.capH });
+      };
+      const judge = (c, L) => classifyGlyph(featOf(c, L), { sub: subOf(c, L), exclude: opts.exclude });
+      // a glyph's ink between columns a and b, with its box shrunk to fit (null: hardly any ink)
+      const piece = (c, a, b) => {
+        const ink = inkOf(c);
+        let px0 = w, px1 = -1, py0 = h, py1 = -1, n = 0;
+        for (let y = c.y0; y <= c.y1; y++) for (let x = Math.max(a, c.x0); x <= Math.min(b, c.x1); x++) if (ink(x, y)) {
+          n++; if (x < px0) px0 = x; if (x > px1) px1 = x; if (y < py0) py0 = y; if (y > py1) py1 = y;
+        }
+        if (n < 6) return null;
+        const keep = (x, y) => x >= a && x <= b && (!c.keep || c.keep(x, y));
+        return { x0: px0, x1: px1, y0: py0, y1: py1, ids: c.ids, keep };
+      };
+      const union = (parts) => {
+        const ins = parts.map(inkOf);
+        return {
+          x0: Math.min(...parts.map(p => p.x0)), x1: Math.max(...parts.map(p => p.x1)),
+          y0: Math.min(...parts.map(p => p.y0)), y1: Math.max(...parts.map(p => p.y1)),
+          ids: new Set(parts.flatMap(p => [...p.ids])), keep: (x, y) => ins.some(f => f(x, y))
+        };
+      };
+      const L = lines();
+      // pieces of one letter: 2–3 touching main-line pieces, one of them unlike any glyph, that together
+      // are clearly one letter
+      for (let k = 0; k < clusters.length; k++) {
+        for (const n of [3, 2]) {
+          const parts = clusters.slice(k, k + n);
+          if (parts.length < n || parts.some(p => subOf(p, L))) continue;
+          if (parts.some((p, i) => i && p.x0 - parts[i - 1].x1 > 2)) continue;
+          const pj = parts.map(p => judge(p, L));
+          if (pj.every(j => j.sure)) continue;
+          const u = union(parts);
+          if (subOf(u, L)) continue;
+          const uj = judge(u, L);
+          // one clear winner, far better than any piece (pieces of "n": 0.29, −0.35, −0.02; together 0.77
+          // with only two other "n" samples to compare): Tesseract still reads it if it isn't sure
+          const clear = uj.sure || (uj.score >= 0.7 && uj.margin >= 0.2);
+          if (!clear || uj.score < Math.max(...pj.map(j => j.score)) + 0.3) continue;
+          clusters.splice(k, n, u);
+          break;
+        }
+      }
+      // a subscript that is unlike any digit: a neighbour's edge left on it (the foot of ")" cut off
+      // with the "₃" before it), or two digits touching. Only from a side where another glyph touches
+      // it, and only for a big jump in likeness: any glyph looks a little more like some digit with a
+      // column or two shaved off, and taking those small gains made a lookalike font's "₈" a sure "3".
+      for (let k = clusters.length - 1; k >= 0; k--) {
+        const c = clusters[k];
+        if (!subOf(c, L)) continue;
+        const j0 = judge(c, L);
+        if (j0.sure) continue;
+        const gain = j0.score + 0.15;
+        let best = { score: gain, parts: null };
+        const cw = c.x1 - c.x0 + 1, ch = c.y1 - c.y0 + 1;
+        const touches = (o) => o && !subOf(o, L) && o.x0 - c.x1 <= 1 && c.x0 - o.x1 <= 1;
+        const fromLeft = touches(clusters[k - 1]), fromRight = touches(clusters[k + 1]);
+        for (let t = 1; t <= Math.floor(cw * 0.4); t++) {
+          const sides = [];
+          if (fromLeft) sides.push([c.x0 + t, c.x1]);
+          if (fromRight) sides.push([c.x0, c.x1 - t]);
+          for (const [a, b] of sides) {
+            const p = piece(c, a, b);
+            if (!p || !subOf(p, L)) continue;
+            // what is shaved off is a neighbour's curl (the foot of ")": short) or edge (of the "O" in
+            // "O₃": a sliver), never a whole digit standing there (the "₁" of "₁₆")
+            const off = a > c.x0 ? piece(c, c.x0, a - 1) : piece(c, b + 1, c.x1);
+            if (off && off.y1 - off.y0 + 1 > ch * 0.5 && off.x1 - off.x0 + 1 > ch * 0.2) continue;
+            const j = judge(p, L);
+            if (j.sure && j.score >= best.score) best = { score: j.score, parts: [p] };
+          }
+        }
+        if (cw > ch * 0.85) {
+          for (let x = c.x0 + Math.round(cw * 0.3); x <= c.x0 + Math.round(cw * 0.7); x++) {
+            const p1 = piece(c, c.x0, x - 1), p2 = piece(c, x, c.x1);
+            if (!p1 || !p2 || p1.x1 - p1.x0 + 1 < ch * 0.33 || p2.x1 - p2.x0 + 1 < ch * 0.33) continue;
+            const j1 = judge(p1, L), j2 = judge(p2, L);
+            const sc = Math.min(j1.score, j2.score);
+            if (j1.sure && j2.sure && sc >= best.score) best = { score: sc, parts: [p1, p2] };
+          }
+        }
+        if (best.parts) clusters.splice(k, 1, ...best.parts);
+      }
+    }
+    const { capTop, base, capH } = lines();
+    clusters.forEach(c => { c.sub = subOf(c, { capTop, base, capH }); });
 
     // Per-glyph crops for single-character OCR (black on white, ~64px tall, padded)
     const glyphs = clusters.map((c, k) => {
@@ -545,7 +645,16 @@ export function locateEquation(img) {
         if (x >= cw * 0.65 && stemAt(x)) rightStem = true;
       }
       const roundStem = !c.sub && !dotted && cw > capH * 0.9 && cw <= capH * 1.6 && chh <= capH * 1.12 && rightStem && !leftStem;
+      // its shape, for matching against glyphs cut from real game pictures (balanceGlyphs.js)
+      const feat = glyphFeature(mine, cw, chh, { top: c.y0, capTop, base, capH });
       return {
+        feat,
+        shape: (() => {
+          const m = classifyGlyph(feat, { sub: c.sub, exclude: opts.exclude });
+          // a digit can't have more closed loops of solid ink than its shape has ("8" is never a "3")
+          if (m.sure && c.sub && solidHoles > (DIGIT_LOOPS[m.ch] ?? 9)) return { ...m, sure: false };
+          return m;
+        })(),
         dotted,
         roundStem,
         onBase: c.y1 >= base - capH * 0.08,     // sits on the baseline ("r"), unlike a raised "+"
@@ -818,12 +927,17 @@ export async function ocrGlyph(worker, g) { // (exported for the browser checks)
 export async function readSideByGlyphs(worker, glyphs) { // (exported for the browser checks)
   // every glyph is its own read: run them side by side, each with its own OCR handle (its own
   // whitelist / page mode), then put the text together in order exactly as before
-  const reads = await Promise.all(glyphs.map(async g => ocrGlyph(await ensureOCRWorker(), g)));
+  // a glyph that clearly matches a real sample (balanceGlyphs.js) is that character: Tesseract is only
+  // asked about the rest (characters with no sample yet, or glyphs cut oddly)
+  const sure = (g) => g.shape && g.shape.sure;
+  const reads = await Promise.all(glyphs.map(async g => (sure(g) ? g.shape.ch : ocrGlyph(await ensureOCRWorker(), g))));
   let out = '';
   for (let i = 0; i < glyphs.length; i++) {
     const g = glyphs[i];
     let t = reads[i];
-    if (g.sub) {
+    if (sure(g)) {
+      if (t === '+') t = ' + ';
+    } else if (g.sub) {
       // a subscript OCR couldn't read stays a "?" for repairEquation to fill (dropped otherwise)
       t = t.split('').map(ch => DIGIT_FIX[ch] || ch).join('').replace(/[^0-9]/g, '') || '?';
     } else if (g.roundStem) {
@@ -860,11 +974,16 @@ async function ocr(worker, canvas, psm) {
 }
 
 /** Read the equation from a screenshot → { ok, equation, raw } */
-export async function readEquationImage(img, onStatus = () => {}) {
-  const loc = locateEquation(img);
+export async function readEquationImage(img, onStatus = () => {}, opts = {}) {
+  const loc = locateEquation(img, opts);
   if (!loc.ok) return loc;
-  onStatus('Starting OCR engine…');
-  const worker = await ensureOCRWorker();
+  // Tesseract only starts when a glyph needs it: when every glyph matches a real sample
+  // (balanceGlyphs.js) the equation is read without it, and without waiting for it to load
+  let tess = null;
+  const worker = {
+    setParameters: async (p) => (tess || (onStatus('Starting OCR engine…'), tess = await ensureOCRWorker())).setParameters(p),
+    recognize: async (c, o) => (tess || (tess = await ensureOCRWorker())).recognize(c, o)
+  };
   onStatus('Reading the equation…');
 
   // A reading that lost a subscript often still balances ("CH₄ + O₂" read as "CH4 + O" does), so

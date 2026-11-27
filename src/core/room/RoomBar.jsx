@@ -9,8 +9,9 @@ import {
 } from './roomClient.js';
 import { useAnswerBoard, openCard } from './roomBoard.js';
 import { useRoomFromAll, shareMine } from './roomSync.js';
-import { useSharedCards } from './roomCards.js';
+import { useSharedCards, useCardUpdating } from './roomCards.js';
 import { useRoomLevelInfo, goToRoomLevel } from './roomLevel.js';
+import { useRoomTiming, timingLines } from './roomTiming.js';
 import { roomKeyLabel, showCode, levelName, levelSig } from './roomKeys.js';
 import { startNewGame } from '../newGame.js';
 import { MODULE_REGISTRY } from '../moduleRegistry.js';
@@ -126,7 +127,7 @@ function OutOfRoom({ status }) {
         ))}
         <button type="button" className="room-btn primary" disabled={busy} onClick={() => createRoom(size)}>{busy ? '…' : '＋ CREATE ROOM'}</button>
       </div>
-      {mine && <div className="room-hint">A room you make plays <b>{levelName(mine)}</b>: everyone who joins opens it. Pick a level in MISSIONS / SECTIONS first to play that one.</div>}
+      {mine && <div className="room-hint">A room you make plays <b>{levelName(mine)}</b>: everyone who joins opens it. Pick a level in MISSION first to play that one.</div>}
       <form className="room-row" onSubmit={(e) => { e.preventDefault(); joinRoom(code); }}>
         <span className="room-label">CODE</span>
         <input
@@ -141,6 +142,12 @@ function OutOfRoom({ status }) {
 
 /** The answers board: every card anyone has an answer for, with each member's answer. Answers that
  *  differ between members are red (one of them misread the picture, or has a stale manual). */
+/** ⏳ on a board row while a teammate's new picture for that card is read (the answers are about to change). */
+function Updating({ module, card }) {
+  const u = useCardUpdating(module, card);
+  return u ? <span className="room-from room-board-updating">⏳ UPDATING</span> : null;
+}
+
 function Board({ room, cards }) {
   const rows = useAnswerBoard();
   if (!rows.length) return null;
@@ -161,9 +168,37 @@ function Board({ room, cards }) {
               ? <span className="room-board-ans">{r.answers.map((a) => <span key={a.member} className="room-board-one"><b>{who(a.member)}</b> {a.answer}</span>)}</span>
               : <span className="room-board-ans">{r.answers[0].answer}{r.answers.length > 1 ? <span className="room-board-same"> ✓ {r.answers.length} agree</span> : null}</span>}
             {pic && <span className="room-from">PICTURE FROM {pic.from === room.me ? 'YOU' : nameOf(pic.from).toUpperCase()}</span>}
+            <Updating module={r.module} card={r.card} />
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/** TIMING: how long things take, measured on this device (roomTiming.js). COPY TIMINGS puts the lines
+ *  on the clipboard, to paste into a chat. */
+function Timing({ room }) {
+  const t = useRoomTiming();
+  const [copied, setCopied] = useState('');
+  const who = (id) => (id === room.me ? 'you' : nameOf(id));
+  const lines = timingLines(t, { me: room.me, members: room.members.map((m) => m.id), who, label: moduleLabel });
+  if (!lines.length) return null;
+  const copy = async () => {
+    const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+    const head = `Bomb room timings · ${nameOf(room.me)} · ${touch ? 'phone' : 'computer'} · ${new Date().toLocaleString()}`;
+    try { await navigator.clipboard.writeText([head, ...lines].join('\n')); setCopied('✓ copied'); }
+    catch (e) { setCopied('select the lines and copy them'); }
+  };
+  return (
+    <div className="room-shared room-timing">
+      <div className="room-row">
+        <span className="room-label">TIMING (THIS DEVICE)</span>
+        <span className="room-spacer" />
+        <button type="button" className="room-btn" onClick={copy}>📋 COPY TIMINGS</button>
+        {copied && <span className="room-hint">{copied}</span>}
+      </div>
+      {lines.map((line, i) => <div key={i} className="room-timing-line">{line}</div>)}
     </div>
   );
 }
@@ -242,6 +277,8 @@ function InRoom({ S }) {
           </div>
         ))}
       </div>
+
+      <Timing room={room} />
 
       <div className="room-row room-actions">
         <button type="button" className="room-btn" onClick={() => setSent(shareMine())} title="Joining doesn't send what you already had (it may be from the last game). This sends it on purpose.">⇪ SHARE MY MANUALS</button>

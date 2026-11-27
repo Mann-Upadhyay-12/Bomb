@@ -18,8 +18,8 @@ export function ReportButton() {
     setState({ kind: 'sending', text: '' });
     try {
       const sent = await sendReport(ref.current, note.trim());
-      const { images, pastes } = sent;
-      const parts = [images && `${images} picture${images > 1 ? 's' : ''}`, pastes && `${pastes} paste${pastes > 1 ? 's' : ''}`].filter(Boolean);
+      const { images, pastes, room } = sent;
+      const parts = [images && `${images} picture${images > 1 ? 's' : ''}`, pastes && `${pastes} paste${pastes > 1 ? 's' : ''}`, room && "+ the room's copy"].filter(Boolean);
       setState({ kind: 'sent', text: `SENT ✓ ${parts.length ? `(${parts.join(', ')})` : ''}`.trim() });
       setOpen(false);
       setNote('');

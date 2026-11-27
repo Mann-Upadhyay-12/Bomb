@@ -272,5 +272,7 @@ export async function recognizeCellConsensus(_worker, padCanvas) {
     ...g, score: g.count * 60 + g.maxConf + g.confs.reduce((a, b) => a + b, 0) / g.count
   }));
   options.sort((a, b) => b.score - a.score);
-  return { letter: options[0].letter, confidence: Math.round(options[0].maxConf || options[0].confs[0] || 50) };
+  // a 0 stays 0: it is what sends the cell to the second pass. (It used to become 50, so in Chrome a
+  // clean I that Tesseract called "E" at 0 % was kept, and the second pass's right "1" = I never ran.)
+  return { letter: options[0].letter, confidence: Math.round(options[0].maxConf || 0) };
 }

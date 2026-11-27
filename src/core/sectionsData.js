@@ -22,7 +22,7 @@ export const KNOWN_MODULE_NAMES = {
   'Mines': { id: 'mines', isImplemented: true },
   'Symbols': { id: 'symbols', isImplemented: true, shared: true },
   'Simon Says': { id: 'simons', isImplemented: true, shared: true },
-  'Rubik\'s Cube': { id: 'cube', isImplemented: true },
+  'Rubik\'s Cube': { id: 'cube', isImplemented: true, shared: true }, // each cube its own card (no manual)
   'Diagram': { id: 'diagram', isImplemented: true, shared: true },
   'Morse Code': { id: 'morse', isImplemented: true, shared: true },
   'Queens': { id: 'queens', isImplemented: true },

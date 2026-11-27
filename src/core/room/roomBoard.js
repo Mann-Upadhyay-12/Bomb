@@ -3,15 +3,17 @@
 // answers. With mirrored cards every app should work out the same answer; when two members' answers
 // for one card differ, the board shows both in red: a misread picture or a stale manual on one side.
 import { useSyncExternalStore } from 'react';
-import { roomPart, roomWrite, inRoom, myId, TAB } from './roomClient.js';
+import { roomPart, roomWrite, inRoom, myId, TAB, sendSoon } from './roomClient.js';
 import { ansOf, ansKey, MAX_ANSWER_CHARS } from './roomKeys.js';
+import { answered } from './roomTiming.js';
 
-const SEND_AFTER_MS = 700; // an answer settles (a solver's second pass, a manual still loading)
+// an answer goes at once, then at most every 300 ms the latest (a solver's second pass corrects it)
+const SEND_EVERY_MS = 300;
 
 // ── this app's answers ──────────────────────────────────────────────────────────────────────────
 const local = new Map();       // card key "module:n" → Map(panel id → answer text)
 const sent = new Map();        // card key → the answer last sent to the room
-const timers = new Map();      // card key → send timer
+const timers = new Map();      // card key → { timer, … } while more may follow (sendSoon)
 
 const cardKey = (module, card) => `${module}:${card}`;
 function combined(key) {
@@ -21,18 +23,18 @@ function combined(key) {
 }
 
 function queueSend(key) {
-  clearTimeout(timers.get(key));
-  timers.set(key, setTimeout(() => {
-    timers.delete(key);
-    if (!inRoom()) return;
-    const answer = combined(key);
-    if ((sent.get(key) || '') === answer) return;
-    sent.set(key, answer);
-    const [module, card] = key.split(':');
-    const fast = { t: 'ans', key: ansKey(module, Number(card), myId()), value: answer ? { a: answer } : null };
-    roomWrite('answer', { module, card: Number(card), answer }, null, fast).catch(() => sent.delete(key));
-  }, SEND_AFTER_MS));
+  sendSoon(timers, key, null, sendAnswer, SEND_EVERY_MS);
 }
+function sendAnswer(key) {
+  if (!inRoom()) return;
+  const answer = combined(key);
+  if ((sent.get(key) || '') === answer) return;
+  sent.set(key, answer);
+  const [module, card] = key.split(':');
+  const fast = { t: 'ans', key: ansKey(module, Number(card), myId()), value: answer ? { a: answer } : null };
+  roomWrite('answer', { module, card: Number(card), answer }, null, fast).catch(() => sent.delete(key));
+}
+function stopSending() { timers.forEach((p) => clearTimeout(p.timer)); timers.clear(); }
 
 /**
  * AnswerPanel calls this whenever the answer it shows changes ('' or null when it shows none, or
@@ -46,7 +48,11 @@ export function noteAnswer(where, panel, answer) {
   if (!panels) { panels = new Map(); local.set(key, panels); }
   if (answer) panels.set(panel, String(answer)); else panels.delete(panel);
   if (!panels.size) local.delete(key);
-  if (inRoom()) { queueSend(key); changed(); }
+  if (inRoom()) {
+    if (answer) answered(`card:${where.module}:${where.card || 0}`); // the timing line
+    queueSend(key);
+    changed();
+  }
 }
 
 // ── everyone's answers (the room's copy) ────────────────────────────────────────────────────────
@@ -80,8 +86,8 @@ roomPart({
     if (msg.fast && (ansOf(msg.key) || {}).member !== msg.from) return;
     setRemote(msg.key, msg.value);
   },
-  onNewGame() { remote = new Map(); sent.clear(); timers.forEach(clearTimeout); timers.clear(); changed(); },
-  onLeave() { remote = new Map(); sent.clear(); timers.forEach(clearTimeout); timers.clear(); changed(); },
+  onNewGame() { remote = new Map(); sent.clear(); stopSending(); changed(); },
+  onLeave() { remote = new Map(); sent.clear(); stopSending(); changed(); },
 });
 
 // ── the board ───────────────────────────────────────────────────────────────────────────────────

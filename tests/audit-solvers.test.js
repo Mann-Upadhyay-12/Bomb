@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 const S = '../src/modules/';
 const { swBFS, swNorm } = await import(S + 'switches/switchesSolver.js');
-const { DEFAULT_RULES, parseRules, solveCore, matchWord, POS_NAMES } = await import(S + 'wof/wofSolver.js');
+const { DEFAULT_RULES, parseRules, solveCore, matchWord, POS_NAMES, looksLikeWofManual, mergeWofManual } = await import(S + 'wof/wofSolver.js');
 const { siToFlashes } = await import(S + 'simons/simonsSolver.js');
 const { pnNote, pnParseCodes, PN_DEFAULT_CODES, PN_INT } = await import(S + 'piano/pianoSolver.js');
 const { filterPasswordCandidates, MASTER_PASSWORDS } = await import(S + 'password/passwordSolver.js');
@@ -54,6 +54,25 @@ test('wof: solve picks first list word present', () => {
   assert.equal(r.ok, true); assert.equal(r.ans, 'FIRST'); assert.equal(r.hit, 1);
   assert.equal(solveCore(R, 'YOU', ['READY', '', 'NOT', 'WAIT', 'HOLD', 'IT']).ok, false);
   assert.equal(solveCore(R, 'NOPE', btns).ok, false);
+});
+test('wof: a manual pasted in air — both steps, or one step at a time with or without headings', () => {
+  const [s1, s2] = DEFAULT_RULES.split(/\n(?=Step 2)/);
+  const bare = t => t.split('\n').filter(l => !/^step/i.test(l.trim())).join('\n');
+  for (const t of [DEFAULT_RULES, s1, s2, bare(s1), bare(s2), bare(DEFAULT_RULES)]) assert.ok(looksLikeWofManual(t));
+  assert.ok(!looksLikeWofManual('lol press the left one: then, wait'));
+  assert.ok(!looksLikeWofManual('https://cdn.discordapp.com/attachments/1/2/wof.png'));
+  // Step 2 alone has no position lines: its lists aren't lost waiting for Step 1
+  assert.equal(parseRules(bare(s2)).buttonLabels.length, 28);
+  const D = parseRules(DEFAULT_RULES);
+  for (const [a, b] of [[bare(s1), bare(s2)], [bare(s2), bare(s1)], [s2, s1]]) {
+    const R = parseRules(mergeWofManual(mergeWofManual('', a), b));
+    assert.deepEqual(R.posOfWord, D.posOfWord);
+    assert.deepEqual(R.step2, D.step2);
+  }
+  // a new Step 1 keeps the Step 2 that is loaded
+  const R = parseRules(mergeWofManual(DEFAULT_RULES, 'top left: SAYS, READ\ntop right: CEE, LEAD\nmiddle left: LEED\nmiddle right: NO\nbottom left: C\nbottom right: (blank)'));
+  assert.equal(R.posOfWord.SAYS, 0);
+  assert.deepEqual(R.step2, D.step2);
 });
 test('wof: fuzzy match keeps apostrophes and question marks', () => {
   const R = parseRules(DEFAULT_RULES);

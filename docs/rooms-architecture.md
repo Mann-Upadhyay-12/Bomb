@@ -1,7 +1,8 @@
 # Rooms architecture: how it works, where the time goes, what we could change
 
-Draft for review, 26 Nov 2026. Nothing in the "options" sections is built. Write your comments
-anywhere (or answer the questions at the end) and I'll fold them in.
+Draft for review, 26 Nov 2026. **Reviewed the same night:** your decisions are in §12 and my answers
+to your questions in §13. Option C (the paster's app shares its reading), the room reports (§7) and
+the small items in §9 are now BUILT.
 
 Status tags used below:
 - **LIVE**: on the site now.
@@ -16,6 +17,9 @@ Numbers are tagged:
 ---
 
 ## 0. My opinion in short
+
+> **Update after your review:** you meant what option C does: the paster's own app reads the picture
+> and sends the reading, the picture stays on the server and comes last. That's built (§12).
 
 Your instinct is right that teammates only need the parsed data, not the picture. But doing the
 parsing **on the server** would not make things faster for the three of you, and it costs the most
@@ -238,7 +242,7 @@ For a pixel module (reading in ~30 ms everywhere): today ≈ 0.1 s, B ≈ 0.25 s
 
 ## 6. Other options
 
-### C. The paster's app shares its reading (IDEA, my recommendation)
+### C. The paster's app shares its reading (BUILT for 14 modules, without the background check: §12)
 
 ```mermaid
 sequenceDiagram
@@ -330,7 +334,7 @@ flowchart LR
 
 ---
 
-## 7. Reports, rebuilt for rooms (IDEA)
+## 7. Reports, rebuilt for rooms (BUILT, in addition to the normal report: §12)
 
 Your point: the server should make the report, so it has the right pictures. For a room, I agree.
 The server has every picture of every card (`bomb_room_pictures`) and every member's answer
@@ -362,28 +366,36 @@ sequenceDiagram
 | The database | Row-level security on, no policies: browsers can't touch it, only the server with its secret key |
 | The live channel | A 128-bit secret topic, given only to members. A kick moves the room to a new topic |
 | Fast way messages | Apps can now send on the topic. Each app checks what it can: the level only from the host, an answer only from its own member, only for the current game. A member with a modified app could still send odd changes to the others. Fine among friends |
-| Limits | ~10 writes/s per person, 128 KB per item, 3 MB per picture, 180 KB per fast message |
+| Limits | ~10 writes/s per person, 128 KB per item, 3 MB per picture, 236 KB per fast message; a reading is at most 24 values of its own card, 128 KB together |
 
 ---
 
 ## 9. Cheap things worth doing (all free)
 
-1. **Timing line** (IDEA, ~1 h). The room panel shows, on each device: "last picture: arrived
-   in X ms, read in Y ms". One game gives real numbers for §4. **Do this before any of the bigger
-   options.**
-2. **Option C for the OCR modules** (IDEA, medium). The biggest real gain on phones.
-3. **"Which module am I on" as a live message instead of presence** (IDEA, small). Presence allows 5
-   updates per 30 s, so it lags up to 6 s. A broadcast message would make it instant.
-4. **Answers board: send at once, then correct** (IDEA, small). It now waits 700 ms for an answer to
-   settle.
-5. **Raise the fast-way cap from 135 KB to ~170 KB** (IDEA, tiny). A few more pictures skip Tokyo.
-   240 KB worked in the test.
-6. **Read the on-screen module first** (IDEA, small). Pictures for other modules wait their turn on
-   a phone.
-7. **Warm the server when entering a room** (IDEA, tiny). One call, so the first save doesn't hit a
-   cold start. Barely matters with the fast way.
-8. **Move the database + functions to Frankfurt** (IDEA, an evening, your accounts). Only helps
-   joins, reloads, big pictures and New game for your friends.
+1. **Timing line** (BUILT). The room panel has a TIMING (THIS DEVICE) section with a COPY TIMINGS
+   button (`src/core/room/roomTiming.js`). It shows:
+   - the live link to each teammate, there and back (a ping on the live channel every 20 s, which
+     also works out how far their clock is from yours);
+   - for each of the last 8 pictures: who pasted it, fast way or from the server, its trip, the
+     download, when it was in the card, and when the card's answer changed;
+   - the trip of the last tap or text from a teammate.
+
+   One game gives real numbers for §4. **Look at these before any of the bigger options.**
+2. **Option C** (BUILT for 14 modules, §12).
+3. **"Which module am I on" as a live message** (BUILT). It goes out the moment you switch, as a
+   `where` message on the live channel. Presence still says who's online; the newer of the two wins.
+4. **Answers board: send at once, then correct** (BUILT). The first answer goes at once, then the
+   latest at most every 300 ms (it waited 700 ms before).
+5. **Fast-way cap** (BUILT): pictures up to 170 KB go the fast way (was 135 KB), so a message is at
+   most 236 KB, under the 240 KB that worked in the test. This only matters for cards not yet on
+   option C: shared-reading cards never send the picture on the live channel.
+6. **Read the on-screen module first** (SKIPPED). With option C, teammates don't read pictures, so
+   there's nothing left to put in order. The modules still read the old way are quick pixel readers.
+7. **Warm the server** (BUILT). While you're in a room with the tab open, a tiny request goes to
+   the server when nothing else has for 4 minutes (`GET /api/room?action=warm`: no login, no
+   database).
+8. **Move the database + functions** (NOT DONE: your accounts, and see §13.4: it's off the
+   critical path now).
 
 ---
 
@@ -391,26 +403,162 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-  A["Deploy the fast way (BUILT)"] --> B["Timing line, play one game"]
-  B --> C{"Reading on phones slow?"}
-  C -- yes --> D["Option C for the slow modules"]
-  C -- no --> E["Small wins: presence, answers board, cap"]
-  D --> F["Room reports from the server (§7)"]
-  E --> F
-  F --> G["Later, for fun: WebRTC as a third road"]
+  A["Deploy: fast way, timing line, option C (14 modules), room reports, §9 (BUILT)"] --> B["All 3 reload, play one game, copy the timings"]
+  B --> C{"Any answer still slow or wrong?"}
+  C -- "a module read the old way" --> D["Move it to option C"]
+  C -- "joins / reloads slow" --> E["Frankfurt move (§13.4)"]
+  C -- no --> G["Weekend: WebRTC as a third road"]
+  D --> G
+  E --> G
 ```
 
 ---
 
 ## 11. Questions for you
 
-1. Option C keeps "every app checks the picture itself" in the background. Do you want to keep that
-   check? Or trust the paster's reading fully, which is simpler and saves phone CPU, but a misread
-   then spreads?
-2. Do teammates need to *see* the picture? Or is the reading + answer enough, with the picture
-   loading only when they open the card?
-3. Room reports from the server (§7): should they replace the current report in rooms, or come in
-   addition?
-4. Which modules feel slowest in real games? That decides where option C starts.
-5. Frankfurt move: worth an evening, or leave Tokyo?
-6. WebRTC: want it as a weekend experiment after the above, knowing it's for fun more than speed?
+1. Keep the background check? **Your answer: no, trust the paster** ("if they mess up, their fault";
+   maybe back later). Built that way.
+2. Do teammates need to see the picture? **Yes, but last:** the reading and the answer first (the
+   drawn staff in Piano, the cube net in Rubik's Cube), the original picture after, as a nice-to-have.
+3. Room reports: **in addition.**
+4. Slowest modules? **None feel slow. The problem is updating:** the second person's answer changes
+   too late, and they enter the old one. That's why the UPDATING guard exists (§12).
+5. Frankfurt? **You asked about a point between India and Macedonia instead:** §13.4.
+6. WebRTC? **A weekend experiment.**
+
+---
+
+## 12. What your review decided, and what's built (26 Nov, night)
+
+**You meant the client parses, not the server.** The app that takes a picture reads it. Teammates
+get only what it read and the answer. The picture stays on the server and reaches them last. No
+`/beta` with server OCR (you dropped it: "most people have great PCs").
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant P as Paster's app
+  participant RT as Live channel (nearest nodes)
+  participant T as Teammate's app
+  participant F as Server (Tokyo)
+  P->>RT: "picture coming" (id, ~200 bytes, no picture)
+  RT->>T: card shows ⏳ UPDATING (the old answer is hidden, can't be copied)
+  P->>F: upload the picture (for thumbnails, reports, late joiners)
+  P->>P: read it (OCR / pixels) → answer
+  P->>RT: the reading: the card's values + "pictureRead = id", one message
+  RT->>T: values in → the parsed view + answer, UPDATING goes
+  P->>F: same reading, saved in one write (late joiners, reloads)
+  T->>F: last: fetch the picture for the small thumbnail
+```
+
+| Part | What it does | Where |
+|---|---|---|
+| Shared cards | `<Dropzone shareReading>`. Only the app that took the picture reads it. What the card changes while reading goes out in one message when the reading is done (Promise-aware: OCR modules finish first) | `Dropzone.jsx`, `roomCards.js`, `useCardState.js` |
+| One write | `POST puts`: up to 24 values of one card, one database write, one live message | `api/room.js`, `lib/rooms.js putItems` |
+| UPDATING | From the moment a teammate's picture arrives until its reading is in (or, for cards still read the old way, until this app has read it). Max 20 s. The answer panel shows ⏳ UPDATING — NAME'S NEW PICTURE and won't copy; the board row says ⏳ UPDATING | `AnswerPanel.jsx`, `RoomBar.jsx` |
+| Picture last | A small thumbnail in the drop box, fetched after the reading is in; a tap shows it big | `Dropzone.jsx RoomPicture` |
+| Fallback | No reading 6 s after a teammate's picture (a friend still on the old page, a tab closed mid-read): this app reads it itself | `roomCards.js` |
+| A tap that starts a solver | `useShareWork`: Cube's sticker tap and its solution go together | `useCardState.js` |
+| Room reports | After the normal ⚑ report, a second message: the card's pictures from the server in paste order (who pasted each), each player's answer, the card's values. Links are fetched only from Discord's picture servers | `api/report.js`, `lib/report.js` |
+| Timing line | Shared cards show "their reading in after X ms" | `roomTiming.js` |
+
+**Modules on shared reading (14):** Piano, Rubik's Cube, Memory, Password, Who's on First, Button,
+Batteries, Word Search, Echo, Balance, Knobs, Bluescreen, Laundry, Complex Wires. That's every
+text-reading (OCR) module, your two examples, and the ones whose settings were already shared.
+
+**Still read the old way (19):** Astrology, Blackjack, Chess, Circuit, Diagram, Hangman, Limbo, Logic,
+Maze, Mines, Morse, Pipes, Queens, Simon, Switches, Symbols, Wire Placement, Wires, Wire Sequence.
+They're quick pixel readers. They still get the fast way and the UPDATING guard. Each needs its
+picture's results moved into `useCardState`, one at a time. Simon and Wire Sequence don't use the
+answer panel, so they have no UPDATING guard yet.
+
+**After deploying:** all three of you reload. A friend on the old page never sends a reading, so their
+pictures in shared cards reach you only through the 6 s fallback.
+
+**Not checked in a browser:** there's no Chromium on this machine. 13 tests cover the room's live side
+in Node, plus server tests for `puts`, `warm` and the room report.
+
+---
+
+## 13. Your questions, answered
+
+### 13.1 "Database = write in disk, not memory. Wouldn't Redis be better?"
+
+Not here. Three reasons:
+- **The live path doesn't touch the database any more.** Taps, readings and answers go player →
+  nearest Realtime node → player. The database only gets the "sure" copy, which nobody waits for.
+- **Postgres isn't slow at this.** It keeps the data it uses in memory too, and a write is an append
+  to its log. One call from the Tokyo functions to the Tokyo database takes a few ms. Redis would
+  take ~1 ms. You'd save 2–5 ms against 100–250 ms of distance between you three.
+- **It's another thing to keep in step.** A second store and its region, and the free tier's limits,
+  for no change you'd feel.
+
+Redis would matter if we read a room's state many times a second from the server. We don't: each
+app holds the room in its own memory.
+
+### 13.2 "They all drag the same cdn link, so how would one app misread it?"
+
+Same bytes through the same reader usually do give the same answer. They differed when:
+1. **Different app versions.** One friend hadn't reloaded since a reader fix.
+2. **Different manuals or settings on each device.** A manual pasted before the room shared it, or
+   the built-in table against this game's.
+3. **Browsers draw pictures slightly differently.** Firefox and Chrome decode JPEGs and scale canvases
+   differently, and phones cap canvas sizes. A pixel reader near a threshold can flip.
+4. **OCR ran differently.** The model was still downloading on one device, a timeout fell back to
+   shape guesses, or memory ran short on a phone.
+5. **Order.** A second picture arrived before the first was read.
+
+With "trust the paster", all five go away: one reading, one answer. A misread is the paster's (your
+call), and the room report shows what their app read.
+
+### 13.3 "You said always-on server. Isn't Vercel always on?"
+
+No:
+- **Functions start when a request comes and sleep when idle.** Fluid compute keeps one copy warm
+  for a few minutes and lets it serve many requests at once. When it sleeps its memory is gone, and
+  two requests can land on two different copies. So nothing can be kept "in memory" reliably, and
+  state lives in the database. (That's also why §9.7 now keeps it warm during a game.)
+- **Vercel Functions can hold WebSockets now.** But each connection lives on one copy and only for
+  the function's maximum run time (minutes). Two players can sit on two different copies that don't
+  share memory, so it's still not one pool.
+- **Vercel Daemons** (beta) run all the time, but take no incoming connections. Players couldn't
+  connect to one.
+- **An always-on option:**
+  - Cloudflare Durable Objects: one object per room, in memory, with a free tier;
+  - a small VPS, about €4–6 a month;
+  - Oracle Cloud's free VMs.
+
+  I haven't checked current limits or regions for any of them.
+
+  Each is still **one place**: §6 D. It's simpler, but not faster for players on different
+  continents.
+
+### 13.4 "What about the middle of India and Macedonia, ignoring the US?"
+
+The middle is around Iran and the Gulf. **Supabase has no Middle East region.** The functions must
+sit next to the database, so the real choices are Mumbai, Frankfurt or staying in Tokyo.
+
+Since today's changes, the database only handles joins, reloads, New game, the "sure" copies and the
+pictures for thumbnails and reports. **Readings, taps and answers don't go through it.** Round trip
+from each player to the database (*estimates*):
+
+| Database + functions in | You (India) | Macedonia | USA (east) | Feels like |
+|---|---|---|---|---|
+| Tokyo (now) | ~120–150 ms | ~250–300 ms | ~150–200 ms | joins ~0.35–0.7 s |
+| Mumbai (`ap-south-1` + `bom1`) | ~10–40 ms | ~130–160 ms | ~200–250 ms | best for you |
+| **Frankfurt** (`eu-central-1` + `fra1`) | ~110–140 ms | ~25–40 ms | ~90–110 ms | best for the three together |
+
+For you and Macedonia alone, Mumbai and Frankfurt come out about even. One favours you, the other
+your friend. **Frankfurt wins once the US friend plays**, so it's the one I'd pick if you move.
+
+**My advice: don't move yet.** The slow part you described (the answer updating late) never goes
+near the database now. Move only if joins or reloads still feel slow after the deploy.
+
+Moving is free but an evening's work in your accounts: a new Supabase project in Frankfurt (a project
+can't change region), the same tables (`supabase/bomb_rooms.sql`), new environment variables in
+Vercel, and `"regions": ["fra1"]`.
+
+### 13.5 WebRTC
+
+A weekend experiment, as you said: a third road on top of the live channel, never instead of it.
+The security points in §6 E still apply.

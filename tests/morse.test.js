@@ -16,6 +16,19 @@ test('morse: a game GIF that plays CARGO backwards is read both ways', async () 
   assert.equal(backward.valid, true);
 });
 
+test('morse: a red-light GIF whose dashes are only ~2× a dot reads QUEST (tester report)', async () => {
+  // 10 fps capture: dots 300 ms, dashes 600–800 ms, letter gaps 600–700 ms. The old cut-off
+  // (2 × the shortest flash = 600 ms) read the 600 ms dashes as dots and gave "QCUT".
+  const buf = fs.readFileSync(FIX + 'morse_quest_red.gif');
+  const frames = await parseGIFFrames(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length));
+  assert.equal(frames.length, 126);
+  assert.equal(lightIsRed(frames), true);
+  const dec = decodeMorseBothWays(framesToRLE(frames));
+  assert.equal(dec.swapped.word, 'QUEST');
+  assert.equal(dec.swapped.valid, true);
+  assert.equal(dec.forward.word, 'FGTOE');
+});
+
 test('morse: a normal word still reads forward, its reverse is the mirror', () => {
   const dot = { is_on: true, duration: 100 }, dash = { is_on: true, duration: 300 };
   const gap = { is_on: false, duration: 100 }, letter = { is_on: false, duration: 300 }, word = { is_on: false, duration: 700 };

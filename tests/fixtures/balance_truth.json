@@ -1,0 +1,20 @@
+{
+ "balance_al2o3_h3po4_wrapped.png": "Al2O3 + H3PO4 → AlPO4 + H2O",
+ "balance_al_ni_small.png": "Al + Ni(NO3)2 → Al(NO3)3 + Ni",
+ "balance_al_znso4_wrapped.png": "Al + ZnSO4 → Al2(SO4)3 + Zn",
+ "balance_alcl3_big.png": "AlCl3 + Na3PO4 → AlPO4 + NaCl",
+ "balance_alcl3_big2.png": "AlCl3 + Na3PO4 → AlPO4 + NaCl",
+ "balance_benzene_wrapped.png": "C6H6 + O2 → CO2 + H2O",
+ "balance_caco3.png": "CaCO3 → CaO + CO2",
+ "balance_cano32_wrapped.png": "Ca(NO3)2 → CaO + NO2 + O2",
+ "balance_croh3_wrapped.png": "Cr(OH)3 → Cr2O3 + H2O",
+ "balance_hcl_cuoh2_wrapped.png": "HCl + Cu(OH)2 → CuCl2 + H2O",
+ "balance_k_h2o.png": "K + H2O → KOH + H2",
+ "balance_li2o_hcl_wrapped.png": "Li2O + HCl → LiCl + H2O",
+ "balance_li_cl2.png": "Li + Cl2 → LiCl",
+ "balance_mg_al2so43_wrapped.png": "Mg + Al2(SO4)3 → MgSO4 + Al",
+ "balance_nio_hcl_wrapped.png": "NiO + HCl → NiCl2 + H2O",
+ "balance_propane_small.png": "C3H8 + O2 → CO2 + H2O",
+ "balance_sn_acetic_wrapped.png": "Sn + CH3COOH → Sn(CH3COO)2 + H2",
+ "balance_sucrose.png": "C12H22O11 + O2 → CO2 + H2O"
+}

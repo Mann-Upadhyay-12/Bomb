@@ -14,6 +14,7 @@ import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { useSharedSetting } from '../../core/sharedSetting.js';
 import { useInstance } from '../../core/InstanceContext.jsx';
 import { Dropzone } from '../../core/Dropzone.jsx';
+import { useCardState } from '../../core/room/useCardState.js';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
 import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
@@ -37,13 +38,15 @@ export function WofModule({ isActive = true }) {
   // The manual is the same for every copy of this module, so all windows share it
   const [rulesText, setRulesText] = useSharedSetting(KEY, DEFAULT_RULES);
   const rules = React.useMemo(() => parseRules(rulesText), [rulesText]);
-  const [disp, setDisp] = useState('');
-  const [btns, setBtns] = useState(['', '', '', '', '', '']);
+  // in a room, the words on the module (read from a picture or picked) are the room's: only the app
+  // that took the picture reads it, the teammates get the words (core/room/useCardState.js)
+  const [disp, setDisp] = useCardState('disp', '');
+  const [btns, setBtns] = useCardState('btns', ['', '', '', '', '', '']);
   const [previewUri, setPreviewUri] = useState('');
   const [previewMeta, setPreviewMeta] = useState('');
-  const [warnDisp, setWarnDisp] = useState(false);
-  const [warnBtn, setWarnBtn] = useState([false, false, false, false, false, false]);
-  const [ocrStatus, setOcrStatus] = useState('');
+  const [warnDisp, setWarnDisp] = useCardState('warnDisp', false);
+  const [warnBtn, setWarnBtn] = useCardState('warnBtn', [false, false, false, false, false, false]);
+  const [ocrStatus, setOcrStatus] = useCardState('status', '');
   const [ocrBusy, setOcrBusy] = useState(false);
 
   const res = solveCore(rules, disp, btns);
@@ -145,7 +148,7 @@ export function WofModule({ isActive = true }) {
       input={
         <ModuleInput
           dropzone={
-            <Dropzone
+            <Dropzone shareReading
               onImage={handleImage}
               icon="🥊 WHO WHAT YES"
               title="Click here, then paste Who's on First screenshot"

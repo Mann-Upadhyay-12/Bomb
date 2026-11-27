@@ -428,6 +428,30 @@
 }
 .needy-timer-icon { font-size: 11px; }
 
+/* ── Bomb timer (top bar): ▶ / ■, the countdown, and a box to type what the bomb shows ── */
+.bomb-timer {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 3px 6px 3px 4px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--paper-raised);
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; font-size: 11.5px; font-weight: 700;
+  letter-spacing: .06em; color: var(--ink-soft); font-variant-numeric: tabular-nums;
+}
+.bomb-timer.running { border-color: var(--brass); background: rgba(var(--brass-rgb),0.12); }
+.bomb-timer:focus-within { border-color: var(--brass); }
+.bomb-timer-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 0; background: none; color: var(--ink); cursor: pointer;
+  font: inherit; padding: 5px 4px 5px 8px; border-radius: 999px;
+}
+.bomb-timer-btn:hover, .bomb-timer.running .bomb-timer-btn { color: var(--brass); }
+.bomb-timer-clock { font-size: 15px; letter-spacing: .04em; color: var(--ink-soft); min-width: 4ch; text-align: center; }
+.bomb-timer.running .bomb-timer-clock { color: var(--brass); }
+.bomb-timer input {
+  width: 6ch; min-width: 0; border: 0; border-left: 1px solid var(--line); outline: 0;
+  background: transparent; color: var(--ink); font: inherit; font-size: 12px; padding: 4px 0 4px 8px;
+}
+.bomb-timer input::placeholder { color: var(--ink-soft); opacity: .7; font-size: 10.5px; font-weight: 500; letter-spacing: .02em; }
+
 /* ── Bomb serial (top bar, one per game) ── */
 .serial-bar {
   display: inline-flex; align-items: center; gap: 8px;

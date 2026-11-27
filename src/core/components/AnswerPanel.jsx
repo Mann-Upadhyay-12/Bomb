@@ -6,6 +6,8 @@ import { useClip } from '../AppStateContext.jsx';
 import { useTouchScreen, tapWord } from '../../utils/touch.js';
 import { useRoomCardId } from '../room/RoomCard.jsx';
 import { noteAnswer } from '../room/roomBoard.js';
+import { useCardUpdating } from '../room/roomCards.js';
+import { nameOf } from '../room/roomClient.js';
 
 const DEFAULT_HINT = 'CLICK TO COPY';
 
@@ -36,6 +38,9 @@ export function AnswerPanel({
   const panelId = React.useId();
   React.useEffect(() => { noteAnswer(card, panelId, summary); }, [card, summary]);
   React.useEffect(() => () => noteAnswer(card, panelId, null), [card]);
+  // a teammate's new picture for this card is on its way or being read: the answer shown is about to
+  // change, so it isn't shown (nor copied) until it has (room/roomCards.js)
+  const updating = useCardUpdating(card ? card.module : '', card ? card.card : 0);
 
   // Is this answer what the page last copied, and did that work? (auto-copy can fail on a phone)
   const mine = summary ? formatClipboardText(summary) : '';
@@ -46,6 +51,7 @@ export function AnswerPanel({
     : `${tapWord(touch, true)} TO COPY`;
 
   const handleCopy = () => {
+    if (updating) return;
     if (copyValue) {
       copy(copyValue);
     } else if (Array.isArray(answers) && answers.length > 0) {
@@ -57,7 +63,7 @@ export function AnswerPanel({
 
   return (
     <div
-      className={`stamp ${flash ? 'flash' : ''}`}
+      className={`stamp ${flash ? 'flash' : ''} ${updating ? 'updating' : ''}`}
       role="button"
       tabIndex={0}
       title={`${tapWord(touch)} to copy the answer`}
@@ -73,11 +79,13 @@ export function AnswerPanel({
         <div className="stamp-label">{label}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {stats && <span className="stamp-stats">{stats}</span>}
-          <span className={`stamp-hint ${copyState || ''}`}>{shownHint}</span>
+          <span className={`stamp-hint ${copyState || ''}`}>{updating ? 'WAIT' : shownHint}</span>
         </div>
       </div>
       <div className="stamp-word">
-        {(!answers || (Array.isArray(answers) && answers.length === 0)) ? (
+        {updating ? (
+          <span className="ph stamp-updating">⏳ UPDATING — {nameOf(updating.from).toUpperCase()}’S NEW PICTURE</span>
+        ) : (!answers || (Array.isArray(answers) && answers.length === 0)) ? (
           <span className="ph">{placeholder}</span>
         ) : Array.isArray(answers) ? (
           answers.map((ans, idx) => (

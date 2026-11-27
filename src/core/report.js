@@ -10,6 +10,7 @@
 import { SERIAL_KEY, cleanSerial } from './bombSerial.js';
 import { GAME_SAVED, GAME_MEMORY } from './newGame.js';
 import { peekSharedState } from './sharedSetting.js';
+import { inRoom } from './room/roomClient.js';
 
 const inputs = new WeakMap(); // a Dropzone's element → the last pictures it took (newest last)
 
@@ -218,6 +219,10 @@ export async function sendReport(anchor, note) {
   const form = new FormData();
   for (const k of ['module', 'card', 'answer', 'serial', 'page', 'device', 'text', 'pasted', 'game']) form.append(k, r[k] || '');
   form.append('note', note || '');
+  // in a room: which card this is, so the server adds the room's copy of it (its pictures, everyone's answers)
+  const win = anchor.closest('[data-module]');
+  const cardEl = anchor.closest('[data-card]');
+  if (inRoom() && win && /^[a-z0-9]{2,20}$/.test(win.dataset.module || '')) form.append('room_card', `card:${win.dataset.module}:${Number(cardEl ? cardEl.dataset.card : 0) || 0}`);
   r.images.forEach((b, i) => form.append('image', b, `picture-${i + 1}`));
   let res;
   try {
@@ -225,7 +230,10 @@ export async function sendReport(anchor, note) {
   } catch (e) {
     throw new Error('no connection: try again');
   }
-  if (res.ok) return { images: r.images.length, pastes: r.pastes };
+  if (res.ok) {
+    const data = await res.json().catch(() => ({}));
+    return { images: r.images.length, pastes: r.pastes, room: Boolean(data.room) };
+  }
   const data = await res.json().catch(() => ({}));
   throw new Error(ERRORS[data.error] || `couldn't send it (${res.status})`);
 }

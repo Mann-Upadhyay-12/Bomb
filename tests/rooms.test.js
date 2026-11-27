@@ -403,6 +403,39 @@ test('card state: state:<module>:<n>:<name> is shared; a CLEAR of the card drops
   assert.deepEqual(sb.tables.bomb_room_items.filter((i) => i.room_id === room.id).map((i) => i.key), [], "and its items");
 });
 
+test('puts: a card\'s reading in one write — this card\'s state: values only, one live message, a size limit', async () => {
+  const P = { h: '200000000000000041', b: '200000000000000042' };
+  for (const id of Object.values(P)) sb.tables.bomb_users.push({ discord_id: id, username: 'P', avatar: null, status: 'allowed', expires_at: null });
+  const { room } = (await call(P.h, 'create', {})).body;
+  await call(P.b, 'join', { code: room.code });
+  const items = [
+    { key: 'state:cube:0:cells', value: { U: ['W'] } },
+    { key: 'state:cube:0:solution', value: "R U F'" },
+    { key: 'state:cube:0:pictureRead', value: 'entry-12345678' },
+  ];
+  const before = sb.broadcasts.length;
+  const ok = await call(P.b, 'puts', { module: 'cube', card: 0, items, game: 1, tab: 't1', mid: 'mid-aaaaaaaa-9' });
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+  assert.equal(sb.broadcasts.length, before + 1, 'one live message for the whole reading');
+  const b = lastBroadcast().payload;
+  assert.deepEqual([b.t, b.key, b.items.length, b.from, b.mid], ['puts', 'card:cube:0', 3, P.b, 'mid-aaaaaaaa-9']);
+  const got = Object.fromEntries((await state(P.h)).body.items.filter((i) => i.key.startsWith('state:cube:0:')).map((i) => [i.key, i.value]));
+  assert.deepEqual(got, Object.fromEntries(items.map((i) => [i.key, i.value])));
+
+  const bad = async (body) => (await call(P.b, 'puts', { game: 1, ...body })).status;
+  assert.equal(await bad({ module: 'cube', card: 0, items: [{ key: 'state:cube:1:cells', value: 1 }] }), 400, 'another card');
+  assert.equal(await bad({ module: 'cube', card: 0, items: [{ key: 'set:bombvision_serial', value: 'X' }] }), 400, 'not card state');
+  assert.equal(await bad({ module: 'cube', card: 0, items: [] }), 400);
+  assert.equal(await bad({ module: 'cube', card: 0, items: Array.from({ length: 25 }, (_, i) => ({ key: `state:cube:0:k${i}`, value: i })) }), 400);
+  assert.equal(await bad({ module: 'cube', card: 0, items: [{ key: 'state:cube:0:big', value: 'x'.repeat(140 * 1024) }] }), 413);
+  assert.equal(await bad({ module: 'cube', card: 0, items, game: 0 }), 409, 'a write from before New game');
+});
+
+test('warm: answers at once, without a login', async () => {
+  const res = await api.GET(new Request(`${SITE}/api/room?action=warm`));
+  assert.equal(res.status, 204);
+});
+
 test('level: the host\'s level is the room\'s — host only, checked, kept across New games', async () => {
   const L = { host: '200000000000000021', b: '200000000000000022' };
   for (const id of Object.values(L)) sb.tables.bomb_users.push({ discord_id: id, username: 'P', avatar: null, status: 'allowed', expires_at: null });

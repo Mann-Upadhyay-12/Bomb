@@ -26,13 +26,15 @@ export function PianoModule({ isActive = true }) {
   const uid = useId(); // per-instance ids: missions can show the same module several times
 
   // in a room, the clef switch and the key signature are the room's (core/room/useCardState.js): the
-  // helper pastes the bot's key message, the defuser the staff picture
+  // helper pastes the bot's key message, the defuser the staff picture. What the picture gave (clef,
+  // notes) is the room's too: only the app that took the picture reads it, the teammates get the notes
+  // and draw the same staff
   const [clefSel, setClefSel] = useCardState('clef', 'auto');
-  const [detClef, setDetClef] = useState('bass');
-  const [notes, setNotes] = useState([{ pos: 0, acc: 0 }, { pos: 0, acc: 0 }]);
+  const [detClef, setDetClef] = useCardState('detClef', 'bass');
+  const [notes, setNotes] = useCardState('notes', [{ pos: 0, acc: 0 }, { pos: 0, acc: 0 }]);
   // no answer until both notes come from a picture, the sample, a tap on the staff or ▲ ▼ (two
   // default notes would read as "Unison"); a tap places one note at a time
-  const [placed, setPlaced] = useState([false, false]);
+  const [placed, setPlaced] = useCardState('placed', [false, false]);
   const touched = placed[0] && placed[1];
   const setTouched = (v) => setPlaced([v, v]);
   // key signature from the bot's message ("Key Signature: F Major."), '' = none / C major
@@ -52,7 +54,7 @@ export function PianoModule({ isActive = true }) {
 
   const [previewUri, setPreviewUri] = useState('');
   const [previewMeta, setPreviewMeta] = useState('');
-  const [statusText, setStatusText] = useState('');
+  const [statusText, setStatusText] = useCardState('status', '');
 
   const effectiveClef = clefSel === 'auto' ? detClef : clefSel;
   // a note drawn without ♯ / ♭ takes the key signature's
@@ -195,6 +197,7 @@ export function PianoModule({ isActive = true }) {
         <ModuleInput
           dropzone={
             <Dropzone
+              shareReading
               onImage={handleImage}
               icon="🎹 🎼 ♯ ♭"
               title="Click here, then paste a screenshot of the piano music staff"

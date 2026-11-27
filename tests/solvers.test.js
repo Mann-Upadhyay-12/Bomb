@@ -49,7 +49,7 @@ test('morse: a capture that starts mid-word is rotated back to the word', () => 
 
 test('morse: timing jitter of 20% does not change the result', () => {
   const rle = transmit('STROBE', 100).map((seg, i) => ({ ...seg, duration: seg.duration * (i % 2 ? 1.2 : 0.85) }));
-  // The decoder takes the shortest "on" as its unit, so keep one exact dot.
+  // one exact dot among the jittered ones
   rle.find(seg => seg.is_on && seg.duration < 150).duration = 85;
   assert.equal(decodeMorseRLE(rle).word, 'STROBE');
 });

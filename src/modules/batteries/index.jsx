@@ -10,8 +10,10 @@ import { useAppState } from '../../core/AppStateContext.jsx';
 import { useClipboard } from '../../core/useClipboard.js';
 import { useAnswerGate } from '../../core/useAnswerGate.js';
 import { useSharedState } from '../../core/sharedSetting.js';
+import { useBombClock, bombSecondsLeft, parseClock, useNow } from '../../core/bombClock.js';
 import { useInstance } from '../../core/InstanceContext.jsx';
 import { Dropzone, ManualPasteBox } from '../../core/Dropzone.jsx';
+import { useCardState } from '../../core/room/useCardState.js';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
 import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
@@ -46,25 +48,17 @@ function CellPick({ cell, onChange }) {
 }
 
 /**
- * The timer-gated modules: where their digits show on the countdown from 8:00, and — once synced to
- * the bomb's timer — whether they can be disarmed now, or when next.
+ * The timer-gated modules: where their digits show on the countdown from 8:00, and — once the bomb's
+ * clock runs (top bar's timer, the needy reminder or ▶ 8:00 here: all one clock, core/bombClock.js) —
+ * whether they can be disarmed now, or when next.
  */
 function TimerHelp({ timer }) {
-  // synced countdown, shared by every Batteries card: { at: Date.now() when synced, sec: timer then }
-  const [sync, setSync] = useSharedState('batteries_timer_sync', null);
+  const { clock, start, stop } = useBombClock();
   const [typed, setTyped] = useState('');
-  const [now, setNow] = useState(() => Date.now());
-  React.useEffect(() => {
-    if (!sync) return;
-    const id = setInterval(() => setNow(Date.now()), 200);
-    return () => clearInterval(id);
-  }, [sync]);
-  const cur = sync ? Math.max(0, sync.sec - Math.floor((now - sync.at) / 1000)) : null;
-  const startSync = (sec) => { setSync({ at: Date.now(), sec }); setNow(Date.now()); };
-  const typedSec = (() => {
-    const m = typed.trim().match(/^(\d{1,2})[:.](\d{2})$/);
-    return m && Number(m[2]) < 60 ? Number(m[1]) * 60 + Number(m[2]) : null;
-  })();
+  const now = useNow(clock != null, 200);
+  const cur = bombSecondsLeft(clock, now);
+  const startSync = (sec) => start(sec);
+  const typedSec = parseClock(typed);
   const live = (digits) => {
     if (cur == null) return null;
     if (showsDigits(cur, digits)) {
@@ -84,15 +78,15 @@ function TimerHelp({ timer }) {
   return (
     <div className="bat-timer-note">
       <div className="bat-timer-bar">
-        <span className="search-config-label">TIMER (counts down from 8:00):</span>
+        <span className="search-config-label">TIMER (counts down from 8:00; the same as the top bar's):</span>
         {cur != null && <span className="bat-clock">{fmtClock(cur)}</span>}
-        <button type="button" className="reset-btn" onClick={() => startSync(BOMB_START)} title="Press as the bomb starts">▶ 8:00</button>
+        <button type="button" className="reset-btn" onClick={() => startSync(BOMB_START)} title="Press as the bomb starts (starts the needy reminder too)">▶ 8:00</button>
         <input className="bat-timer-in" value={typed} placeholder="6:42" inputMode="numeric" spellCheck="false"
           onChange={(e) => setTyped(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && typedSec != null) startSync(typedSec); }}
           title="What the bomb's timer shows right now, then Enter" />
         <button type="button" className="reset-btn" disabled={typedSec == null} onClick={() => startSync(typedSec)}>sync</button>
-        {sync && <button type="button" className="reset-btn" onClick={() => setSync(null)}>stop</button>}
+        {clock && <button type="button" className="reset-btn" onClick={stop} title="Stops the bomb timer and the needy reminder">stop</button>}
       </div>
       {timer.map(t => (
         <div key={t.name} className="bat-timer-row">
@@ -115,9 +109,11 @@ export function BatteriesModule({ isActive = true }) {
 
   // This game's table (new every game: in memory only), shared by every Batteries card
   const [table, setTable] = useSharedState('batteries_table', null);
-  const [batteries, setBatteries] = useState([]);
-  const [overrides, setOverrides] = useState({}); // row → true / false set by hand
-  const [status, setStatus] = useState({ text: '', ok: null });
+  // in a room, the batteries read from a picture and the rows set by hand are the card's, the room's:
+  // only the app that took the picture reads it (core/room/useCardState.js)
+  const [batteries, setBatteries] = useCardState('batteries', []);
+  const [overrides, setOverrides] = useCardState('overrides', {}); // row → true / false set by hand
+  const [status, setStatus] = useCardState('status', { text: '', ok: null });
   const [busy, setBusy] = useState(false);
   const [thumbs, setThumbs] = useState({ table: '', batteries: '' });
 
@@ -172,7 +168,7 @@ export function BatteriesModule({ isActive = true }) {
 
   const handleImage = (img, dataUri, blob) => {
     setLastImage(img, blob);
-    ingest([{ img, uri: dataUri }]);
+    return ingest([{ img, uri: dataUri }]); // read when this settles (a room gets the reading then)
   };
 
   const handleFiles = async (files) => {
@@ -183,7 +179,7 @@ export function BatteriesModule({ isActive = true }) {
       const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = uri; });
       items.push({ img, uri });
     }
-    ingest(items);
+    return ingest(items);
   };
 
   const handleSample = () => {
@@ -252,6 +248,7 @@ export function BatteriesModule({ isActive = true }) {
         <ModuleInput
           dropzone={
             <Dropzone
+              shareReading
               onImage={handleImage}
               onFiles={handleFiles}
               multiple

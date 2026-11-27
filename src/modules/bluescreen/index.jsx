@@ -14,6 +14,7 @@ import { ModuleInput } from '../../core/components/ModuleInput.jsx';
 import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
 import { CopyLines } from '../../core/components/CopyLines.jsx';
 import { WorkingPanel } from '../../core/components/WorkingPanel.jsx';
+import { useAirText } from '../../core/airPaste.js';
 
 const emptyFacts = () => ({ error: '', disarmed: '', armed: '' });
 
@@ -25,9 +26,11 @@ export function BluescreenModule({ isActive = true }) {
   const uid = useId();
 
   const [serial, setSerial] = useBombSerial();
-  const [message, setMessage] = useState('');
-  const [facts, setFacts] = useState(emptyFacts);
-  const [status, setStatus] = useState({ text: '', ok: null });
+  // in a room, the crash message, its numbers and what the picture gave are the card's, the room's:
+  // only the app that took the picture reads it (core/room/useCardState.js)
+  const [message, setMessage] = useCardState('message', '');
+  const [facts, setFacts] = useCardState('facts', emptyFacts);
+  const [status, setStatus] = useCardState('status', { text: '', ok: null });
   const [busy, setBusy] = useState(false);
   const [previewUri, setPreviewUri] = useState('');
   // the level's cards the Defuser has disarmed (board slots, 1-based); kept between crashes. In a room
@@ -73,6 +76,15 @@ export function BluescreenModule({ isActive = true }) {
     }));
     if (p.serial) setSerial(p.serial);
   };
+
+  // the crash message pasted anywhere on the page (Ctrl+V, no text box) goes in its box. Any four
+  // digits read as an error number, so a bare number needs the word "error" / "crash" with it.
+  useAirText(isActive, (t) => {
+    const p = parseCrashMessage(t);
+    if (p.disarmed === null && p.armed === null && !(p.error && /error|crash/i.test(t))) return false;
+    takeMessage(t);
+    return true;
+  });
 
   const handleImage = async (img, dataUri, fileBlob) => {
     setPreviewUri(dataUri);
@@ -132,7 +144,7 @@ export function BluescreenModule({ isActive = true }) {
       input={
         <ModuleInput
           dropzone={
-            <Dropzone
+            <Dropzone shareReading
               onImage={handleImage}
               icon=":( 8136"
               title="Click here, then paste the crashed Bluescreen picture"

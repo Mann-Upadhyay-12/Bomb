@@ -74,7 +74,7 @@ opened by a guest keeps `room=` in the address and opens the panel by itself.
   kicked (they can't join again), moves the room to a **new secret topic** and tells the old one, so
   the kicked tab stops hearing the room; the others pick up the new topic from the reply / a refresh.
 - **Answers board (layer 2):** each app sends the answer every card shows (`ans:<module>:<n>:<member>`,
-  700 ms after it settles; empty deletes it). The panel lists one row per card: the answer and
+  at once, then the latest at most every 300 ms; empty deletes it). The panel lists one row per card: the answer and
   "✓ 2 agree", or every member's answer in red when they differ, and who sent the card's picture. A
   row opens that module and flashes the card. New game empties it.
 - **Layer 4 (`useCardState`):** `useState(x)` → `useCardState('name', x)` makes an input the room's
@@ -94,6 +94,21 @@ opened by a guest keeps `room=` in the address and opens the panel by itself.
   pictures already keep them in step through layer 3; sharing the state as well would apply a
   picture twice on a reload or for a late joiner. Hand-tapped Hangman guesses (no screenshots) stay
   on the phone they were tapped on.
+- **Shared reading (2026-11-26, `docs/rooms-architecture.md` §12):** `<Dropzone shareReading>` makes only
+  the app that took a picture read it. Everything its card's `useCardState` values change while it reads
+  (until the module's onImage / onFiles Promise settles, or a `useShareWork` job ends) goes out in one
+  `puts` (≤ 24 values of that card + `pictureRead` = the picture's id), one live message and one write.
+  Teammates never read that picture: the live channel says it's coming (no bytes), the card's answer
+  shows ⏳ UPDATING until the reading is in (`useCardUpdating`, max 20 s), and the picture shows last as
+  a thumbnail fetched from the server. No reading 6 s after a teammate's picture → this app reads it
+  (a teammate still on the old page). No background check (the user's choice: trust the paster).
+  On: Piano, Rubik's Cube, Memory, Password, Who's on First, Button, Batteries, Word Search, Echo,
+  Balance, Knobs, Bluescreen, Laundry, Complex Wires. This replaces the note above about picture-set
+  values: on these, a reload or late joiner gets what the paster read. The other 19 still read the old
+  way, with the UPDATING guard until this app has read the picture.
+- **Room reports:** a ⚑ report from a room card also sends `room_card`; for a logged-in member,
+  `api/report.js` posts a second message with the card's pictures from the server (paste order, who
+  pasted each), each member's answer and the card's values (`lib/report.js roomReportMessage`).
 - **Provenance:** "FROM YUZA" shows in the room panel (everything shared this game), on a shared
   manual's 📖 bar, and under a card's drop box when its picture came from a teammate. There's no
   chip yet for manuals outside the 📖 bars (Astrology, Laundry …); the panel lists those.
@@ -114,9 +129,10 @@ opened by a guest keeps `room=` in the address and opens the panel by itself.
   (POST field), and `onMessage` applies the first copy and skips the second (the last 600 ids; a `card`
   copy from the server still goes through, since it has the saved picture ids and the card skips
   entries it has taken). Realtime is a worldwide cluster (nearest node per client), so a change goes
-  player → nearest node → teammate's node → teammate, never through Tokyo. Picture files up to 135 KB
-  travel inside the message as base64 (`roomCards.js` `appendLog`, `inline`); a message over 180 KB
-  (`FAST_MAX_CHARS`) goes only the sure way (measured on the real project: 240 KB arrives, 300 KB is
+  player → nearest node → teammate's node → teammate, never through Tokyo. Picture files up to 170 KB
+  (135 KB before the night of 26 Nov) travel inside the message as base64 (`roomCards.js` `appendLog`,
+  `inline`), only for cards not on shared reading; a message over 236 KB (`FAST_MAX_CHARS`) goes only
+  the sure way (measured on the real project: 240 KB arrives, 300 KB is
   dropped with the socket left up). Fast messages are checked where the server would: the level only
   from the host, an answer only from its member, the current game only. Fix 3: `sendSoon` sends a key's
   first change at once and then the latest at most every 300 ms (was 300 ms after the last change).

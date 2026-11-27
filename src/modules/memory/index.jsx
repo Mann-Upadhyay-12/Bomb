@@ -9,6 +9,7 @@ import { useSharedSetting } from '../../core/sharedSetting.js';
 import { manualBoxPaste } from '../../core/airPaste.js';
 import { useInstance } from '../../core/InstanceContext.jsx';
 import { Dropzone } from '../../core/Dropzone.jsx';
+import { useCardState } from '../../core/room/useCardState.js';
 import { ModuleLayout } from '../../core/components/ModuleLayout.jsx';
 import { ModuleInput } from '../../core/components/ModuleInput.jsx';
 import { AnswerPanel } from '../../core/components/AnswerPanel.jsx';
@@ -29,10 +30,12 @@ export function MemoryModule({ isActive = true }) {
   const inst = useInstance();
   const grouped = Boolean(inst && inst.grouped);
   const [manual, setManual] = useSharedSetting(KEY, '');
-  const [history, setHistory] = useState([]); // [{ pos, label, display }] per finished stage
-  const [display, setDisplay] = useState(null);
-  const [labels, setLabels] = useState(['', '', '', '']);
-  const [status, setStatus] = useState({ text: '', ok: null });
+  // in a room, the card's stages and what its picture showed are the room's: only the app that took
+  // the picture reads it, the teammates get the display, labels and saved stages (core/room/useCardState.js)
+  const [history, setHistory] = useCardState('history', []); // [{ pos, label, display }] per finished stage
+  const [display, setDisplay] = useCardState('display', null);
+  const [labels, setLabels] = useCardState('labels', ['', '', '', '']);
+  const [status, setStatus] = useCardState('status', { text: '', ok: null });
   const [busy, setBusy] = useState(false);
   const [previewUri, setPreviewUri] = useState('');
 
@@ -56,6 +59,7 @@ export function MemoryModule({ isActive = true }) {
   // (one drop handled twice, the second after the first was saved), so it reads the latest from here.
   const histRef = useRef(history);
   const saveHistory = (next) => { histRef.current = next; setHistory(next); };
+  useEffect(() => { histRef.current = history; }, [history]); // a teammate's stages (in a room)
   const live = useRef(null);
   live.current = { ready, r, display, labelNums };
   const reading = useRef(false);   // a picture is being read
@@ -129,7 +133,7 @@ export function MemoryModule({ isActive = true }) {
     <ModuleLayout
       input={
         <ModuleInput
-          dropzone={<Dropzone onImage={handleImage} icon="4 · ▢▢▢▢" title="Click here, then paste the Memory picture" sub={<>reads the <b>display</b> and the four <b>button labels</b> — paste each stage's picture</>} />}
+          dropzone={<Dropzone shareReading onImage={handleImage} icon="4 · ▢▢▢▢" title="Click here, then paste the Memory picture" sub={<>reads the <b>display</b> and the four <b>button labels</b> — paste each stage's picture</>} />}
           preview={previewUri ? (
             <div className="preview-row show">
               <img src={previewUri} alt="memory picture" />
